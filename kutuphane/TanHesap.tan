@@ -1,11 +1,11 @@
 # ============================================================
-# tan_hesap.tan — Tan içinde yazılmış bir ifade değerlendirici
+# TanHesap.tan — Tan içinde yazılmış bir ifade değerlendirici
 # Bootstrap kanıtı: Tan, Tan koduyla bir dili yorumluyor.
 # Aritmetik ifadeleri (+ - * / parantez) çözer.
 # lexer -> parser -> değerlendirici, hepsi TAN dilinde.
 # ============================================================
 
-içe al "kutuphane/tan_lexer.tan"
+içe al "kutuphane/TanLexer.tan"
 
 # --- Parser + değerlendirici (özyinemeli iniş) ---
 # Durumu sözlükte taşıyoruz: {"tokenlar": ..., "konum": ...}
@@ -22,12 +22,12 @@ işlev ilerle(durum)
 son
 
 # ifade = terim (('+' | '-') terim)*
-işlev ifade_çöz(durum)
-    sol = terim_çöz(durum)
+işlev ifadeÇöz(durum)
+    sol = terimÇöz(durum)
     iken şimdiki(durum)["değer"] == "+" veya şimdiki(durum)["değer"] == "-"
         işleç = şimdiki(durum)["değer"]
         ilerle(durum)
-        sağ = terim_çöz(durum)
+        sağ = terimÇöz(durum)
         eğer işleç == "+" ise
             sol = sol + sağ
         değilse
@@ -38,12 +38,12 @@ işlev ifade_çöz(durum)
 son
 
 # terim = çarpan (('*' | '/') çarpan)*
-işlev terim_çöz(durum)
-    sol = çarpan_çöz(durum)
+işlev terimÇöz(durum)
+    sol = çarpanÇöz(durum)
     iken şimdiki(durum)["değer"] == "*" veya şimdiki(durum)["değer"] == "/"
         işleç = şimdiki(durum)["değer"]
         ilerle(durum)
-        sağ = çarpan_çöz(durum)
+        sağ = çarpanÇöz(durum)
         eğer işleç == "*" ise
             sol = sol * sağ
         değilse
@@ -54,11 +54,11 @@ işlev terim_çöz(durum)
 son
 
 # çarpan = sayı | '(' ifade ')'
-işlev çarpan_çöz(durum)
+işlev çarpanÇöz(durum)
     t = şimdiki(durum)
     eğer t["değer"] == "(" ise
         ilerle(durum)
-        iç = ifade_çöz(durum)
+        iç = ifadeÇöz(durum)
         ilerle(durum)
         döndür iç
     son
@@ -69,5 +69,5 @@ son
 # hesapla(metin): bir aritmetik ifadeyi Tan-içi yorumlayıcıyla çözer
 işlev hesapla(metin)
     durum = {"tokenlar": tokenle(metin), "konum": 0}
-    döndür ifade_çöz(durum)
+    döndür ifadeÇöz(durum)
 son

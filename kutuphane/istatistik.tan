@@ -1,11 +1,11 @@
-içe al "kutuphane/sira.tan"
-içe al "kutuphane/temel.tan"
+içe al "kutuphane/Sira.tan"
+içe al "kutuphane/Temel.tan"
 # ============================================================
-# istatistik.tan — temel istatistik işlevleri (saf Tan)
+# Istatistik.tan — temel istatistik işlevleri (saf Tan)
 # ============================================================
 
-# topla_sayılar(liste): tüm sayıların toplamı
-işlev topla_sayılar(liste)
+# toplaSayılar(liste): tüm sayıların toplamı
+işlev toplaSayılar(liste)
     toplam = 0
     her sayı liste içinde
         toplam = toplam + sayı
@@ -13,14 +13,14 @@ işlev topla_sayılar(liste)
     döndür toplam
 son
 
-# ist_ortalama(liste): aritmetik ortalama
-# (adı "ortalama" değil "ist_ortalama" — liste.tan'daki ortalama ile çakışmasın diye)
-işlev ist_ortalama(liste)
-    döndür topla_sayılar(liste) / uzunluk(liste)
+# istOrtalama(liste): aritmetik ortalama
+# (adı "ortalama" değil "istOrtalama" — Liste.tan'daki ortalama ile çakışmasın diye)
+işlev istOrtalama(liste)
+    döndür toplaSayılar(liste) / uzunluk(liste)
 son
 
-# ist_en_büyük(liste): en büyük değer
-işlev ist_en_büyük(liste)
+# istEnBüyük(liste): en büyük değer
+işlev istEnBüyük(liste)
     enb = liste[0]
     her sayı liste içinde
         eğer sayı > enb ise
@@ -30,8 +30,8 @@ işlev ist_en_büyük(liste)
     döndür enb
 son
 
-# ist_en_küçük(liste): en küçük değer
-işlev ist_en_küçük(liste)
+# istEnKüçük(liste): en küçük değer
+işlev istEnKüçük(liste)
     enk = liste[0]
     her sayı liste içinde
         eğer sayı < enk ise
@@ -43,7 +43,7 @@ son
 
 # medyan(liste): sıralayıp ortadaki değer(ler)
 işlev medyan(liste)
-    sıralı = hızlı_sırala(liste)
+    sıralı = hızlıSırala(liste)
     n = uzunluk(sıralı)
     orta = n / 2
     eğer n % 2 == 0 ise
@@ -52,14 +52,14 @@ işlev medyan(liste)
     döndür sıralı[orta]
 son
 
-# std_sapma(liste): standart sapma (popülasyon)
-işlev std_sapma(liste)
-    ort = ist_ortalama(liste)
-    kareler_toplamı = 0
+# stdSapma(liste): standart sapma (popülasyon)
+işlev stdSapma(liste)
+    ort = istOrtalama(liste)
+    karelerToplamı = 0
     her sayı liste içinde
         fark = sayı - ort
-        kareler_toplamı = kareler_toplamı + fark * fark
+        karelerToplamı = karelerToplamı + fark * fark
     son
-    varyans = kareler_toplamı / uzunluk(liste)
-    döndür t_karekök(varyans)
+    varyans = karelerToplamı / uzunluk(liste)
+    döndür tKarekök(varyans)
 son

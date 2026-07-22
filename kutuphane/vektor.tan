@@ -1,9 +1,9 @@
 # ============================================================
-# vektor.tan — vektör işlemleri (saf Tan). Vektör = sayı listesi.
+# Vektor.tan — vektör işlemleri (saf Tan). Vektör = sayı listesi.
 # ============================================================
-içe al "kutuphane/temel.tan"
+içe al "kutuphane/Temel.tan"
 
-işlev v_topla(a, b)
+işlev vTopla(a, b)
     sonuç = []
     i = 0
     iken i < uzunluk(a)
@@ -13,7 +13,7 @@ işlev v_topla(a, b)
     döndür sonuç
 son
 
-işlev v_çıkar(a, b)
+işlev vÇıkar(a, b)
     sonuç = []
     i = 0
     iken i < uzunluk(a)
@@ -23,7 +23,7 @@ işlev v_çıkar(a, b)
     döndür sonuç
 son
 
-işlev v_ölçekle(a, s)
+işlev vÖlçekle(a, s)
     sonuç = []
     her x a içinde
         ekle(sonuç, x * s)
@@ -32,7 +32,7 @@ işlev v_ölçekle(a, s)
 son
 
 # nokta çarpım (dot product)
-işlev v_nokta(a, b)
+işlev vNokta(a, b)
     toplam = 0
     i = 0
     iken i < uzunluk(a)
@@ -43,20 +43,20 @@ işlev v_nokta(a, b)
 son
 
 # büyüklük (norm / uzunluk)
-işlev v_büyüklük(a)
-    döndür t_karekök(v_nokta(a, a))
+işlev vBüyüklük(a)
+    döndür tKarekök(vNokta(a, a))
 son
 
 # iki nokta arası mesafe
-işlev v_mesafe(a, b)
-    döndür v_büyüklük(v_çıkar(a, b))
+işlev vMesafe(a, b)
+    döndür vBüyüklük(vÇıkar(a, b))
 son
 
 # birim vektör (normalize)
-işlev v_birim(a)
-    b = v_büyüklük(a)
+işlev vBirim(a)
+    b = vBüyüklük(a)
     eğer b == 0 ise
         döndür a
     son
-    döndür v_ölçekle(a, 1 / b)
+    döndür vÖlçekle(a, 1 / b)
 son

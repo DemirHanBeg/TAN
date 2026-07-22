@@ -1,10 +1,10 @@
 # ============================================================
-# metin2.tan — gelişmiş metin işleme (saf Tan)
+# Metin2.tan — gelişmiş metin işleme (saf Tan)
 # ============================================================
-içe al "kutuphane/temel.tan"
+içe al "kutuphane/Temel.tan"
 
-# başlıyor_mu(metin, ön): metin ön ile mi başlıyor
-işlev başlıyor_mu(metin, ön)
+# başlıyorMu(metin, ön): metin ön ile mi başlıyor
+işlev başlıyorMu(metin, ön)
     h = harfler(metin)
     o = harfler(ön)
     eğer uzunluk(o) > uzunluk(h) ise
@@ -20,10 +20,10 @@ işlev başlıyor_mu(metin, ön)
     döndür doğru
 son
 
-# bitiyor_mu(metin, son_ek): metin son_ek ile mi bitiyor
-işlev bitiyor_mu(metin, son_ek)
+# bitiyorMu(metin, sonEk): metin sonEk ile mi bitiyor
+işlev bitiyorMu(metin, sonEk)
     h = harfler(metin)
-    s = harfler(son_ek)
+    s = harfler(sonEk)
     fark = uzunluk(h) - uzunluk(s)
     eğer fark < 0 ise
         döndür yanlış
@@ -73,24 +73,24 @@ son
 # kelimele(metin): boşluklardan bölerek kelime listesi
 işlev kelimele(metin)
     kelimeler = []
-    şu_an = ""
+    şuAn = ""
     her h harfler(metin) içinde
         eğer h == " " veya h == "\n" veya h == "\t" ise
-            eğer uzunluk_metin(şu_an) > 0 ise
-                ekle(kelimeler, şu_an)
-                şu_an = ""
+            eğer uzunlukMetin(şuAn) > 0 ise
+                ekle(kelimeler, şuAn)
+                şuAn = ""
             son
         değilse
-            şu_an = şu_an + h
+            şuAn = şuAn + h
         son
     son
-    eğer uzunluk_metin(şu_an) > 0 ise
-        ekle(kelimeler, şu_an)
+    eğer uzunlukMetin(şuAn) > 0 ise
+        ekle(kelimeler, şuAn)
     son
     döndür kelimeler
 son
 
-# uzunluk_metin yardımcısı (temel.tan'da t_uzunluk var, kısayol)
-işlev uzunluk_metin(m)
-    döndür t_uzunluk(m)
+# uzunlukMetin yardımcısı (Temel.tan'da tUzunluk var, kısayol)
+işlev uzunlukMetin(m)
+    döndür tUzunluk(m)
 son

@@ -1,0 +1,10 @@
+içe al "kutuphane/Istatistik.tan"
+
+sayılar = [4, 8, 15, 16, 23, 42]
+
+yaz "toplam: " + toplaSayılar(sayılar)
+yaz "ortalama: " + istOrtalama(sayılar)
+yaz "medyan: " + medyan(sayılar)
+yaz "std sapma: " + stdSapma(sayılar)
+yaz "en büyük: " + istEnBüyük(sayılar)
+yaz "en küçük: " + istEnKüçük(sayılar)

@@ -1,0 +1,60 @@
+=====================================================================
+ TAN — YIGIN AYIRICI VE METIN DESTEGI (Madde 1)
+=====================================================================
+
+YAPILAN: ELF backend'ine (tan elf) kendi bellek yoneticisi ve metin
+         calisma zamani eklendi. libc YOK, malloc YOK — ham brk syscall.
+
+--- YIGIN AYIRICI ---
+_start'ta:  brk(0) ile program sonu alinir, brk(son + 64MB) ile alan
+            ayrilir. Adres global bir hucrede tutulur.
+tan_ayir(n): bump allocator — 8'e hizalar, isaretciyi ilerletir.
+            Cop toplayici YOK (kisa omurlu programlar icin yeterli).
+
+--- METIN GOSTERIMI ---
+[uzunluk: 8 bayt][baytlar...]
+Kayitta tasinan deger bu yapiya isaretcidir.
+Metin sabitleri .rodata'da, ayni uzunluk-onekli bicimde.
+
+--- EKLENEN CALISMA ZAMANI ISLEVLERI (hepsi elle makine kodu) ---
+  f_tan_ayir          yigin ayirici
+  f_bellek_kopyala    bayt bayt kopyalama
+  f_metin_birlestir   iki metni birlestirir, yigindan yeni alan alir
+  f_sayi_metne        int64 -> ondalik metin (yigina)
+  f_yaz_metin_deger   uzunluk-onekli metni stdout'a yazar
+
+--- CALISAN OZELLIKLER ---
+  metin degiskeni        a = "Tan"
+  birlestirme            b = a + " dili"
+  otomatik sayi cevrimi  "sayi: " + metin(42)   ve   "x" + 5
+  uzunluk(metin)
+  dongude birlestirme    (yigin ayiriciyi gercekten zorlar)
+  yaz(metin)
+
+--- TIP SISTEMI ---
+ELF backend artik STATIK tipli bir altkume derliyor:
+  TipTam   -> int64, kayitta ham deger
+  TipMetin -> yigin isaretcisi
+Tip cikarimi derleme aninda yapilir (atamadan, literalden, islecten).
+Yorumlayici dinamik tiplidir; bu backend onun statik altkumesidir.
+
+--- OLCUM ---
+  metin + birlestirme + dongu programi: 1144 bayt
+  metin() cevrimi iceren program      : 1496 bayt
+  ikisi de: statically linked, not a dynamic executable, SIFIR dis arac
+
+--- TEST ---
+  ./TestArkaUc.sh elf   -> 14/14 gecti
+  (2 yeni test: metin_yigin, metin_cevirme)
+
+--- HENUZ YOK ---
+  liste/sozluk yigin uzerinde (altyapi hazir, ust katman yazilmadi)
+  metin indeksleme  s[0]
+  parcala / birlestir / kod / karakter yerlesikleri
+  ondalik sayi (SSE kodlamasi gerekiyor — Madde 2)
+  cop toplayici (bump allocator sadece ilerler, geri almaz)
+
+--- ASM BACKEND ---
+  'tan asm' yolu metin DESTEKLEMIYOR — sadece int64.
+  Metin isteyen programlari 'tan elf' veya 'tan derle' ile derle.
+  ELF backend artik asm backend'inden ilerde.

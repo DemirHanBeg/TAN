@@ -1,35 +1,35 @@
 # ============================================================
-# veri_yapilari.tan — yığın (stack) ve kuyruk (queue), saf Tan
+# VeriYapilari.tan — yığın (stack) ve kuyruk (queue), saf Tan
 # Liste üstünde. Yığın: LIFO, Kuyruk: FIFO.
 # ============================================================
 
 # --- Yığın (stack) ---
-işlev yığın_yeni()
+işlev yığınYeni()
     döndür []
 son
-işlev yığına_it(y, öge)
+işlev yığınaİt(y, öge)
     ekle(y, öge)
     döndür y
 son
-işlev yığından_al(y)
+işlev yığındanAl(y)
     döndür çıkar(y)
 son
-işlev yığın_tepe(y)
+işlev yığınTepe(y)
     döndür y[uzunluk(y) - 1]
 son
-işlev yığın_boş_mu(y)
+işlev yığınBoşMu(y)
     döndür uzunluk(y) == 0
 son
 
 # --- Kuyruk (queue) --- (baştan al, sona ekle)
-işlev kuyruk_yeni()
+işlev kuyrukYeni()
     döndür []
 son
-işlev kuyruğa_ekle(k, öge)
+işlev kuyruğaEkle(k, öge)
     ekle(k, öge)
     döndür k
 son
-işlev kuyruktan_al(k)
+işlev kuyruktanAl(k)
     ilk = k[0]
     yeni = []
     i = 1

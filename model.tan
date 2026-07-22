@@ -13,7 +13,7 @@ işlev satırlaştır(liste)
 son
 
 # --- 1. Veriyi dosyadan oku ---
-isimler = satırlar(oku("isimler.txt"))
+isimler = satırlar(oku("Isimler.txt"))
 yaz "Dosyadan " + uzunluk(isimler) + " isim okundu."
 
 başlangıç = "."
@@ -27,7 +27,7 @@ her isim isimler içinde
     iken i < uzunluk(zincir) - 1
         şimdi = zincir[i]
         sonra = zincir[i + 1]
-        eğer değil var_mı(sayımlar, şimdi) ise
+        eğer değil varMı(sayımlar, şimdi) ise
             sayımlar[şimdi] = []
         son
         ekle(sayımlar[şimdi], sonra)
@@ -70,5 +70,5 @@ her ü üretilenler içinde
     yaz "  " + ü
 son
 
-yaz_dosya("uretilen.txt", satırlaştır(üretilenler))
+yazDosya("uretilen.txt", satırlaştır(üretilenler))
 yaz "Sonuçlar 'uretilen.txt' dosyasına yazıldı."

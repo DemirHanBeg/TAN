@@ -1,31 +1,31 @@
 # ============================================
-# matematik.tan — saf Tan ile yazılmış matematik kütüphanesi
+# Matematik.tan — saf Tan ile yazılmış matematik kütüphanesi
 # Hiçbiri ödünç değil; hepsi Tan'ın kendisiyle.
-# içe al "kutuphane/matematik.tan"
+# içe al "kutuphane/Matematik.tan"
 # ============================================
 
-işlev mutlak_değer(x)
+işlev mutlakDeğer(x)
     eğer x < 0 ise
         döndür 0 - x
     son
     döndür x
 son
 
-işlev en_büyük(a, b)
+işlev enBüyük(a, b)
     eğer a > b ise
         döndür a
     son
     döndür b
 son
 
-işlev en_küçük(a, b)
+işlev enKüçük(a, b)
     eğer a < b ise
         döndür a
     son
     döndür b
 son
 
-işlev üs_al(taban, kuvvet)
+işlev üsAl(taban, kuvvet)
     sonuç = 1
     i = 0
     iken i < kuvvet
@@ -42,11 +42,11 @@ işlev faktöriyel(n)
     döndür n * faktöriyel(n - 1)
 son
 
-işlev tek_mi(n)
+işlev tekMi(n)
     döndür n % 2 == 1
 son
 
-işlev çift_mi(n)
+işlev çiftMi(n)
     döndür n % 2 == 0
 son
 

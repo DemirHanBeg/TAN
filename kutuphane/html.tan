@@ -1,5 +1,5 @@
 # ============================================
-# html.tan — saf Tan ile HTML üretme yardımcıları
+# Html.tan — saf Tan ile HTML üretme yardımcıları
 # ============================================
 
 işlev etiket(ad, içerik)
@@ -18,7 +18,7 @@ işlev bağlantı(adres, metin)
     döndür "<a href=\"" + adres + "\">" + metin + "</a>"
 son
 
-işlev liste_html(ögeler)
+işlev listeHtml(ögeler)
     içerik = ""
     her ö ögeler içinde
         içerik = içerik + etiket("li", ö)
@@ -26,8 +26,8 @@ işlev liste_html(ögeler)
     döndür etiket("ul", içerik)
 son
 
-işlev sayfa(başlık_metni, gövde)
-    döndür "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + başlık_metni + "</title></head><body>" + gövde + "</body></html>"
+işlev sayfa(başlıkMetni, gövde)
+    döndür "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + başlıkMetni + "</title></head><body>" + gövde + "</body></html>"
 son
 
 # --- Şablon sistemi: veri + HTML birleştirme ---
@@ -42,15 +42,15 @@ işlev tablo(başlıklar, satırlar)
     her satır satırlar içinde
         hücreler = ""
         her b başlıklar içinde
-            hücreler = hücreler + etiket("td", metin_yap(satır[b]))
+            hücreler = hücreler + etiket("td", metinYap(satır[b]))
         son
         gövde = gövde + etiket("tr", hücreler)
     son
     döndür "<table border=\"1\">" + gövde + "</table>"
 son
 
-# her_için(liste, şablon_işlevi): her ögeye şablon uygular, birleştirir
-işlev her_için(liste, şablon)
+# herİçin(liste, şablonİşlevi): her ögeye şablon uygular, birleştirir
+işlev herİçin(liste, şablon)
     çıktı = ""
     her ö liste içinde
         çıktı = çıktı + şablon(ö)
@@ -60,6 +60,6 @@ son
 
 # doldur(kalıp, sözlük): "{ad}" gibi yer tutucuları sözlükten doldurur
 # basit sürüm: tek anahtar
-işlev metin_yap(x)
+işlev metinYap(x)
     döndür "" + x
 son

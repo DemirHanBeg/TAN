@@ -1,8 +1,8 @@
 # ============================================
-# liste.tan — saf Tan ile liste araçları
+# Liste.tan — saf Tan ile liste araçları
 # ============================================
 
-işlev topla_hepsi(liste)
+işlev toplaHepsi(liste)
     toplam = 0
     her e liste içinde
         toplam = toplam + e
@@ -10,7 +10,7 @@ işlev topla_hepsi(liste)
     döndür toplam
 son
 
-işlev en_büyük_öge(liste)
+işlev enBüyükÖge(liste)
     enb = liste[0]
     her e liste içinde
         eğer e > enb ise
@@ -20,7 +20,7 @@ işlev en_büyük_öge(liste)
     döndür enb
 son
 
-işlev en_küçük_öge(liste)
+işlev enKüçükÖge(liste)
     enk = liste[0]
     her e liste içinde
         eğer e < enk ise
@@ -30,7 +30,7 @@ işlev en_küçük_öge(liste)
     döndür enk
 son
 
-işlev içeriyor_mu(liste, aranan)
+işlev içeriyorMu(liste, aranan)
     her e liste içinde
         eğer e == aranan ise
             döndür doğru
@@ -39,7 +39,7 @@ işlev içeriyor_mu(liste, aranan)
     döndür yanlış
 son
 
-işlev ters_çevir(liste)
+işlev tersÇevir(liste)
     yeni = []
     i = uzunluk(liste) - 1
     iken i >= 0
@@ -73,5 +73,5 @@ işlev sırala(liste)
 son
 
 işlev ortalama(liste)
-    döndür topla_hepsi(liste) / uzunluk(liste)
+    döndür toplaHepsi(liste) / uzunluk(liste)
 son

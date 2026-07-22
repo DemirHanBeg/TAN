@@ -1,21 +1,21 @@
 # ============================================================
-# tokenizer.tan — basit aritmetik ifade tokenizer'ı
+# Tokenizer.tan — basit aritmetik ifade tokenizer'ı
 # Kaynak metni karakter karakter gezer, token listesine böler.
 # Her token: {"tür": ..., "değer": ...}
 # ============================================================
 
 # rakam mı kontrolü — sayı token'lerini biriktirmek için lazım
-işlev rakam_mı(h)
+işlev rakamMı(h)
     döndür h == "0" veya h == "1" veya h == "2" veya h == "3" veya h == "4" veya h == "5" veya h == "6" veya h == "7" veya h == "8" veya h == "9"
 son
 
 # boşluk mu kontrolü — atlanacak karakterler
-işlev boşluk_mu(h)
+işlev boşlukMu(h)
     döndür h == " " veya h == "\t" veya h == "\n"
 son
 
 # işleç mi kontrolü — desteklenen aritmetik işleçler
-işlev işleç_mi(h)
+işlev işleçMi(h)
     döndür h == "+" veya h == "-" veya h == "*" veya h == "/" veya h == "%"
 son
 
@@ -30,15 +30,15 @@ işlev tokenle(kaynak)
         h = hrf[i]
 
         # 1) boşluk: token üretmeden atla
-        eğer boşluk_mu(h) ise
+        eğer boşlukMu(h) ise
             i = i + 1
             devam
         son
 
         # 2) sayı: ardışık rakamları tek token'a topla
-        eğer rakam_mı(h) ise
+        eğer rakamMı(h) ise
             metin = ""
-            iken i < n ve rakam_mı(hrf[i])
+            iken i < n ve rakamMı(hrf[i])
                 metin = metin + hrf[i]
                 i = i + 1
             son
@@ -47,7 +47,7 @@ işlev tokenle(kaynak)
         son
 
         # 3) işleç: + - * / %
-        eğer işleç_mi(h) ise
+        eğer işleçMi(h) ise
             ekle(tokenlar, {"tür": "işleç", "değer": h})
             i = i + 1
             devam
@@ -62,7 +62,7 @@ işlev tokenle(kaynak)
 son
 
 # Token listesini "[tür] değer" biçiminde ekrana basar.
-işlev tokenları_yazdır(tokenlar)
+işlev tokenlarıYazdır(tokenlar)
     her t tokenlar içinde
         yaz "[" + t["tür"] + "] " + t["değer"]
     son
@@ -77,6 +77,6 @@ son
 her ornek örnekler içinde
     yaz "Kaynak: " + ornek
     tlar = tokenle(ornek)
-    tokenları_yazdır(tlar)
+    tokenlarıYazdır(tlar)
     yaz "----------------------------"
 son

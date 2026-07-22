@@ -1,12 +1,12 @@
 # ============================================================
-# gostergeler.tan — teknik gösterge motoru (saf Tan)
+# Gostergeler.tan — teknik gösterge motoru (saf Tan)
 # Zaman serisi verisinden: hareketli ortalama, momentum, oynaklık
 # ============================================================
-içe al "kutuphane/temel.tan"
-içe al "kutuphane/sira.tan"
+içe al "kutuphane/Temel.tan"
+içe al "kutuphane/Sira.tan"
 
-# hareketli_ortalama(seri, pencere): son 'pencere' değerin ortalaması
-işlev hareketli_ortalama(seri, pencere)
+# hareketliOrtalama(seri, pencere): son 'pencere' değerin ortalaması
+işlev hareketliOrtalama(seri, pencere)
     n = uzunluk(seri)
     eğer n < pencere ise
         pencere = n
@@ -46,19 +46,19 @@ işlev oynaklık(seri, pencere)
         ekle(dilim, seri[i])
         i = i + 1
     son
-    ort = hareketli_ortalama(dilim, pencere)
-    kare_toplam = 0
+    ort = hareketliOrtalama(dilim, pencere)
+    kareToplam = 0
     her d dilim içinde
         fark = d - ort
-        kare_toplam = kare_toplam + fark * fark
+        kareToplam = kareToplam + fark * fark
     son
-    döndür t_karekök(kare_toplam / pencere)
+    döndür tKarekök(kareToplam / pencere)
 son
 
-# trend_yönü(seri, kısa, uzun): kısa HO > uzun HO ise +1 (yukarı), değilse -1
-işlev trend_yönü(seri, kısa, uzun)
-    k = hareketli_ortalama(seri, kısa)
-    u = hareketli_ortalama(seri, uzun)
+# trendYönü(seri, kısa, uzun): kısa HO > uzun HO ise +1 (yukarı), değilse -1
+işlev trendYönü(seri, kısa, uzun)
+    k = hareketliOrtalama(seri, kısa)
+    u = hareketliOrtalama(seri, uzun)
     eğer k > u ise
         döndür 1
     son

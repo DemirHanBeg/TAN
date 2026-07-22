@@ -6,7 +6,7 @@ package main
 // Tan -> C native derleyici (v2) — DEĞER RUNTIME'LI
 // Sayı + metin + liste destekli. String birleştirme, indeksleme,
 // dosya oku/yaz, çalıştır. Bu backend, Tan'la yazılmış bir
-// derleyiciyi (tanc.tan) derleyecek kadar zengin. Go runtime YOK;
+// derleyiciyi (Tanc.tan) derleyecek kadar zengin. Go runtime YOK;
 // çıktı saf C -> ELF, tek bağımlılık libc.
 // ============================================================
 
@@ -346,6 +346,13 @@ func derleC(dosya string, cikti string) {
 	lexer := YeniLexer(string(kaynak))
 	parser := YeniParser(lexer.Tokenle())
 	agac := parser.Ayristir()
+
+	// --- OPTIMIZE GECISI: sabit katlama, cebirsel sadelestirme, olu kod ---
+	opt := YeniOptimizer()
+	agac = opt.Govde(agac)
+	if os.Getenv("TAN_OPT_RAPOR") != "" {
+		fmt.Fprintf(os.Stderr, "optimize: %d katlama, %d ölü blok\n", opt.Katlanan, opt.Silinen)
+	}
 
 	var islevler []IslevDugum
 	var anaGovde []Dugum

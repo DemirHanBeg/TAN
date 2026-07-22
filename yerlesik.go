@@ -405,6 +405,15 @@ func init() {
 			return nil
 		},
 	}
+
+	// --- camelCase takma adlar (eski alt cizgili adlar da calisir) ---
+	yerlesikler["yazDosya"] = yerlesikler["yaz_dosya"]
+	yerlesikler["ekleDosya"] = yerlesikler["ekle_dosya"]
+	yerlesikler["jsonYap"] = yerlesikler["json_yap"]
+	yerlesikler["jsonÇöz"] = yerlesikler["json_çöz"]
+	yerlesikler["listeMi"] = yerlesikler["liste_mi"]
+	yerlesikler["varMı"] = yerlesikler["var_mı"]
+	yerlesikler["eÜssü"] = yerlesikler["e_üssü"]
 }
 
 // goDegeriTana: json_çöz'ün ürettiği Go değerini Tan değerine çevirir

@@ -1,5 +1,5 @@
 # ============================================================
-# sozluk.tan — sözlük araçları (saf Tan)
+# Sozluk.tan — sözlük araçları (saf Tan)
 # ============================================================
 
 # değerler(s): sözlüğün değerlerini liste olarak
@@ -23,9 +23,9 @@ işlev harmanla(a, b)
     döndür yeni
 son
 
-# al_yoksa(s, anahtar, varsayılan): anahtar yoksa varsayılanı döndür
-işlev al_yoksa(s, anahtar, varsayılan)
-    eğer var_mı(s, anahtar) ise
+# alYoksa(s, anahtar, varsayılan): anahtar yoksa varsayılanı döndür
+işlev alYoksa(s, anahtar, varsayılan)
+    eğer varMı(s, anahtar) ise
         döndür s[anahtar]
     son
     döndür varsayılan

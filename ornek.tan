@@ -1,4 +1,4 @@
-içe al "kutuphane/temel.tan"
+içe al "kutuphane/Temel.tan"
 # ==========================================
 # Tan dili - ilk program
 # Türkçe anahtar kelimeler, "son" ile blok
@@ -54,7 +54,7 @@ yaz "faktöriyel(5) = " + faktöriyel(5)
 # ==========================================
 yaz "----------------------------"
 yaz "Köprü (geçici iskele) testi:"
-yaz "16'nın karekökü: " + t_karekök(16)
-yaz "2'nin 10. üssü: " + t_üs(2, 10)
-yaz "BÜYÜK harf: " + t_büyüt("tan dili")
-yaz "'merhaba' uzunluğu: " + t_uzunluk("merhaba")
+yaz "16'nın karekökü: " + tKarekök(16)
+yaz "2'nin 10. üssü: " + tÜs(2, 10)
+yaz "BÜYÜK harf: " + tBüyüt("tan dili")
+yaz "'merhaba' uzunluğu: " + tUzunluk("merhaba")

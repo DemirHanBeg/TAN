@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -94,6 +95,7 @@ type Yorumlayici struct {
 	global    *Kapsam
 	kopru     *Kopru
 	alinanlar map[string]bool
+	kaynakDizin string // içe al çözümlemesi için
 }
 
 func YeniYorumlayici() *Yorumlayici {
@@ -129,18 +131,33 @@ func (y *Yorumlayici) Calistir(deyimler []Dugum) {
 // iceAl: başka bir .tan dosyasını okur, aynı global kapsamda çalıştırır.
 // Böylece o dosyadaki işlev ve değişkenler kullanılabilir olur.
 // Aynı dosya iki kez alınmaz (döngüsel içe aktarma koruması).
-func (y *Yorumlayici) iceAl(dosya string, satir int) {
+func (y *Yorumlayici) iceAl(ad string, satir int) {
 	if y.alinanlar == nil {
 		y.alinanlar = map[string]bool{}
 	}
-	if y.alinanlar[dosya] {
-		return
+	// Modül adını gerçek dosya yoluna çevir (arama yolları: Modul.go)
+	yol, bulundu := modulAra(ad, y.kaynakDizin)
+	if !bulundu {
+		firlat(satir, "modül bulunamadı: %s\n%s", ad, modulAramaYollari(ad, y.kaynakDizin))
 	}
-	y.alinanlar[dosya] = true
-	kaynak, err := os.ReadFile(dosya)
+	mutlak, err := filepath.Abs(yol)
+	if err != nil {
+		mutlak = yol
+	}
+	if y.alinanlar[mutlak] {
+		return // döngüsel/tekrar içe alma
+	}
+	y.alinanlar[mutlak] = true
+
+	kaynak, err := os.ReadFile(yol)
 	if err != nil {
 		firlat(satir, "modül okunamadı: %v", err)
 	}
+	// İç içe içe al'lar bu modülün dizinine göre çözülsün
+	eskiDizin := y.kaynakDizin
+	y.kaynakDizin = filepath.Dir(mutlak)
+	defer func() { y.kaynakDizin = eskiDizin }()
+
 	lexer := YeniLexer(string(kaynak))
 	parser := YeniParser(lexer.Tokenle())
 	for _, d := range parser.Ayristir() {
@@ -465,6 +482,8 @@ func dogruMu(d Deger) bool {
 		return v
 	case nil:
 		return false
+	case int64:
+		return v != 0
 	case float64:
 		return v != 0
 	case string:

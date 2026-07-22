@@ -1,8 +1,0 @@
-içe al "kutuphane/bicim.tan"
-
-yaz para_biçim(1234567)
-yaz para_biçim(1000)
-yaz para_biçim(42)
-yaz sola_yasla("ad", 10, ".")
-yaz sağa_yasla("42", 6, "0")
-yaz tekrar_metin("ab", 3)

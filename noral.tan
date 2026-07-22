@@ -11,7 +11,7 @@ nokta = "."
 
 # Dağarcık: tüm benzersiz harfler
 dagarcik = []
-işlev dagarcikta_mi(h)
+işlev dagarciktaMi(h)
     her x dagarcik içinde
         eğer x == h ise
             döndür doğru
@@ -22,7 +22,7 @@ son
 ekle(dagarcik, nokta)
 her kel kelimeler içinde
     her h harfler(kel) içinde
-        eğer değil dagarcikta_mi(h) ise
+        eğer değil dagarciktaMi(h) ise
             ekle(dagarcik, h)
         son
     son
@@ -79,7 +79,7 @@ işlev softmax(logitler)
     üsler = []
     toplam = 0
     her l logitler içinde
-        e = e_üssü(l - en)
+        e = eÜssü(l - en)
         ekle(üsler, e)
         toplam = toplam + e
     son
@@ -100,7 +100,7 @@ iken devir < 100
         y = c[1]
         p = softmax(W[x])
         kayıp = kayıp - log(p[y])
-        # gradyan: dL/dlogit_j = p_j - (j==y)
+        # gradyan: dL/dlogitJ = pJ - (j==y)
         j = 0
         iken j < D
             hedef = 0

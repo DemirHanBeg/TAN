@@ -1,12 +1,12 @@
 # ============================================================
-# talay.tan — Navlun İstihbarat Motoru (tam uygulama, saf Tan)
+# Talay.tan — Navlun İstihbarat Motoru (tam uygulama, saf Tan)
 # Navlun endekslerinden teknik göstergeler -> endeks sinyalleri
 # -> sektör skorları -> sıralama -> rapor.
 # "Motor sayı üretir." — Talay'ın çekirdek mantığı, Tan diliyle.
 # ============================================================
-içe al "kutuphane/skorlama.tan"
-içe al "kutuphane/tablo.tan"
-içe al "kutuphane/sira.tan"
+içe al "kutuphane/Skorlama.tan"
+içe al "kutuphane/Tablo.tan"
+içe al "kutuphane/Sira.tan"
 
 # --- 1. VERİ: navlun endeksleri (zaman serileri) ---
 # Gerçekte RSS/AIS'ten gelir; burada örnek seri gömülü.
@@ -23,7 +23,7 @@ sektörler = {
     "perakende": {"FBX": 0.5, "SCFI": 0.3, "WCI": 0.2},
     "elektronik": {"SCFI": 0.4, "WCI": 0.4, "FBX": 0.2},
     "otomotiv": {"WCI": 0.5, "BDI": 0.3, "FBX": 0.2},
-    "hammadde_kimya": {"BDI": 0.6, "HARPEX": 0.4},
+    "hammaddeKimya": {"BDI": 0.6, "HARPEX": 0.4},
     "tüketim": {"FBX": 0.4, "SCFI": 0.3, "HARPEX": 0.3}
 }
 
@@ -33,39 +33,39 @@ yaz "   TALAY — Navlun İstihbarat Raporu"
 yaz "═══════════════════════════════════════════════"
 yaz ""
 
-endeks_sinyalleri = sözlük()
-endeks_satırları = []
+endeksSinyalleri = sözlük()
+endeksSatırları = []
 her ad anahtarlar(endeksler) içinde
     seri = endeksler[ad]
-    sinyal = endeks_sinyali(seri)
-    endeks_sinyalleri[ad] = sinyal
+    sinyal = endeksSinyali(seri)
+    endeksSinyalleri[ad] = sinyal
     mom = momentum(seri, 3)
-    son_değer = seri[uzunluk(seri) - 1]
-    ekle(endeks_satırları, [ad, "" + son_değer, "" + yuvarla(mom, 1) + "%", "" + yuvarla(sinyal, 1), sinyal_etiketi(sinyal)])
+    sonDeğer = seri[uzunluk(seri) - 1]
+    ekle(endeksSatırları, [ad, "" + sonDeğer, "" + yuvarla(mom, 1) + "%", "" + yuvarla(sinyal, 1), sinyalEtiketi(sinyal)])
 son
 
 yaz "── ENDEKSLER ──"
-yaz metin_tablo(["Endeks", "Değer", "Momentum", "Sinyal", "Durum"], endeks_satırları)
+yaz metinTablo(["Endeks", "Değer", "Momentum", "Sinyal", "Durum"], endeksSatırları)
 yaz ""
 
 # --- 4. Her sektör için skor hesapla ---
-sektör_skorları = []
+sektörSkorları = []
 her sektör anahtarlar(sektörler) içinde
     ağırlıklar = sektörler[sektör]
-    skor = sektör_skoru(endeks_sinyalleri, ağırlıklar)
-    ekle(sektör_skorları, {"ad": sektör, "skor": skor})
+    skor = sektörSkoru(endeksSinyalleri, ağırlıklar)
+    ekle(sektörSkorları, {"ad": sektör, "skor": skor})
 son
 
 # --- 5. Sektörleri skora göre sırala (yüksekten düşüğe, kabarcık) ---
-n = uzunluk(sektör_skorları)
+n = uzunluk(sektörSkorları)
 i = 0
 iken i < n
     j = 0
     iken j < n - 1
-        eğer sektör_skorları[j]["skor"] < sektör_skorları[j + 1]["skor"] ise
-            g = sektör_skorları[j]
-            sektör_skorları[j] = sektör_skorları[j + 1]
-            sektör_skorları[j + 1] = g
+        eğer sektörSkorları[j]["skor"] < sektörSkorları[j + 1]["skor"] ise
+            g = sektörSkorları[j]
+            sektörSkorları[j] = sektörSkorları[j + 1]
+            sektörSkorları[j + 1] = g
         son
         j = j + 1
     son
@@ -73,22 +73,22 @@ iken i < n
 son
 
 # --- 6. Sektör raporu ---
-sektör_satırları = []
+sektörSatırları = []
 sıra = 1
-her s sektör_skorları içinde
-    ekle(sektör_satırları, ["" + sıra, s["ad"], "" + yuvarla(s["skor"], 1), sinyal_etiketi(s["skor"])])
+her s sektörSkorları içinde
+    ekle(sektörSatırları, ["" + sıra, s["ad"], "" + yuvarla(s["skor"], 1), sinyalEtiketi(s["skor"])])
     sıra = sıra + 1
 son
 
 yaz "── SEKTÖR SIRALAMASI (sinyal gücüne göre) ──"
-yaz metin_tablo(["Sıra", "Sektör", "Skor", "Tavsiye"], sektör_satırları)
+yaz metinTablo(["Sıra", "Sektör", "Skor", "Tavsiye"], sektörSatırları)
 yaz ""
 
 # --- 7. Özet: en güçlü ve en zayıf ---
-en_güçlü = sektör_skorları[0]
-en_zayıf = sektör_skorları[uzunluk(sektör_skorları) - 1]
+enGüçlü = sektörSkorları[0]
+enZayıf = sektörSkorları[uzunluk(sektörSkorları) - 1]
 yaz "── ÖZET ──"
-yaz "En güçlü sektör : " + en_güçlü["ad"] + " (" + sinyal_etiketi(en_güçlü["skor"]) + ")"
-yaz "En zayıf sektör : " + en_zayıf["ad"] + " (" + sinyal_etiketi(en_zayıf["skor"]) + ")"
+yaz "En güçlü sektör : " + enGüçlü["ad"] + " (" + sinyalEtiketi(enGüçlü["skor"]) + ")"
+yaz "En zayıf sektör : " + enZayıf["ad"] + " (" + sinyalEtiketi(enZayıf["skor"]) + ")"
 yaz ""
 yaz "Motor sayı üretti; yorum insana kalır."

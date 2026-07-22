@@ -27,7 +27,7 @@ Most toy languages stop at "it compiles to C." Tan goes four stages down:
 
 At stage 3+4 Tan writes the REX prefixes, ModRM bytes, RIP-relative addressing, label fixups, the ELF64 header and the program header by hand. There is no `printf` — integer-to-string conversion is hand-written machine code and output goes through a raw `write` syscall.
 
-**Self-hosting:** the compiler is also written in Tan (`tanc2.tan`) — its own lexer, its own shunting-yard operator precedence, emitting x86-64 assembly. Go is used exactly once, as a seed, then it leaves the chain.
+**Self-hosting:** the compiler is also written in Tan (`Tanc2.tan`) — its own lexer, its own shunting-yard operator precedence, emitting x86-64 assembly. Go is used exactly once, as a seed, then it leaves the chain.
 
 ---
 
@@ -38,16 +38,16 @@ git clone https://github.com/karaefendii/tan.git
 cd tan
 go build -o tan .          # Go is only needed to build the engine (seed)
 
-./tan ornek.tan            # run with the interpreter
-./tan elf asmtest.tan out  # compile to a native binary, no external tools
+./tan Ornek.tan            # run with the interpreter
+./tan elf AsmTest.tan out  # compile to a native binary, no external tools
 ./out
 ```
 
 Verify everything:
 
 ```bash
-./bootstrap.sh        # all four stages + self-hosting + regression tests
-./test_backend.sh     # 24 backend regression tests
+./Bootstrap.sh        # all four stages + self-hosting + regression tests
+./TestArkaUc.sh     # 24 backend regression tests
 ```
 
 ---
@@ -73,7 +73,7 @@ Keywords: `işlev` (function), `döndür` (return), `eğer/değilse/son` (if/els
 
 ## Real example: cutting-stock optimizer
 
-`kesim.tan` — a working production tool. Given stock bars and a cut list, it minimizes waste (First Fit Decreasing), accounts for saw kerf, and **verifies its own output** before you cut anything.
+`Kesim.tan` — a working production tool. Given stock bars and a cut list, it minimizes waste (First Fit Decreasing), accounts for saw kerf, and **verifies its own output** before you cut anything.
 
 ```
  Cubuk | Parcalar (mm)                        |  Fire | Doluluk
@@ -116,7 +116,7 @@ This is the part most projects hide. Read it before you judge.
 All of the above **does work** on the C backend (`tan derle`) and in the interpreter.
 
 **Other open items:**
-- `tanc2.tan` (the Tan-written compiler) does not yet compile function definitions — it handles assignment, `yaz`, `eger`, `iken`, and full arithmetic with precedence.
+- `Tanc2.tan` (the Tan-written compiler) does not yet compile function definitions — it handles assignment, `yaz`, `eger`, `iken`, and full arithmetic with precedence.
 - The bytecode VM does not cover the entire language; it falls back to the interpreter.
 - x86-64 Linux only. Other architectures would need a new backend (the C path is portable and gets ARM/RISC-V for free).
 - No DWARF debug info, so `gdb` sees no symbols.
@@ -137,18 +137,18 @@ Deliberate. Three backends consume the same AST. Day-to-day language and library
 
 ```
 *.go                engine: lexer, parser, interpreter, bytecode VM,
-                    sayi.go (number system), and three backends:
-                    derle_c.go, derle_asm.go, derle_elf.go
+                    Sayi.go (number system), and three backends:
+                    DerleC.go, DerleAsm.go, DerleElf.go
 kutuphane/          31 standard library modules, written in Tan
-tanc.tan            compiler written in Tan (emits C)
-tanc_asm.tan        compiler written in Tan (emits assembly)
-tanc2.tan           + comparison operators, eger, iken, nested blocks
-kesim.tan           cutting-stock optimizer (real tool)
-talay.tan           freight index scoring pipeline
-noral.tan           neural network with backpropagation
+Tanc.tan            compiler written in Tan (emits C)
+TancAsm.tan        compiler written in Tan (emits assembly)
+Tanc2.tan           + comparison operators, eger, iken, nested blocks
+Kesim.tan           cutting-stock optimizer (real tool)
+Talay.tan           freight index scoring pipeline
+Noral.tan           neural network with backpropagation
 testler/            test programs
-test_backend.sh     24 backend regression tests
-bootstrap.sh        full verification
+TestArkaUc.sh     24 backend regression tests
+Bootstrap.sh        full verification
 web/                browser REPL (build tan.wasm separately)
 ```
 
@@ -166,4 +166,4 @@ GOOS=js GOARCH=wasm go build -o web/tan.wasm .
 
 MIT — see [LICENSE](LICENSE).
 
-Contributions welcome. The most useful ones right now: SSE floating-point in the ELF backend, a `brk`/`mmap` heap allocator for strings and lists, function definitions in `tanc2.tan`, or an ARM64 backend.
+Contributions welcome. The most useful ones right now: SSE floating-point in the ELF backend, a `brk`/`mmap` heap allocator for strings and lists, function definitions in `Tanc2.tan`, or an ARM64 backend.

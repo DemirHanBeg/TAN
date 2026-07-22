@@ -1,5 +1,5 @@
 # ============================================================
-# tan_lexer.tan — Tan'ın lexer'ı, TAN DİLİYLE yazılmış
+# TanLexer.tan — Tan'ın lexer'ı, TAN DİLİYLE yazılmış
 # Bootstrap'ın ilk adımı: dilin bir parçasını kendi diliyle yaz.
 # Şu an motor Go'da; bu, o motoru Tan'a taşımanın başlangıcı.
 # ============================================================
@@ -7,11 +7,11 @@
 # Bir kaynak metnini token listesine böler.
 # Her token: {"tür": ..., "değer": ...}
 
-işlev rakam_mı(h)
+işlev rakamMı(h)
     döndür h == "0" veya h == "1" veya h == "2" veya h == "3" veya h == "4" veya h == "5" veya h == "6" veya h == "7" veya h == "8" veya h == "9"
 son
 
-işlev boşluk_mu(h)
+işlev boşlukMu(h)
     döndür h == " " veya h == "\t" veya h == "\n"
 son
 
@@ -23,18 +23,18 @@ işlev tokenle(kaynak)
     iken i < n
         h = hrf[i]
         # boşlukları atla
-        eğer boşluk_mu(h) ise
+        eğer boşlukMu(h) ise
             i = i + 1
             devam
         son
         # sayı
-        eğer rakam_mı(h) ise
-            sayı_metni = ""
-            iken i < n ve rakam_mı(hrf[i])
-                sayı_metni = sayı_metni + hrf[i]
+        eğer rakamMı(h) ise
+            sayıMetni = ""
+            iken i < n ve rakamMı(hrf[i])
+                sayıMetni = sayıMetni + hrf[i]
                 i = i + 1
             son
-            ekle(tokenlar, {"tür": "sayı", "değer": sayı_metni})
+            ekle(tokenlar, {"tür": "sayı", "değer": sayıMetni})
             devam
         son
         # işleçler

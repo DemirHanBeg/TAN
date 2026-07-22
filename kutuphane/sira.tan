@@ -1,5 +1,5 @@
 # ============================================================
-# sira.tan — gelişmiş liste araçları (yüksek mertebeli işlevlerle)
+# Sira.tan — gelişmiş liste araçları (yüksek mertebeli işlevlerle)
 # ============================================================
 
 # eşle(liste, f): her ögeye f uygular, yeni liste döndürür
@@ -61,8 +61,8 @@ işlev dilim(liste, baş, bit)
     döndür yeni
 son
 
-# dizin_bul(liste, aranan): ilk konumu, yoksa -1
-işlev dizin_bul(liste, aranan)
+# dizinBul(liste, aranan): ilk konumu, yoksa -1
+işlev dizinBul(liste, aranan)
     i = 0
     iken i < uzunluk(liste)
         eğer liste[i] == aranan ise
@@ -84,8 +84,8 @@ işlev say(liste, koşul)
     döndür n
 son
 
-# hızlı_sırala(liste): quicksort (küçükten büyüğe)
-işlev hızlı_sırala(liste)
+# hızlıSırala(liste): quicksort (küçükten büyüğe)
+işlev hızlıSırala(liste)
     eğer uzunluk(liste) <= 1 ise
         döndür liste
     son
@@ -101,9 +101,9 @@ işlev hızlı_sırala(liste)
         son
         i = i + 1
     son
-    sonuç = hızlı_sırala(küçükler)
+    sonuç = hızlıSırala(küçükler)
     ekle(sonuç, eksen)
-    her b hızlı_sırala(büyükler) içinde
+    her b hızlıSırala(büyükler) içinde
         ekle(sonuç, b)
     son
     döndür sonuç

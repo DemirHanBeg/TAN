@@ -1,10 +1,10 @@
 # ============================================================
-# temel.tan — köprüden sökülen işlevlerin SAF TAN karşılıkları
+# Temel.tan — köprüden sökülen işlevlerin SAF TAN karşılıkları
 # Artık hiçbiri Go'dan ödünç değil. İskele tamamen söküldü.
 # ============================================================
 
 # --- matematik ---
-işlev t_karekök(x)
+işlev tKarekök(x)
     eğer x < 0 ise
         döndür 0
     son
@@ -20,7 +20,7 @@ işlev t_karekök(x)
     döndür tahmin
 son
 
-işlev t_üs(taban, kuvvet)
+işlev tÜs(taban, kuvvet)
     sonuç = 1
     i = 0
     iken i < kuvvet
@@ -30,7 +30,7 @@ işlev t_üs(taban, kuvvet)
     döndür sonuç
 son
 
-işlev t_taban(x)
+işlev tTaban(x)
     n = 0
     iken n + 1 <= x
         n = n + 1
@@ -38,15 +38,15 @@ işlev t_taban(x)
     döndür n
 son
 
-işlev t_yuvarla(x)
-    aşağı = t_taban(x)
+işlev tYuvarla(x)
+    aşağı = tTaban(x)
     eğer x - aşağı >= 0.5 ise
         döndür aşağı + 1
     son
     döndür aşağı
 son
 
-işlev t_mutlak(x)
+işlev tMutlak(x)
     eğer x < 0 ise
         döndür 0 - x
     son
@@ -55,7 +55,7 @@ son
 
 # --- metin ---
 # Türkçe-doğru harf tabloları
-işlev t_büyük_harf(h)
+işlev tBüyükHarf(h)
     eğer h == "i" ise döndür "İ" son
     eğer h == "ı" ise döndür "I" son
     eğer h == "ç" ise döndür "Ç" son
@@ -88,19 +88,19 @@ işlev t_büyük_harf(h)
     döndür h
 son
 
-işlev t_büyüt(metin)
+işlev tBüyüt(metin)
     sonuç = ""
     her h harfler(metin) içinde
-        sonuç = sonuç + t_büyük_harf(h)
+        sonuç = sonuç + tBüyükHarf(h)
     son
     döndür sonuç
 son
 
-işlev t_uzunluk(metin)
+işlev tUzunluk(metin)
     döndür uzunluk(harfler(metin))
 son
 
-işlev t_içerir(metin, aranan)
+işlev tİçerir(metin, aranan)
     hrf = harfler(metin)
     ha = harfler(aranan)
     n = uzunluk(hrf)

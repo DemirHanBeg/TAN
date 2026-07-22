@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"os"
 	"strings"
 )
@@ -32,6 +33,12 @@ func main() {
 			os.Exit(1)
 		}
 		paketle(os.Args[2], os.Args[3])
+		return
+	}
+
+	// 3a. paket komutu: tan paket <alt-komut>
+	if os.Args[1] == "paket" {
+		paketKomutu(os.Args[2:])
 		return
 	}
 
@@ -76,6 +83,9 @@ func main() {
 		os.Exit(1)
 	}
 	y := YeniYorumlayici()
+	if mutlak, err := filepath.Abs(dosya); err == nil {
+		y.kaynakDizin = filepath.Dir(mutlak)
+	}
 	if kaynagiCalistir(y, string(kaynak)) {
 		os.Exit(1)
 	}

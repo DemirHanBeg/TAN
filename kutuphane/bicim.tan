@@ -1,9 +1,9 @@
 # ============================================================
-# bicim.tan — sayı/metin biçimleme (saf Tan)
+# Bicim.tan — sayı/metin biçimleme (saf Tan)
 # ============================================================
 
-# tekrar_metin(metin, n): metni n kez tekrarlar
-işlev tekrar_metin(metin, n)
+# tekrarMetin(metin, n): metni n kez tekrarlar
+işlev tekrarMetin(metin, n)
     sonuç = ""
     i = 0
     iken i < n
@@ -13,26 +13,26 @@ işlev tekrar_metin(metin, n)
     döndür sonuç
 son
 
-# sola_yasla(metin, genişlik, dolgu): metni sola yaslar, sağını dolgu ile tamamlar
-işlev sola_yasla(metin, genişlik, dolgu)
+# solaYasla(metin, genişlik, dolgu): metni sola yaslar, sağını dolgu ile tamamlar
+işlev solaYasla(metin, genişlik, dolgu)
     uzun = uzunluk(metin)
     eğer uzun >= genişlik ise
         döndür metin
     son
-    döndür metin + tekrar_metin(dolgu, genişlik - uzun)
+    döndür metin + tekrarMetin(dolgu, genişlik - uzun)
 son
 
-# sağa_yasla(metin, genişlik, dolgu): metni sağa yaslar, solunu dolgu ile tamamlar
-işlev sağa_yasla(metin, genişlik, dolgu)
+# sağaYasla(metin, genişlik, dolgu): metni sağa yaslar, solunu dolgu ile tamamlar
+işlev sağaYasla(metin, genişlik, dolgu)
     uzun = uzunluk(metin)
     eğer uzun >= genişlik ise
         döndür metin
     son
-    döndür tekrar_metin(dolgu, genişlik - uzun) + metin
+    döndür tekrarMetin(dolgu, genişlik - uzun) + metin
 son
 
-# para_biçim(sayı): binlik ayraçlı tam sayı metni. Örn: 1234567 -> "1.234.567"
-işlev para_biçim(sayı)
+# paraBiçim(sayı): binlik ayraçlı tam sayı metni. Örn: 1234567 -> "1.234.567"
+işlev paraBiçim(sayı)
     negatif = yanlış
     n = sayı
     eğer n < 0 ise

@@ -369,6 +369,13 @@ func derleAsm(dosya string, cikti string, asmSakla bool) {
 	parser := YeniParser(lexer.Tokenle())
 	agac := parser.Ayristir()
 
+	// --- OPTIMIZE GECISI: sabit katlama, cebirsel sadelestirme, olu kod ---
+	opt := YeniOptimizer()
+	agac = opt.Govde(agac)
+	if os.Getenv("TAN_OPT_RAPOR") != "" {
+		fmt.Fprintf(os.Stderr, "optimize: %d katlama, %d ölü blok\n", opt.Katlanan, opt.Silinen)
+	}
+
 	var islevler []IslevDugum
 	var anaGovde []Dugum
 	for _, d := range agac {

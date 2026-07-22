@@ -4,7 +4,7 @@
 # yorumlayici float64 kullanir, native arka uclar int64 —
 # buyuk tam sayilarda native arka uc daha dogrudur.
 #
-# Kullanim: ./test_backend.sh [backend...]    (varsayilan: elf asm)
+# Kullanim: ./TestArkaUc.sh [backend...]    (varsayilan: elf asm)
 
 set -u
 BACKENDS="${*:-elf asm}"
@@ -182,6 +182,155 @@ yaz("Tan kendi ayaginda")
 yaz(42)' 'merhaba
 Tan kendi ayaginda
 42'
+
+test_et metin_yigin 'a = "Tan"
+b = a + " dili"
+yaz(b)
+yaz(uzunluk(b))
+s = ""
+i = 0
+iken i < 5
+    s = s + "ab"
+    i = i + 1
+son
+yaz(s)
+yaz(uzunluk(s))' 'Tan dili
+8
+ababababab
+10'
+
+test_et metin_cevirme 'yaz("sayi: " + metin(42))
+yaz("negatif: " + metin(0 - 17))
+n = 20
+f = 1
+k = 1
+iken k <= n
+    f = f * k
+    k = k + 1
+son
+yaz(metin(n) + "! = " + metin(f))' 'sayi: 42
+negatif: -17
+20! = 2432902008176640000'
+
+test_et liste 'l = [10, 20, 30]
+yaz(uzunluk(l))
+yaz(l[0])
+l = ekle(l, 40)
+yaz(l[3])
+t = 0
+her x l içinde
+    t = t + x
+son
+yaz(t)
+b = []
+i = 0
+iken i < 5
+    b = ekle(b, i * i)
+    i = i + 1
+son
+her v b içinde
+    yaz(v)
+son' '3
+10
+40
+100
+0
+1
+4
+9
+16'
+
+test_et metin_liste 'm = ["bir", "iki", "uc"]
+her s m içinde
+    yaz(s)
+son
+s = "Tan"
+yaz(s[0])
+yaz(kod(s))
+yaz(karakter(65))
+yaz(uzunluk(s))' 'bir
+iki
+uc
+T
+84
+A
+3'
+
+test_et ondalik 'yaz(3.14)
+yaz(1.5 + 2.5)
+yaz(10.0 / 4.0)
+yaz(2.5 * 4.0)
+yaz(0.0 - 1.75)
+yaz(1 + 0.5)
+yaz(3.0 > 2.0)
+yaz(3.0 < 2.0)
+x = 1.5
+yaz(x * 2.0)
+yaz("pi " + metin(3.14159))' '3.14
+4
+2.5
+10
+-1.75
+1.5
+1
+0
+3
+pi 3.14159'
+
+test_et dosya 'yaz_dosya("/tmp/tantest_io.txt", "Tan " + metin(7))
+yaz(oku("/tmp/tantest_io.txt"))
+yaz(uzunluk(oku("/tmp/tantest_io.txt")))' 'Tan 7
+5'
+
+test_et islev_tip 'işlev selam(ad)
+    döndür "merhaba " + ad
+son
+işlev liste_yap(n)
+    l = []
+    i = 0
+    iken i < n
+        l = ekle(l, i * 2)
+        i = i + 1
+    son
+    döndür l
+son
+işlev topla(l)
+    t = 0
+    her x l içinde
+        t = t + x
+    son
+    döndür t
+son
+işlev yarim(x)
+    döndür x / 2.0
+son
+yaz(selam("Demir"))
+l = liste_yap(5)
+yaz(uzunluk(l))
+yaz(topla(l))
+yaz(yarim(7.0))' 'merhaba Demir
+5
+20
+3.5'
+
+test_et karisik 'işlev tersine(s)
+    r = ""
+    i = 0
+    iken i < uzunluk(s)
+        r = s[i] + r
+        i = i + 1
+    son
+    döndür r
+son
+yaz(tersine("abcdef"))
+isimler = ["ali", "veli"]
+her i isimler içinde
+    yaz("merhaba " + i)
+son
+yaz(1.5 * 2.0 + 0.25)' 'fedcba
+merhaba ali
+merhaba veli
+3.25'
 
 echo ""
 echo "=== SONUC: $GECTI gecti, $KALDI kaldi ==="

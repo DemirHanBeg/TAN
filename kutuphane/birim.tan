@@ -1,34 +1,34 @@
 # ============================================================
-# birim.tan — birim çevrimleri (saf Tan)
+# Birim.tan — birim çevrimleri (saf Tan)
 # ============================================================
 # Sıcaklık
-işlev c_to_f(c)
+işlev cToF(c)
     döndür c * 9 / 5 + 32
 son
-işlev f_to_c(f)
+işlev fToC(f)
     döndür (f - 32) * 5 / 9
 son
-işlev c_to_k(c)
+işlev cToK(c)
     döndür c + 273.15
 son
 # Uzunluk
-işlev km_to_mil(km)
+işlev kmToMil(km)
     döndür km * 0.621371
 son
-işlev mil_to_km(mil)
+işlev milToKm(mil)
     döndür mil / 0.621371
 son
-işlev metre_to_ayak(m)
+işlev metreToAyak(m)
     döndür m * 3.28084
 son
 # Ağırlık
-işlev kg_to_lb(kg)
+işlev kgToLb(kg)
     döndür kg * 2.20462
 son
-işlev lb_to_kg(lb)
+işlev lbToKg(lb)
     döndür lb / 2.20462
 son
 # Veri
-işlev mb_to_gb(mb)
+işlev mbToGb(mb)
     döndür mb / 1024
 son

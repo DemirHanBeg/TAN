@@ -1,14 +1,14 @@
 # ============================================================
-# grafik.tan — konsol ASCII grafikleri (saf Tan)
+# Grafik.tan — konsol ASCII grafikleri (saf Tan)
 # ============================================================
-içe al "kutuphane/temel.tan"
-içe al "kutuphane/liste.tan"
+içe al "kutuphane/Temel.tan"
+içe al "kutuphane/Liste.tan"
 
-# yatay_çubuk(etiket, değer, en_büyük, genişlik): tek çubuk satırı
-işlev yatay_çubuk(etiket, değer, en_büyük, genişlik)
+# yatayÇubuk(etiket, değer, enBüyük, genişlik): tek çubuk satırı
+işlev yatayÇubuk(etiket, değer, enBüyük, genişlik)
     dolu = 0
-    eğer en_büyük > 0 ise
-        dolu = t_yuvarla((değer / en_büyük) * genişlik)
+    eğer enBüyük > 0 ise
+        dolu = tYuvarla((değer / enBüyük) * genişlik)
     son
     çubuk = ""
     i = 0
@@ -19,13 +19,13 @@ işlev yatay_çubuk(etiket, değer, en_büyük, genişlik)
     döndür etiket + " |" + çubuk + " " + değer
 son
 
-# çubuk_grafik(etiketler, değerler, genişlik): tüm satırlar
-işlev çubuk_grafik(etiketler, değerler, genişlik)
-    enb = en_büyük_öge(değerler)
+# çubukGrafik(etiketler, değerler, genişlik): tüm satırlar
+işlev çubukGrafik(etiketler, değerler, genişlik)
+    enb = enBüyükÖge(değerler)
     çıktı = ""
     i = 0
     iken i < uzunluk(etiketler)
-        çıktı = çıktı + yatay_çubuk(etiketler[i], değerler[i], enb, genişlik) + "\n"
+        çıktı = çıktı + yatayÇubuk(etiketler[i], değerler[i], enb, genişlik) + "\n"
         i = i + 1
     son
     döndür çıktı

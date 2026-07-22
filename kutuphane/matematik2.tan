@@ -1,7 +1,7 @@
 # ============================================================
-# matematik2.tan — ileri matematik (saf Tan)
+# Matematik2.tan — ileri matematik (saf Tan)
 # ============================================================
-içe al "kutuphane/temel.tan"
+içe al "kutuphane/Temel.tan"
 
 # ebob (en büyük ortak bölen) - Öklid
 işlev ebob(a, b)
@@ -18,8 +18,8 @@ işlev ekok(a, b)
     döndür (a * b) / ebob(a, b)
 son
 
-# asal_mı(n)
-işlev asal_mı(n)
+# asalMı(n)
+işlev asalMı(n)
     eğer n < 2 ise
         döndür yanlış
     son

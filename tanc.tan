@@ -7,15 +7,15 @@
 # Kullanım: tanc <girdi.mt> <cikti-binary>
 # ============================================================
 
-işlev bosluk_mu(k)
+işlev boslukMu(k)
     döndür k == 32 veya k == 9 veya k == 13
 son
 
-işlev rakam_mi(k)
+işlev rakamMi(k)
     döndür k >= 48 ve k <= 57
 son
 
-işlev harf_mi(k)
+işlev harfMi(k)
     döndür (k >= 97 ve k <= 122) veya (k >= 65 ve k <= 90) veya k == 95
 son
 
@@ -26,18 +26,18 @@ işlev tokenle(satir)
     i = 0
     iken i < n
         k = kod(satir[i])
-        eğer bosluk_mu(k) ise
+        eğer boslukMu(k) ise
             i = i + 1
-        değilse eğer rakam_mi(k) ise
+        değilse eğer rakamMi(k) ise
             s = ""
-            iken i < n ve rakam_mi(kod(satir[i]))
+            iken i < n ve rakamMi(kod(satir[i]))
                 s = s + satir[i]
                 i = i + 1
             son
             tokenler = ekle(tokenler, s)
-        değilse eğer harf_mi(k) ise
+        değilse eğer harfMi(k) ise
             ad = ""
-            iken i < n ve (harf_mi(kod(satir[i])) veya rakam_mi(kod(satir[i])))
+            iken i < n ve (harfMi(kod(satir[i])) veya rakamMi(kod(satir[i])))
                 ad = ad + satir[i]
                 i = i + 1
             son
@@ -50,21 +50,21 @@ işlev tokenle(satir)
     döndür tokenler
 son
 
-işlev sayi_token_mu(t)
+işlev sayiTokenMu(t)
     eğer uzunluk(t) == 0 ise
         döndür 0
     son
-    döndür rakam_mi(kod(t))
+    döndür rakamMi(kod(t))
 son
 
 # ifade tokenlerini (basla indeksinden) C ifadesine çevir
-işlev ifade_c(tokenler, basla)
+işlev ifadeC(tokenler, basla)
     c = ""
     i = basla
     n = uzunluk(tokenler)
     iken i < n
         t = tokenler[i]
-        eğer sayi_token_mu(t) ise
+        eğer sayiTokenMu(t) ise
             c = c + t
         değilse eğer t == "+" veya t == "-" veya t == "*" veya t == "/" ise
             c = c + " " + t + " "
@@ -78,7 +78,7 @@ işlev ifade_c(tokenler, basla)
     döndür c
 son
 
-işlev iceriyor_mu(liste, x)
+işlev iceriyorMu(liste, x)
     her e liste içinde
         eğer e == x ise
             döndür 1
@@ -100,7 +100,7 @@ her satir satirlar içinde
     eğer uzunluk(tk) >= 2 ise
         eğer tk[1] == "=" ise
             ad = tk[0]
-            eğer iceriyor_mu(degiskenler, ad) == 0 ise
+            eğer iceriyorMu(degiskenler, ad) == 0 ise
                 degiskenler = ekle(degiskenler, ad)
             son
         son
@@ -120,16 +120,16 @@ her satir satirlar içinde
     eğer uzunluk(tk) > 0 ise
         ilk = tk[0]
         eğer ilk == "yaz" ise
-            c = c + "yz(" + ifade_c(tk, 1) + ");" + karakter(10)
+            c = c + "yz(" + ifadeC(tk, 1) + ");" + karakter(10)
         değilse
             ad = tk[0]
-            c = c + "v_" + ad + " = " + ifade_c(tk, 2) + ";" + karakter(10)
+            c = c + "v_" + ad + " = " + ifadeC(tk, 2) + ";" + karakter(10)
         son
     son
 son
 c = c + "return 0;" + karakter(10) + "}" + karakter(10)
 
 # C'yi yaz, gcc ile derle
-yaz_dosya(cikti + ".c", c)
+yazDosya(cikti + ".c", c)
 çalıştır("gcc", "-O2", "-o", cikti, cikti + ".c", "-lm")
 yaz("tanc: derlendi -> " + cikti)

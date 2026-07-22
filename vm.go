@@ -224,6 +224,8 @@ func vmDogru(d Deger) bool {
 		return v
 	case nil:
 		return false
+	case int64:
+		return v != 0
 	case float64:
 		return v != 0
 	case string:

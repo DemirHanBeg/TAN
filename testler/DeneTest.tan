@@ -1,6 +1,6 @@
 dene
     yaz "başladı"
-    x = oku("olmayan_dosya.txt")
+    x = oku("olmayanDosya.txt")
     yaz "buraya gelmemeli"
 yakala hata
     yaz "yakalandı: " + hata
