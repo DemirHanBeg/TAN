@@ -1,0 +1,265 @@
+# ============================================================
+# KESIM — Profil Kesim Optimizasyonu
+# Tan dilinde yazilmis ilk gercek uretim programi.
+#
+# Problem: Elinde sabit boy stok profil var (or. 6 m).
+#          Projeden gelen parca listesini en az fire ile cikar.
+# Yontem : First Fit Decreasing (FFD) — kesim/bin-packing yaklasimi.
+#          Buyukten kucuge dizip, her parcayi SIGDIGI ILK cubuga koyar.
+#          Optimale yakin, hizli, sahada uygulanabilir.
+# ============================================================
+
+# ---------------- AYARLAR ----------------
+stok_boy = 6000      # stok profil boyu (mm)
+kesim_payi = 3       # testere agzi kalinligi (mm)
+
+# Siparis listesi: [parca_boyu_mm, adet]
+siparis = [
+    [2400, 4],
+    [1850, 6],
+    [1200, 9],
+    [950, 14],
+    [720, 8],
+    [430, 20]
+]
+
+# ---------------- YARDIMCILAR ----------------
+
+# Siparisi tek tek parcalara ac
+işlev parcalari_ac(siparis)
+    hepsi = []
+    her kalem siparis içinde
+        boy = kalem[0]
+        adet = kalem[1]
+        i = 0
+        iken i < adet
+            hepsi = ekle(hepsi, boy)
+            i = i + 1
+        son
+    son
+    döndür hepsi
+son
+
+# Buyukten kucuge sirala (secmeli siralama — saf Tan)
+işlev buyukten_sirala(liste)
+    n = uzunluk(liste)
+    i = 0
+    iken i < n
+        en_buyuk = i
+        j = i + 1
+        iken j < n
+            eğer liste[j] > liste[en_buyuk] ise
+                en_buyuk = j
+            son
+            j = j + 1
+        son
+        gecici = liste[i]
+        liste[i] = liste[en_buyuk]
+        liste[en_buyuk] = gecici
+        i = i + 1
+    son
+    döndür liste
+son
+
+# Bir parcanin cubukta kaplayacagi yer (parca + testere payi)
+işlev kaplama(boy, kesim_payi)
+    döndür boy + kesim_payi
+son
+
+# Sayiyi sag hizali metne cevir (rapor duzeni icin)
+işlev sag_hizala(sayi, genislik)
+    s = metin(sayi)
+    iken uzunluk(s) < genislik
+        s = " " + s
+    son
+    döndür s
+son
+
+işlev cizgi(n)
+    s = ""
+    i = 0
+    iken i < n
+        s = s + "-"
+        i = i + 1
+    son
+    döndür s
+son
+
+# Yuzde hesabi — iki ondalik basamak
+işlev yuzde(pay, payda)
+    eğer payda == 0 ise
+        döndür 0
+    son
+    döndür taban(pay * 10000 / payda) / 100
+son
+
+# ---------------- OPTIMIZASYON ----------------
+
+parcalar = parcalari_ac(siparis)
+parcalar = buyukten_sirala(parcalar)
+
+toplam_parca = uzunluk(parcalar)
+toplam_talep = 0
+her p parcalar içinde
+    toplam_talep = toplam_talep + p
+son
+
+# cubuklar: her cubuk icin kalan bosluk + uzerindeki parcalar
+kalan = []       # her cubugun kalan mm si
+cubuklar = []    # her cubugun parca listesi
+
+her boy parcalar içinde
+    yer = kaplama(boy, kesim_payi)
+    yerlesti = 0
+    i = 0
+    n = uzunluk(kalan)
+    iken i < n
+        eğer yerlesti == 0 ve kalan[i] >= yer ise
+            kalan[i] = kalan[i] - yer
+            cubuklar[i] = ekle(cubuklar[i], boy)
+            yerlesti = 1
+        son
+        i = i + 1
+    son
+    eğer yerlesti == 0 ise
+        # yeni cubuk ac
+        yeni = []
+        yeni = ekle(yeni, boy)
+        cubuklar = ekle(cubuklar, yeni)
+        kalan = ekle(kalan, stok_boy - yer)
+    son
+son
+
+# ---------------- RAPOR ----------------
+
+cubuk_sayisi = uzunluk(cubuklar)
+toplam_stok = cubuk_sayisi * stok_boy
+
+yaz("")
+yaz("=========================================================")
+yaz("  KESIM PLANI — Tan dilinde uretildi")
+yaz("=========================================================")
+yaz("Stok profil boyu : " + metin(stok_boy) + " mm")
+yaz("Testere payi     : " + metin(kesim_payi) + " mm")
+yaz("Toplam parca     : " + metin(toplam_parca) + " adet")
+yaz("")
+yaz(cizgi(76))
+yaz(" Cubuk | Parcalar (mm)                                    |  Fire | Doluluk")
+yaz(cizgi(76))
+
+toplam_fire = 0
+c = 0
+iken c < cubuk_sayisi
+    satir = " " + sag_hizala(c + 1, 5) + " | "
+    liste = cubuklar[c]
+    metin_parca = ""
+    her p liste içinde
+        eğer metin_parca == "" ise
+            metin_parca = metin(p)
+        değilse
+            metin_parca = metin_parca + "+" + metin(p)
+        son
+    son
+    iken uzunluk(metin_parca) < 48
+        metin_parca = metin_parca + " "
+    son
+    fire = kalan[c]
+    toplam_fire = toplam_fire + fire
+    dolu = yuzde(stok_boy - fire, stok_boy)
+    yaz(satir + metin_parca + " | " + sag_hizala(fire, 5) + " |  %" + metin(dolu))
+    c = c + 1
+son
+
+yaz(cizgi(76))
+yaz("")
+yaz("Kullanilan stok  : " + metin(cubuk_sayisi) + " cubuk = " + metin(toplam_stok) + " mm")
+yaz("Net parca toplami: " + metin(toplam_talep) + " mm")
+yaz("Toplam fire      : " + metin(toplam_fire) + " mm")
+yaz("Verim            : %" + metin(yuzde(toplam_talep, toplam_stok)))
+yaz("Fire orani       : %" + metin(yuzde(toplam_fire, toplam_stok)))
+yaz("")
+
+# Teorik alt sinir: net talep / stok boyu (yukari yuvarlama)
+alt_sinir = toplam_talep / stok_boy
+eğer toplam_talep % stok_boy != 0 ise
+    alt_sinir = (toplam_talep - (toplam_talep % stok_boy)) / stok_boy + 1
+son
+yaz("Teorik en az cubuk: " + metin(alt_sinir) + "  (fire sifir olsaydi)")
+yaz("Bu planda         : " + metin(cubuk_sayisi) + " cubuk")
+yaz("Fazladan          : " + metin(cubuk_sayisi - alt_sinir) + " cubuk")
+yaz("")
+
+# ---------------- OZ-DENETIM ----------------
+# Uretilen plan siparisi TAM olarak karsiliyor mu?
+# Sahada kesim yapilacaksa bu denetim sart.
+
+işlev planda_say(cubuklar, aranan)
+    adet = 0
+    her cubuk cubuklar içinde
+        her p cubuk içinde
+            eğer p == aranan ise
+                adet = adet + 1
+            son
+        son
+    son
+    döndür adet
+son
+
+yaz(cizgi(76))
+yaz(" OZ-DENETIM")
+yaz(cizgi(76))
+
+hata_var = 0
+her kalem siparis içinde
+    boy = kalem[0]
+    istenen = kalem[1]
+    bulunan = planda_say(cubuklar, boy)
+    durum = "TAMAM"
+    eğer bulunan != istenen ise
+        durum = "HATA"
+        hata_var = 1
+    son
+    yaz(" " + sag_hizala(boy, 6) + " mm : istenen " + sag_hizala(istenen, 3) +
+        " / planda " + sag_hizala(bulunan, 3) + "   " + durum)
+son
+
+# Boy denetimi: hicbir cubuk stok boyunu asmamali
+tasan = 0
+c = 0
+iken c < cubuk_sayisi
+    kullanilan = 0
+    her p cubuklar[c] içinde
+        kullanilan = kullanilan + p + kesim_payi
+    son
+    eğer kullanilan > stok_boy ise
+        tasan = tasan + 1
+    son
+    c = c + 1
+son
+
+yaz("")
+eğer tasan > 0 ise
+    yaz(" BOY DENETIMI : HATA — " + metin(tasan) + " cubuk stok boyunu asiyor")
+    hata_var = 1
+değilse
+    yaz(" BOY DENETIMI : TAMAM — hicbir cubuk " + metin(stok_boy) + " mm yi asmiyor")
+son
+
+# Toplam denge: net + fire + testere payi = kullanilan stok
+testere_toplam = toplam_parca * kesim_payi
+denge = toplam_talep + toplam_fire + testere_toplam
+eğer denge == toplam_stok ise
+    yaz(" DENGE DENETIMI: TAMAM — " + metin(toplam_talep) + " + " + metin(toplam_fire) +
+        " + " + metin(testere_toplam) + " = " + metin(toplam_stok))
+değilse
+    yaz(" DENGE DENETIMI: HATA — " + metin(denge) + " != " + metin(toplam_stok))
+    hata_var = 1
+son
+
+yaz("")
+eğer hata_var == 0 ise
+    yaz(" >>> PLAN GECERLI. Kesime hazir.")
+değilse
+    yaz(" >>> PLAN HATALI. Kesime BASLAMA.")
+son
+yaz("")

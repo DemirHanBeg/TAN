@@ -1,0 +1,37 @@
+# ============================================================
+# finans.tan — finansal hesaplamalar (saf Tan)
+# ============================================================
+içe al "kutuphane/matematik2.tan"
+
+# yüzde_değişim(eski, yeni)
+işlev yüzde_değişim(eski, yeni)
+    eğer eski == 0 ise
+        döndür 0
+    son
+    döndür ((yeni - eski) / eski) * 100
+son
+
+# bileşik_faiz(anapara, oran_yüzde, dönem)
+işlev bileşik_faiz(anapara, oran, dönem)
+    çarpan = 1 + oran / 100
+    döndür anapara * kuvvet_ondalık(çarpan, dönem)
+son
+
+# ondalık üs için (kuvvet tam sayı üs alıyor, burada dönem tam sayı)
+işlev kuvvet_ondalık(taban, üs)
+    sonuç = 1
+    i = 0
+    iken i < üs
+        sonuç = sonuç * taban
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# kar_marjı(maliyet, satış)
+işlev kar_marjı(maliyet, satış)
+    eğer satış == 0 ise
+        döndür 0
+    son
+    döndür ((satış - maliyet) / satış) * 100
+son

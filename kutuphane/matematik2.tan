@@ -1,0 +1,85 @@
+# ============================================================
+# matematik2.tan — ileri matematik (saf Tan)
+# ============================================================
+içe al "kutuphane/temel.tan"
+
+# ebob (en büyük ortak bölen) - Öklid
+işlev ebob(a, b)
+    iken b != 0
+        geçici = b
+        b = a % b
+        a = geçici
+    son
+    döndür a
+son
+
+# ekok (en küçük ortak kat)
+işlev ekok(a, b)
+    döndür (a * b) / ebob(a, b)
+son
+
+# asal_mı(n)
+işlev asal_mı(n)
+    eğer n < 2 ise
+        döndür yanlış
+    son
+    i = 2
+    iken i * i <= n
+        eğer n % i == 0 ise
+            döndür yanlış
+        son
+        i = i + 1
+    son
+    döndür doğru
+son
+
+# fibonacci(n) - n. terim (iteratif)
+işlev fibonacci(n)
+    a = 0
+    b = 1
+    i = 0
+    iken i < n
+        geçici = a + b
+        a = b
+        b = geçici
+        i = i + 1
+    son
+    döndür a
+son
+
+# sin/cos - Taylor serisi (radyan)
+işlev sinüs(x)
+    # x'i -pi..pi aralığına indir (kabaca)
+    terim = x
+    toplam = x
+    i = 1
+    iken i < 10
+        terim = terim * (0 - x * x) / ((2 * i) * (2 * i + 1))
+        toplam = toplam + terim
+        i = i + 1
+    son
+    döndür toplam
+son
+
+işlev kosinüs(x)
+    terim = 1
+    toplam = 1
+    i = 1
+    iken i < 10
+        terim = terim * (0 - x * x) / ((2 * i - 1) * (2 * i))
+        toplam = toplam + terim
+        i = i + 1
+    son
+    döndür toplam
+son
+
+# üs alma (tam sayı üs)
+işlev kuvvet(taban, üs)
+    sonuç = 1
+    i = 0
+    iken i < üs
+        sonuç = sonuç * taban
+        i = i + 1
+    son
+    döndür sonuç
+son

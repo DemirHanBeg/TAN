@@ -1,0 +1,58 @@
+# ============================================================
+# bicim.tan — sayı/metin biçimleme (saf Tan)
+# ============================================================
+
+# tekrar_metin(metin, n): metni n kez tekrarlar
+işlev tekrar_metin(metin, n)
+    sonuç = ""
+    i = 0
+    iken i < n
+        sonuç = sonuç + metin
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# sola_yasla(metin, genişlik, dolgu): metni sola yaslar, sağını dolgu ile tamamlar
+işlev sola_yasla(metin, genişlik, dolgu)
+    uzun = uzunluk(metin)
+    eğer uzun >= genişlik ise
+        döndür metin
+    son
+    döndür metin + tekrar_metin(dolgu, genişlik - uzun)
+son
+
+# sağa_yasla(metin, genişlik, dolgu): metni sağa yaslar, solunu dolgu ile tamamlar
+işlev sağa_yasla(metin, genişlik, dolgu)
+    uzun = uzunluk(metin)
+    eğer uzun >= genişlik ise
+        döndür metin
+    son
+    döndür tekrar_metin(dolgu, genişlik - uzun) + metin
+son
+
+# para_biçim(sayı): binlik ayraçlı tam sayı metni. Örn: 1234567 -> "1.234.567"
+işlev para_biçim(sayı)
+    negatif = yanlış
+    n = sayı
+    eğer n < 0 ise
+        negatif = doğru
+        n = 0 - n
+    son
+    hrf = harfler("" + n)
+    uzun = uzunluk(hrf)
+    sonuç = ""
+    i = 0
+    iken i < uzun
+        sonuç = sonuç + hrf[i]
+        kalan = uzun - i - 1
+        eğer kalan > 0 ve kalan % 3 == 0 ise
+            sonuç = sonuç + "."
+        son
+        i = i + 1
+    son
+    eğer negatif ise
+        döndür "-" + sonuç
+    son
+    döndür sonuç
+son

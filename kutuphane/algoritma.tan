@@ -1,0 +1,43 @@
+# ============================================================
+# algoritma.tan — arama ve yardımcı algoritmalar (saf Tan)
+# ============================================================
+
+# ikili_arama(sıralı_liste, hedef): konumu, yoksa -1 (liste SIRALI olmalı)
+işlev ikili_arama(liste, hedef)
+    alt = 0
+    üst = uzunluk(liste) - 1
+    iken alt <= üst
+        orta = taban((alt + üst) / 2)
+        eğer liste[orta] == hedef ise
+            döndür orta
+        değilse eğer liste[orta] < hedef ise
+            alt = orta + 1
+        değilse
+            üst = orta - 1
+        son
+    son
+    döndür -1
+son
+
+# doğrusal_arama(liste, hedef): konumu, yoksa -1
+işlev doğrusal_arama(liste, hedef)
+    i = 0
+    iken i < uzunluk(liste)
+        eğer liste[i] == hedef ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür -1
+son
+
+# sayaç(liste, hedef): kaç kez geçiyor
+işlev sayaç_kaç(liste, hedef)
+    n = 0
+    her x liste içinde
+        eğer x == hedef ise
+            n = n + 1
+        son
+    son
+    döndür n
+son

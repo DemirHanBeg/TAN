@@ -1,0 +1,36 @@
+# Derlenmiş motor binary'leri
+tan
+tan_seed
+tan_yerli
+tan_linux
+tan.eski
+
+# Tan'ın ürettiği derleyiciler
+tanc
+tanc2
+tanc_asm
+
+# Derleme çıktıları
+*.o
+*.s
+*.c
+*_bin
+k1
+k2
+k34
+o2
+ornek_prog
+ornek_asm
+ornek2_bin
+
+# WASM (yeniden üretilebilir: GOOS=js GOARCH=wasm go build)
+web/tan.wasm
+
+# Go
+/vendor/
+
+# Düzenleyici
+.vscode/
+.idea/
+*.swp
+.DS_Store

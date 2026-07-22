@@ -1,0 +1,65 @@
+içe al "kutuphane/sira.tan"
+içe al "kutuphane/temel.tan"
+# ============================================================
+# istatistik.tan — temel istatistik işlevleri (saf Tan)
+# ============================================================
+
+# topla_sayılar(liste): tüm sayıların toplamı
+işlev topla_sayılar(liste)
+    toplam = 0
+    her sayı liste içinde
+        toplam = toplam + sayı
+    son
+    döndür toplam
+son
+
+# ist_ortalama(liste): aritmetik ortalama
+# (adı "ortalama" değil "ist_ortalama" — liste.tan'daki ortalama ile çakışmasın diye)
+işlev ist_ortalama(liste)
+    döndür topla_sayılar(liste) / uzunluk(liste)
+son
+
+# ist_en_büyük(liste): en büyük değer
+işlev ist_en_büyük(liste)
+    enb = liste[0]
+    her sayı liste içinde
+        eğer sayı > enb ise
+            enb = sayı
+        son
+    son
+    döndür enb
+son
+
+# ist_en_küçük(liste): en küçük değer
+işlev ist_en_küçük(liste)
+    enk = liste[0]
+    her sayı liste içinde
+        eğer sayı < enk ise
+            enk = sayı
+        son
+    son
+    döndür enk
+son
+
+# medyan(liste): sıralayıp ortadaki değer(ler)
+işlev medyan(liste)
+    sıralı = hızlı_sırala(liste)
+    n = uzunluk(sıralı)
+    orta = n / 2
+    eğer n % 2 == 0 ise
+        döndür (sıralı[orta - 1] + sıralı[orta]) / 2
+    son
+    döndür sıralı[orta]
+son
+
+# std_sapma(liste): standart sapma (popülasyon)
+işlev std_sapma(liste)
+    ort = ist_ortalama(liste)
+    kareler_toplamı = 0
+    her sayı liste içinde
+        fark = sayı - ort
+        kareler_toplamı = kareler_toplamı + fark * fark
+    son
+    varyans = kareler_toplamı / uzunluk(liste)
+    döndür t_karekök(varyans)
+son

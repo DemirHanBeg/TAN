@@ -1,0 +1,65 @@
+# ============================================
+# matematik.tan — saf Tan ile yazılmış matematik kütüphanesi
+# Hiçbiri ödünç değil; hepsi Tan'ın kendisiyle.
+# içe al "kutuphane/matematik.tan"
+# ============================================
+
+işlev mutlak_değer(x)
+    eğer x < 0 ise
+        döndür 0 - x
+    son
+    döndür x
+son
+
+işlev en_büyük(a, b)
+    eğer a > b ise
+        döndür a
+    son
+    döndür b
+son
+
+işlev en_küçük(a, b)
+    eğer a < b ise
+        döndür a
+    son
+    döndür b
+son
+
+işlev üs_al(taban, kuvvet)
+    sonuç = 1
+    i = 0
+    iken i < kuvvet
+        sonuç = sonuç * taban
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+işlev faktöriyel(n)
+    eğer n <= 1 ise
+        döndür 1
+    son
+    döndür n * faktöriyel(n - 1)
+son
+
+işlev tek_mi(n)
+    döndür n % 2 == 1
+son
+
+işlev çift_mi(n)
+    döndür n % 2 == 0
+son
+
+# Karekök — Newton yöntemiyle (saf Tan, köprü yok)
+işlev karekök(x)
+    eğer x < 0 ise
+        döndür 0
+    son
+    tahmin = x / 2
+    i = 0
+    iken i < 20
+        tahmin = (tahmin + x / tahmin) / 2
+        i = i + 1
+    son
+    döndür tahmin
+son

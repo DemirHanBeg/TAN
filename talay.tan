@@ -1,0 +1,94 @@
+# ============================================================
+# talay.tan — Navlun İstihbarat Motoru (tam uygulama, saf Tan)
+# Navlun endekslerinden teknik göstergeler -> endeks sinyalleri
+# -> sektör skorları -> sıralama -> rapor.
+# "Motor sayı üretir." — Talay'ın çekirdek mantığı, Tan diliyle.
+# ============================================================
+içe al "kutuphane/skorlama.tan"
+içe al "kutuphane/tablo.tan"
+içe al "kutuphane/sira.tan"
+
+# --- 1. VERİ: navlun endeksleri (zaman serileri) ---
+# Gerçekte RSS/AIS'ten gelir; burada örnek seri gömülü.
+endeksler = {
+    "FBX": [1420, 1490, 1560, 1640, 1730, 1830, 1950],
+    "SCFI": [1180, 1120, 1060, 1000, 940, 880, 810],
+    "WCI": [2100, 2180, 2260, 2350, 2450, 2560, 2690],
+    "BDI": [1450, 1380, 1310, 1240, 1170, 1100, 1020],
+    "HARPEX": [640, 648, 655, 660, 668, 674, 682]
+}
+
+# --- 2. SEKTÖR HARİTASI: her sektör hangi endekslere ne ağırlıkla bağlı ---
+sektörler = {
+    "perakende": {"FBX": 0.5, "SCFI": 0.3, "WCI": 0.2},
+    "elektronik": {"SCFI": 0.4, "WCI": 0.4, "FBX": 0.2},
+    "otomotiv": {"WCI": 0.5, "BDI": 0.3, "FBX": 0.2},
+    "hammadde_kimya": {"BDI": 0.6, "HARPEX": 0.4},
+    "tüketim": {"FBX": 0.4, "SCFI": 0.3, "HARPEX": 0.3}
+}
+
+# --- 3. Her endeks için sinyal hesapla ---
+yaz "═══════════════════════════════════════════════"
+yaz "   TALAY — Navlun İstihbarat Raporu"
+yaz "═══════════════════════════════════════════════"
+yaz ""
+
+endeks_sinyalleri = sözlük()
+endeks_satırları = []
+her ad anahtarlar(endeksler) içinde
+    seri = endeksler[ad]
+    sinyal = endeks_sinyali(seri)
+    endeks_sinyalleri[ad] = sinyal
+    mom = momentum(seri, 3)
+    son_değer = seri[uzunluk(seri) - 1]
+    ekle(endeks_satırları, [ad, "" + son_değer, "" + yuvarla(mom, 1) + "%", "" + yuvarla(sinyal, 1), sinyal_etiketi(sinyal)])
+son
+
+yaz "── ENDEKSLER ──"
+yaz metin_tablo(["Endeks", "Değer", "Momentum", "Sinyal", "Durum"], endeks_satırları)
+yaz ""
+
+# --- 4. Her sektör için skor hesapla ---
+sektör_skorları = []
+her sektör anahtarlar(sektörler) içinde
+    ağırlıklar = sektörler[sektör]
+    skor = sektör_skoru(endeks_sinyalleri, ağırlıklar)
+    ekle(sektör_skorları, {"ad": sektör, "skor": skor})
+son
+
+# --- 5. Sektörleri skora göre sırala (yüksekten düşüğe, kabarcık) ---
+n = uzunluk(sektör_skorları)
+i = 0
+iken i < n
+    j = 0
+    iken j < n - 1
+        eğer sektör_skorları[j]["skor"] < sektör_skorları[j + 1]["skor"] ise
+            g = sektör_skorları[j]
+            sektör_skorları[j] = sektör_skorları[j + 1]
+            sektör_skorları[j + 1] = g
+        son
+        j = j + 1
+    son
+    i = i + 1
+son
+
+# --- 6. Sektör raporu ---
+sektör_satırları = []
+sıra = 1
+her s sektör_skorları içinde
+    ekle(sektör_satırları, ["" + sıra, s["ad"], "" + yuvarla(s["skor"], 1), sinyal_etiketi(s["skor"])])
+    sıra = sıra + 1
+son
+
+yaz "── SEKTÖR SIRALAMASI (sinyal gücüne göre) ──"
+yaz metin_tablo(["Sıra", "Sektör", "Skor", "Tavsiye"], sektör_satırları)
+yaz ""
+
+# --- 7. Özet: en güçlü ve en zayıf ---
+en_güçlü = sektör_skorları[0]
+en_zayıf = sektör_skorları[uzunluk(sektör_skorları) - 1]
+yaz "── ÖZET ──"
+yaz "En güçlü sektör : " + en_güçlü["ad"] + " (" + sinyal_etiketi(en_güçlü["skor"]) + ")"
+yaz "En zayıf sektör : " + en_zayıf["ad"] + " (" + sinyal_etiketi(en_zayıf["skor"]) + ")"
+yaz ""
+yaz "Motor sayı üretti; yorum insana kalır."

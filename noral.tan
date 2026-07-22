@@ -1,0 +1,155 @@
+# ============================================================
+# Seviye B — ÖĞRENEN nöral model (saf Tan, backprop)
+# Bigram'dan farkı: sayım değil, ağırlık öğreniyor.
+# Her (şimdiki harf -> sonraki harf) için bir ağırlık (logit).
+# softmax + çapraz entropi kaybı + gradyan inişi.
+# ============================================================
+
+# --- 1. Veri ve dağarcık ---
+kelimeler = ["demir", "deniz", "derya", "melek", "mert", "mavi", "arda", "aslan", "ada"]
+nokta = "."
+
+# Dağarcık: tüm benzersiz harfler
+dagarcik = []
+işlev dagarcikta_mi(h)
+    her x dagarcik içinde
+        eğer x == h ise
+            döndür doğru
+        son
+    son
+    döndür yanlış
+son
+ekle(dagarcik, nokta)
+her kel kelimeler içinde
+    her h harfler(kel) içinde
+        eğer değil dagarcikta_mi(h) ise
+            ekle(dagarcik, h)
+        son
+    son
+son
+D = uzunluk(dagarcik)
+yaz "Dağarcık boyutu: " + D
+
+# harf -> indeks
+işlev indeksi(h)
+    i = 0
+    iken i < D
+        eğer dagarcik[i] == h ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0
+son
+
+# --- 2. Ağırlıklar: W[şimdiki][sonraki], D x D matris ---
+W = []
+i = 0
+iken i < D
+    satır = []
+    j = 0
+    iken j < D
+        ekle(satır, 0)
+        j = j + 1
+    son
+    ekle(W, satır)
+    i = i + 1
+son
+
+# --- 3. Eğitim çiftlerini hazırla (şimdiki -> sonraki) ---
+ciftler = []
+her kel kelimeler içinde
+    zincir = harfler(nokta + kel + nokta)
+    k = 0
+    iken k < uzunluk(zincir) - 1
+        ekle(ciftler, [indeksi(zincir[k]), indeksi(zincir[k + 1])])
+        k = k + 1
+    son
+son
+yaz "Eğitim çifti sayısı: " + uzunluk(ciftler)
+
+# --- 4. softmax (bir satır logit -> olasılıklar) ---
+işlev softmax(logitler)
+    en = logitler[0]
+    her l logitler içinde
+        eğer l > en ise
+            en = l
+        son
+    son
+    üsler = []
+    toplam = 0
+    her l logitler içinde
+        e = e_üssü(l - en)
+        ekle(üsler, e)
+        toplam = toplam + e
+    son
+    olasılıklar = []
+    her e üsler içinde
+        ekle(olasılıklar, e / toplam)
+    son
+    döndür olasılıklar
+son
+
+# --- 5. Eğitim döngüsü (gradyan inişi) ---
+oran = 0.5
+devir = 0
+iken devir < 100
+    kayıp = 0
+    her c ciftler içinde
+        x = c[0]
+        y = c[1]
+        p = softmax(W[x])
+        kayıp = kayıp - log(p[y])
+        # gradyan: dL/dlogit_j = p_j - (j==y)
+        j = 0
+        iken j < D
+            hedef = 0
+            eğer j == y ise
+                hedef = 1
+            son
+            W[x][j] = W[x][j] - oran * (p[j] - hedef)
+            j = j + 1
+        son
+    son
+    eğer devir % 20 == 0 ise
+        yaz "devir " + devir + " ortalama kayıp: " + kayıp / uzunluk(ciftler)
+    son
+    devir = devir + 1
+son
+
+# --- 6. Üretim (öğrenilen ağırlıklardan) ---
+işlev üret()
+    sonuç = []
+    x = indeksi(nokta)
+    adım = 0
+    iken adım < 15
+        p = softmax(W[x])
+        # olasılığa göre örnekle
+        r = rastgele(1000) / 1000
+        birikim = 0
+        seçilen = 0
+        j = 0
+        iken j < D
+            birikim = birikim + p[j]
+            eğer r < birikim ise
+                seçilen = j
+                dur
+            son
+            j = j + 1
+        son
+        eğer dagarcik[seçilen] == nokta ise
+            döndür birleştir(sonuç)
+        son
+        ekle(sonuç, dagarcik[seçilen])
+        x = seçilen
+        adım = adım + 1
+    son
+    döndür birleştir(sonuç)
+son
+
+yaz "--- Öğrenen modelin ürettikleri ---"
+n = 1
+iken n <= 8
+    yaz "  " + üret()
+    n = n + 1
+son

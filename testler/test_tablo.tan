@@ -1,0 +1,6 @@
+içe al "kutuphane/tablo.tan"
+
+başlıklar = ["Ad", "Yaş", "Şehir"]
+satırlar = [["Ali", "30", "İstanbul"], ["Ayşe", "25", "Ankara"], ["Mehmet", "41", "İzmir"]]
+
+yaz metin_tablo(başlıklar, satırlar)

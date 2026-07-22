@@ -1,0 +1,77 @@
+# ============================================
+# liste.tan — saf Tan ile liste araçları
+# ============================================
+
+işlev topla_hepsi(liste)
+    toplam = 0
+    her e liste içinde
+        toplam = toplam + e
+    son
+    döndür toplam
+son
+
+işlev en_büyük_öge(liste)
+    enb = liste[0]
+    her e liste içinde
+        eğer e > enb ise
+            enb = e
+        son
+    son
+    döndür enb
+son
+
+işlev en_küçük_öge(liste)
+    enk = liste[0]
+    her e liste içinde
+        eğer e < enk ise
+            enk = e
+        son
+    son
+    döndür enk
+son
+
+işlev içeriyor_mu(liste, aranan)
+    her e liste içinde
+        eğer e == aranan ise
+            döndür doğru
+        son
+    son
+    döndür yanlış
+son
+
+işlev ters_çevir(liste)
+    yeni = []
+    i = uzunluk(liste) - 1
+    iken i >= 0
+        ekle(yeni, liste[i])
+        i = i - 1
+    son
+    döndür yeni
+son
+
+# Kabarcık sıralama (küçükten büyüğe)
+işlev sırala(liste)
+    yeni = []
+    her e liste içinde
+        ekle(yeni, e)
+    son
+    n = uzunluk(yeni)
+    i = 0
+    iken i < n
+        j = 0
+        iken j < n - 1
+            eğer yeni[j] > yeni[j + 1] ise
+                geçici = yeni[j]
+                yeni[j] = yeni[j + 1]
+                yeni[j + 1] = geçici
+            son
+            j = j + 1
+        son
+        i = i + 1
+    son
+    döndür yeni
+son
+
+işlev ortalama(liste)
+    döndür topla_hepsi(liste) / uzunluk(liste)
+son

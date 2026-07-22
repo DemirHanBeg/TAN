@@ -1,0 +1,24 @@
+# ============================================================
+# tarih.tan — tarih/süre yardımcıları (zaman yerleşiği üstüne)
+# ============================================================
+
+işlev şimdi_saniye()
+    döndür zaman()
+son
+işlev saniyeyi_güne(sn)
+    döndür sn / 86400
+son
+işlev saniyeyi_saate(sn)
+    döndür sn / 3600
+son
+işlev süre_biçim(sn)
+    saat = taban(sn / 3600)
+    kalan = sn - saat * 3600
+    dakika = taban(kalan / 60)
+    saniye = kalan - dakika * 60
+    döndür "" + saat + "s " + dakika + "d " + saniye + "sn"
+son
+# iki zaman damgası arası fark (saniye)
+işlev geçen_süre(baş, bit)
+    döndür bit - baş
+son

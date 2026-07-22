@@ -1,0 +1,82 @@
+# ============================================================
+# tokenizer.tan — basit aritmetik ifade tokenizer'ı
+# Kaynak metni karakter karakter gezer, token listesine böler.
+# Her token: {"tür": ..., "değer": ...}
+# ============================================================
+
+# rakam mı kontrolü — sayı token'lerini biriktirmek için lazım
+işlev rakam_mı(h)
+    döndür h == "0" veya h == "1" veya h == "2" veya h == "3" veya h == "4" veya h == "5" veya h == "6" veya h == "7" veya h == "8" veya h == "9"
+son
+
+# boşluk mu kontrolü — atlanacak karakterler
+işlev boşluk_mu(h)
+    döndür h == " " veya h == "\t" veya h == "\n"
+son
+
+# işleç mi kontrolü — desteklenen aritmetik işleçler
+işlev işleç_mi(h)
+    döndür h == "+" veya h == "-" veya h == "*" veya h == "/" veya h == "%"
+son
+
+# Ana tokenizer işlevi: kaynak metni token listesine çevirir.
+işlev tokenle(kaynak)
+    tokenlar = []
+    hrf = harfler(kaynak)
+    i = 0
+    n = uzunluk(hrf)
+
+    iken i < n
+        h = hrf[i]
+
+        # 1) boşluk: token üretmeden atla
+        eğer boşluk_mu(h) ise
+            i = i + 1
+            devam
+        son
+
+        # 2) sayı: ardışık rakamları tek token'a topla
+        eğer rakam_mı(h) ise
+            metin = ""
+            iken i < n ve rakam_mı(hrf[i])
+                metin = metin + hrf[i]
+                i = i + 1
+            son
+            ekle(tokenlar, {"tür": "sayı", "değer": metin})
+            devam
+        son
+
+        # 3) işleç: + - * / %
+        eğer işleç_mi(h) ise
+            ekle(tokenlar, {"tür": "işleç", "değer": h})
+            i = i + 1
+            devam
+        son
+
+        # 4) geri kalan her şey: bilinmeyen
+        ekle(tokenlar, {"tür": "bilinmeyen", "değer": h})
+        i = i + 1
+    son
+
+    döndür tokenlar
+son
+
+# Token listesini "[tür] değer" biçiminde ekrana basar.
+işlev tokenları_yazdır(tokenlar)
+    her t tokenlar içinde
+        yaz "[" + t["tür"] + "] " + t["değer"]
+    son
+son
+
+# ============================================================
+# Örnekler
+# ============================================================
+
+örnekler = ["12 + 34 * 5 - 6", "100 / 3 % 2", "7 + a - 8"]
+
+her ornek örnekler içinde
+    yaz "Kaynak: " + ornek
+    tlar = tokenle(ornek)
+    tokenları_yazdır(tlar)
+    yaz "----------------------------"
+son

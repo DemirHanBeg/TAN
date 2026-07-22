@@ -1,0 +1,74 @@
+# ============================================================
+# skorlama.tan — sinyal/skorlama motoru (saf Tan)
+# Göstergeleri birleştirip endeks sinyali, sonra sektör skoru üretir
+# ============================================================
+içe al "kutuphane/gostergeler.tan"
+
+# endeks_sinyali(seri): bir endeksin zaman serisinden -100..+100 arası sinyal
+# momentum + trend + oynaklık cezası birleştirilir
+işlev endeks_sinyali(seri)
+    mom = momentum(seri, 3)
+    trend = trend_yönü(seri, 3, 7)
+    oyn = oynaklık(seri, 5)
+
+    # oynaklığı yüzdeye çevir (ortalamaya oranla) — momentum ile aynı ölçek
+    ort = hareketli_ortalama(seri, 5)
+    oyn_yüzde = 0
+    eğer ort != 0 ise
+        oyn_yüzde = (oyn / ort) * 100
+    son
+
+    # temel sinyal: momentum
+    sinyal = mom
+    # trend yukarıysa güçlendir, aşağıysa zayıflat
+    sinyal = sinyal * (1 + trend * 0.3)
+    # yüksek oynaklık güveni azaltır (yüzdesel ceza)
+    ceza = oyn_yüzde * 0.5
+    eğer sinyal > 0 ise
+        sinyal = sinyal - ceza
+    değilse
+        sinyal = sinyal + ceza
+    son
+    # -100..+100 aralığına sıkıştır
+    eğer sinyal > 100 ise
+        sinyal = 100
+    son
+    eğer sinyal < -100 ise
+        sinyal = -100
+    son
+    döndür sinyal
+son
+
+# sektör_skoru(endeks_sinyalleri, ağırlıklar): ağırlıklı ortalama sinyal
+# endeks_sinyalleri: sözlük {endeks_adı: sinyal}
+# ağırlıklar: sözlük {endeks_adı: ağırlık}
+işlev sektör_skoru(sinyaller, ağırlıklar)
+    toplam_ağırlık = 0
+    ağırlıklı_toplam = 0
+    her endeks anahtarlar(ağırlıklar) içinde
+        eğer var_mı(sinyaller, endeks) ise
+            a = ağırlıklar[endeks]
+            ağırlıklı_toplam = ağırlıklı_toplam + sinyaller[endeks] * a
+            toplam_ağırlık = toplam_ağırlık + a
+        son
+    son
+    eğer toplam_ağırlık == 0 ise
+        döndür 0
+    son
+    döndür ağırlıklı_toplam / toplam_ağırlık
+son
+
+# sinyal_etiketi(skor): sayısal skoru okunur etikete çevirir
+işlev sinyal_etiketi(skor)
+    eğer skor >= 40 ise
+        döndür "GÜÇLÜ AL"
+    değilse eğer skor >= 15 ise
+        döndür "AL"
+    değilse eğer skor > -15 ise
+        döndür "NÖTR"
+    değilse eğer skor > -40 ise
+        döndür "SAT"
+    değilse
+        döndür "GÜÇLÜ SAT"
+    son
+son

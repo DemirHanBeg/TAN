@@ -1,0 +1,11 @@
+işlev topla(a, b)
+    döndür a + b
+son
+işlev faktöriyel(n)
+    eğer n <= 1 ise
+        döndür 1
+    son
+    döndür n * faktöriyel(n - 1)
+son
+yaz "topla(3,4): " + topla(3, 4)
+yaz "faktöriyel(6): " + faktöriyel(6)

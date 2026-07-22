@@ -1,0 +1,15 @@
+# ============================================================
+# hesap.tan — ağır sayısal işi DIŞ motora devretme deseni
+# GPU köprüsünün mimari provası: Tan yönetir, hesabı dışarı verir.
+# Şimdilik dış motor = Python/numpy (çalıştır ile). GPU geldiğinde
+# aynı desen CUDA'ya bağlanır; Tan kodu değişmez.
+# "Motor sayı üretir, Tan yönetir."
+# ============================================================
+
+# matris_çarp(A, B): iki matrisi dış motora (numpy) çarptırır
+işlev matris_çarp(A, B)
+    istek = json_yap({"işlem": "matris_çarp", "A": A, "B": B})
+    kod = "import sys,json,numpy as np;" + "d=json.loads(sys.argv[1]);" + "print(json.dumps(np.matmul(np.array(d['A']),np.array(d['B'])).tolist()))"
+    sonuç = çalıştır("python3", "-c", kod, istek)
+    döndür json_çöz(kırp(sonuç))
+son

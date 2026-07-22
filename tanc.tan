@@ -1,0 +1,135 @@
+# ============================================================
+# tanc — TAN İLE YAZILMIŞ mini-Tan derleyicisi
+# Girdi dili (mini-Tan, ASCII): her satır
+#     <ad> = <ifade>      (atama)
+#     yaz <ifade>         (yazdır)
+# İfade: tam sayı, + - * /, ( ), değişken.  C precedence uygular.
+# Kullanım: tanc <girdi.mt> <cikti-binary>
+# ============================================================
+
+işlev bosluk_mu(k)
+    döndür k == 32 veya k == 9 veya k == 13
+son
+
+işlev rakam_mi(k)
+    döndür k >= 48 ve k <= 57
+son
+
+işlev harf_mi(k)
+    döndür (k >= 97 ve k <= 122) veya (k >= 65 ve k <= 90) veya k == 95
+son
+
+# bir satırı token listesine böl
+işlev tokenle(satir)
+    tokenler = []
+    n = uzunluk(satir)
+    i = 0
+    iken i < n
+        k = kod(satir[i])
+        eğer bosluk_mu(k) ise
+            i = i + 1
+        değilse eğer rakam_mi(k) ise
+            s = ""
+            iken i < n ve rakam_mi(kod(satir[i]))
+                s = s + satir[i]
+                i = i + 1
+            son
+            tokenler = ekle(tokenler, s)
+        değilse eğer harf_mi(k) ise
+            ad = ""
+            iken i < n ve (harf_mi(kod(satir[i])) veya rakam_mi(kod(satir[i])))
+                ad = ad + satir[i]
+                i = i + 1
+            son
+            tokenler = ekle(tokenler, ad)
+        değilse
+            tokenler = ekle(tokenler, satir[i])
+            i = i + 1
+        son
+    son
+    döndür tokenler
+son
+
+işlev sayi_token_mu(t)
+    eğer uzunluk(t) == 0 ise
+        döndür 0
+    son
+    döndür rakam_mi(kod(t))
+son
+
+# ifade tokenlerini (basla indeksinden) C ifadesine çevir
+işlev ifade_c(tokenler, basla)
+    c = ""
+    i = basla
+    n = uzunluk(tokenler)
+    iken i < n
+        t = tokenler[i]
+        eğer sayi_token_mu(t) ise
+            c = c + t
+        değilse eğer t == "+" veya t == "-" veya t == "*" veya t == "/" ise
+            c = c + " " + t + " "
+        değilse eğer t == "(" veya t == ")" ise
+            c = c + t
+        değilse
+            c = c + "v_" + t
+        son
+        i = i + 1
+    son
+    döndür c
+son
+
+işlev iceriyor_mu(liste, x)
+    her e liste içinde
+        eğer e == x ise
+            döndür 1
+        son
+    son
+    döndür 0
+son
+
+# ---- ANA DERLEYİCİ ----
+girdi = arg(1)
+cikti = arg(2)
+kaynak = oku(girdi)
+satirlar = parçala(kaynak, "\n")
+
+# 1. geçiş: değişkenleri topla
+degiskenler = []
+her satir satirlar içinde
+    tk = tokenle(satir)
+    eğer uzunluk(tk) >= 2 ise
+        eğer tk[1] == "=" ise
+            ad = tk[0]
+            eğer iceriyor_mu(degiskenler, ad) == 0 ise
+                degiskenler = ekle(degiskenler, ad)
+            son
+        son
+    son
+son
+
+# 2. geçiş: C üret
+c = "#include <stdio.h>" + karakter(10)
+c = c + "static void yz(double x){ if(x==(long long)x) printf(" + karakter(34) + "%lld" + karakter(92) + "n" + karakter(34) + ",(long long)x); else printf(" + karakter(34) + "%g" + karakter(92) + "n" + karakter(34) + ",x); }" + karakter(10)
+c = c + "int main(void){" + karakter(10)
+her d degiskenler içinde
+    c = c + "double v_" + d + "=0;" + karakter(10)
+son
+
+her satir satirlar içinde
+    tk = tokenle(satir)
+    eğer uzunluk(tk) > 0 ise
+        ilk = tk[0]
+        eğer ilk == "yaz" ise
+            c = c + "yz(" + ifade_c(tk, 1) + ");" + karakter(10)
+        değilse
+            ad = tk[0]
+            c = c + "v_" + ad + " = " + ifade_c(tk, 2) + ";" + karakter(10)
+        son
+    son
+son
+c = c + "return 0;" + karakter(10) + "}" + karakter(10)
+
+# C'yi yaz, gcc ile derle
+yaz_dosya(cikti + ".c", c)
+çalıştır("gcc", "-O2", "-o", cikti, cikti + ".c", "-lm")
+yaz("tanc: derlendi -> " + cikti)

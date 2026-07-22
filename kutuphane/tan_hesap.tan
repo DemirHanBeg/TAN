@@ -1,0 +1,73 @@
+# ============================================================
+# tan_hesap.tan — Tan içinde yazılmış bir ifade değerlendirici
+# Bootstrap kanıtı: Tan, Tan koduyla bir dili yorumluyor.
+# Aritmetik ifadeleri (+ - * / parantez) çözer.
+# lexer -> parser -> değerlendirici, hepsi TAN dilinde.
+# ============================================================
+
+içe al "kutuphane/tan_lexer.tan"
+
+# --- Parser + değerlendirici (özyinemeli iniş) ---
+# Durumu sözlükte taşıyoruz: {"tokenlar": ..., "konum": ...}
+
+işlev şimdiki(durum)
+    eğer durum["konum"] < uzunluk(durum["tokenlar"]) ise
+        döndür durum["tokenlar"][durum["konum"]]
+    son
+    döndür {"tür": "son", "değer": ""}
+son
+
+işlev ilerle(durum)
+    durum["konum"] = durum["konum"] + 1
+son
+
+# ifade = terim (('+' | '-') terim)*
+işlev ifade_çöz(durum)
+    sol = terim_çöz(durum)
+    iken şimdiki(durum)["değer"] == "+" veya şimdiki(durum)["değer"] == "-"
+        işleç = şimdiki(durum)["değer"]
+        ilerle(durum)
+        sağ = terim_çöz(durum)
+        eğer işleç == "+" ise
+            sol = sol + sağ
+        değilse
+            sol = sol - sağ
+        son
+    son
+    döndür sol
+son
+
+# terim = çarpan (('*' | '/') çarpan)*
+işlev terim_çöz(durum)
+    sol = çarpan_çöz(durum)
+    iken şimdiki(durum)["değer"] == "*" veya şimdiki(durum)["değer"] == "/"
+        işleç = şimdiki(durum)["değer"]
+        ilerle(durum)
+        sağ = çarpan_çöz(durum)
+        eğer işleç == "*" ise
+            sol = sol * sağ
+        değilse
+            sol = sol / sağ
+        son
+    son
+    döndür sol
+son
+
+# çarpan = sayı | '(' ifade ')'
+işlev çarpan_çöz(durum)
+    t = şimdiki(durum)
+    eğer t["değer"] == "(" ise
+        ilerle(durum)
+        iç = ifade_çöz(durum)
+        ilerle(durum)
+        döndür iç
+    son
+    ilerle(durum)
+    döndür sayı(t["değer"])
+son
+
+# hesapla(metin): bir aritmetik ifadeyi Tan-içi yorumlayıcıyla çözer
+işlev hesapla(metin)
+    durum = {"tokenlar": tokenle(metin), "konum": 0}
+    döndür ifade_çöz(durum)
+son

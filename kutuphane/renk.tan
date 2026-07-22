@@ -1,0 +1,22 @@
+# ============================================================
+# renk.tan — terminal (ANSI) renk kodları (saf Tan)
+# Not: bazı terminaller desteklemez.
+# ============================================================
+işlev renkli(metin, kod)
+    döndür karakter(27) + "[" + kod + "m" + metin + karakter(27) + "[0m"
+son
+işlev kırmızı(m)
+    döndür renkli(m, "31")
+son
+işlev yeşil(m)
+    döndür renkli(m, "32")
+son
+işlev sarı(m)
+    döndür renkli(m, "33")
+son
+işlev mavi(m)
+    döndür renkli(m, "34")
+son
+işlev kalın(m)
+    döndür renkli(m, "1")
+son

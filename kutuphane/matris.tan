@@ -1,0 +1,156 @@
+# ============================================================
+# matris.tan — lineer cebir (saf Tan)
+# Matris = liste içinde liste (satırlar). [[1,2],[3,4]]
+# ============================================================
+içe al "kutuphane/temel.tan"
+
+# birim_matris(n): n x n birim matris
+işlev birim_matris(n)
+    m = []
+    i = 0
+    iken i < n
+        satır = []
+        j = 0
+        iken j < n
+            eğer i == j ise
+                ekle(satır, 1)
+            değilse
+                ekle(satır, 0)
+            son
+            j = j + 1
+        son
+        ekle(m, satır)
+        i = i + 1
+    son
+    döndür m
+son
+
+# satır_sayısı / sütun_sayısı
+işlev satır_sayısı(m)
+    döndür uzunluk(m)
+son
+işlev sütun_sayısı(m)
+    eğer uzunluk(m) == 0 ise
+        döndür 0
+    son
+    döndür uzunluk(m[0])
+son
+
+# matris_topla(a, b): eleman eleman toplama
+işlev matris_topla(a, b)
+    sonuç = []
+    i = 0
+    iken i < uzunluk(a)
+        satır = []
+        j = 0
+        iken j < uzunluk(a[i])
+            ekle(satır, a[i][j] + b[i][j])
+            j = j + 1
+        son
+        ekle(sonuç, satır)
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# skaler_çarp(m, s): her elemanı s ile çarp
+işlev skaler_çarp(m, s)
+    sonuç = []
+    her satır m içinde
+        yeni = []
+        her x satır içinde
+            ekle(yeni, x * s)
+        son
+        ekle(sonuç, yeni)
+    son
+    döndür sonuç
+son
+
+# transpoz(m): satır<->sütun
+işlev transpoz(m)
+    sonuç = []
+    j = 0
+    iken j < sütun_sayısı(m)
+        yeni = []
+        i = 0
+        iken i < satır_sayısı(m)
+            ekle(yeni, m[i][j])
+            i = i + 1
+        son
+        ekle(sonuç, yeni)
+        j = j + 1
+    son
+    döndür sonuç
+son
+
+# matris_çarp(a, b): matris çarpımı (a: m×n, b: n×p)
+işlev matris_çarp(a, b)
+    sonuç = []
+    i = 0
+    iken i < satır_sayısı(a)
+        satır = []
+        j = 0
+        iken j < sütun_sayısı(b)
+            toplam = 0
+            k = 0
+            iken k < sütun_sayısı(a)
+                toplam = toplam + a[i][k] * b[k][j]
+                k = k + 1
+            son
+            ekle(satır, toplam)
+            j = j + 1
+        son
+        ekle(sonuç, satır)
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# determinant(m): 2x2 ve 3x3 için (Laplace açılımı, küçük matrisler)
+işlev determinant(m)
+    n = satır_sayısı(m)
+    eğer n == 1 ise
+        döndür m[0][0]
+    son
+    eğer n == 2 ise
+        döndür m[0][0] * m[1][1] - m[0][1] * m[1][0]
+    son
+    # genel: ilk satır boyunca Laplace açılımı
+    toplam = 0
+    j = 0
+    iken j < n
+        toplam = toplam + m[0][j] * kofaktör(m, 0, j)
+        j = j + 1
+    son
+    döndür toplam
+son
+
+# minör(m, satır_atla, sütun_atla): bir satır ve sütun çıkarılmış alt matris
+işlev minör(m, sa, su)
+    sonuç = []
+    i = 0
+    iken i < uzunluk(m)
+        eğer i != sa ise
+            yeni = []
+            j = 0
+            iken j < uzunluk(m[i])
+                eğer j != su ise
+                    ekle(yeni, m[i][j])
+                son
+                j = j + 1
+            son
+            ekle(sonuç, yeni)
+        son
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# kofaktör(m, i, j): (-1)^(i+j) * minör determinantı
+işlev kofaktör(m, i, j)
+    işaret = 1
+    eğer (i + j) % 2 == 1 ise
+        işaret = -1
+    son
+    döndür işaret * determinant(minör(m, i, j))
+son

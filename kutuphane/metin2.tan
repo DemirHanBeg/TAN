@@ -1,0 +1,96 @@
+# ============================================================
+# metin2.tan — gelişmiş metin işleme (saf Tan)
+# ============================================================
+içe al "kutuphane/temel.tan"
+
+# başlıyor_mu(metin, ön): metin ön ile mi başlıyor
+işlev başlıyor_mu(metin, ön)
+    h = harfler(metin)
+    o = harfler(ön)
+    eğer uzunluk(o) > uzunluk(h) ise
+        döndür yanlış
+    son
+    i = 0
+    iken i < uzunluk(o)
+        eğer h[i] != o[i] ise
+            döndür yanlış
+        son
+        i = i + 1
+    son
+    döndür doğru
+son
+
+# bitiyor_mu(metin, son_ek): metin son_ek ile mi bitiyor
+işlev bitiyor_mu(metin, son_ek)
+    h = harfler(metin)
+    s = harfler(son_ek)
+    fark = uzunluk(h) - uzunluk(s)
+    eğer fark < 0 ise
+        döndür yanlış
+    son
+    i = 0
+    iken i < uzunluk(s)
+        eğer h[fark + i] != s[i] ise
+            döndür yanlış
+        son
+        i = i + 1
+    son
+    döndür doğru
+son
+
+# değiştir(metin, eski, yeni): tüm eski geçişlerini yeni ile değiştirir
+işlev değiştir(metin, eski, yeni)
+    sonuç = ""
+    h = harfler(metin)
+    e = harfler(eski)
+    n = uzunluk(h)
+    m = uzunluk(e)
+    i = 0
+    iken i < n
+        eşleşti = yanlış
+        eğer i <= n - m ise
+            eşleşti = doğru
+            j = 0
+            iken j < m
+                eğer h[i + j] != e[j] ise
+                    eşleşti = yanlış
+                    dur
+                son
+                j = j + 1
+            son
+        son
+        eğer eşleşti ise
+            sonuç = sonuç + yeni
+            i = i + m
+        değilse
+            sonuç = sonuç + h[i]
+            i = i + 1
+        son
+    son
+    döndür sonuç
+son
+
+# kelimele(metin): boşluklardan bölerek kelime listesi
+işlev kelimele(metin)
+    kelimeler = []
+    şu_an = ""
+    her h harfler(metin) içinde
+        eğer h == " " veya h == "\n" veya h == "\t" ise
+            eğer uzunluk_metin(şu_an) > 0 ise
+                ekle(kelimeler, şu_an)
+                şu_an = ""
+            son
+        değilse
+            şu_an = şu_an + h
+        son
+    son
+    eğer uzunluk_metin(şu_an) > 0 ise
+        ekle(kelimeler, şu_an)
+    son
+    döndür kelimeler
+son
+
+# uzunluk_metin yardımcısı (temel.tan'da t_uzunluk var, kısayol)
+işlev uzunluk_metin(m)
+    döndür t_uzunluk(m)
+son

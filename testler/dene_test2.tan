@@ -1,0 +1,8 @@
+dene
+    yaz "sorunsuz iş"
+    x = 10 + 5
+    yaz "sonuç: " + x
+yakala hata
+    yaz "buraya gelmemeli"
+son
+yaz "bitti"

@@ -1,0 +1,125 @@
+# ============================================================
+# temel.tan — köprüden sökülen işlevlerin SAF TAN karşılıkları
+# Artık hiçbiri Go'dan ödünç değil. İskele tamamen söküldü.
+# ============================================================
+
+# --- matematik ---
+işlev t_karekök(x)
+    eğer x < 0 ise
+        döndür 0
+    son
+    tahmin = x / 2
+    eğer tahmin == 0 ise
+        döndür 0
+    son
+    i = 0
+    iken i < 30
+        tahmin = (tahmin + x / tahmin) / 2
+        i = i + 1
+    son
+    döndür tahmin
+son
+
+işlev t_üs(taban, kuvvet)
+    sonuç = 1
+    i = 0
+    iken i < kuvvet
+        sonuç = sonuç * taban
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+işlev t_taban(x)
+    n = 0
+    iken n + 1 <= x
+        n = n + 1
+    son
+    döndür n
+son
+
+işlev t_yuvarla(x)
+    aşağı = t_taban(x)
+    eğer x - aşağı >= 0.5 ise
+        döndür aşağı + 1
+    son
+    döndür aşağı
+son
+
+işlev t_mutlak(x)
+    eğer x < 0 ise
+        döndür 0 - x
+    son
+    döndür x
+son
+
+# --- metin ---
+# Türkçe-doğru harf tabloları
+işlev t_büyük_harf(h)
+    eğer h == "i" ise döndür "İ" son
+    eğer h == "ı" ise döndür "I" son
+    eğer h == "ç" ise döndür "Ç" son
+    eğer h == "ş" ise döndür "Ş" son
+    eğer h == "ğ" ise döndür "Ğ" son
+    eğer h == "ü" ise döndür "Ü" son
+    eğer h == "ö" ise döndür "Ö" son
+    eğer h == "a" ise döndür "A" son
+    eğer h == "b" ise döndür "B" son
+    eğer h == "c" ise döndür "C" son
+    eğer h == "d" ise döndür "D" son
+    eğer h == "e" ise döndür "E" son
+    eğer h == "f" ise döndür "F" son
+    eğer h == "g" ise döndür "G" son
+    eğer h == "h" ise döndür "H" son
+    eğer h == "j" ise döndür "J" son
+    eğer h == "k" ise döndür "K" son
+    eğer h == "l" ise döndür "L" son
+    eğer h == "m" ise döndür "M" son
+    eğer h == "n" ise döndür "N" son
+    eğer h == "o" ise döndür "O" son
+    eğer h == "p" ise döndür "P" son
+    eğer h == "r" ise döndür "R" son
+    eğer h == "s" ise döndür "S" son
+    eğer h == "t" ise döndür "T" son
+    eğer h == "u" ise döndür "U" son
+    eğer h == "v" ise döndür "V" son
+    eğer h == "y" ise döndür "Y" son
+    eğer h == "z" ise döndür "Z" son
+    döndür h
+son
+
+işlev t_büyüt(metin)
+    sonuç = ""
+    her h harfler(metin) içinde
+        sonuç = sonuç + t_büyük_harf(h)
+    son
+    döndür sonuç
+son
+
+işlev t_uzunluk(metin)
+    döndür uzunluk(harfler(metin))
+son
+
+işlev t_içerir(metin, aranan)
+    hrf = harfler(metin)
+    ha = harfler(aranan)
+    n = uzunluk(hrf)
+    m = uzunluk(ha)
+    i = 0
+    iken i <= n - m
+        eşleşti = doğru
+        j = 0
+        iken j < m
+            eğer hrf[i + j] != ha[j] ise
+                eşleşti = yanlış
+                dur
+            son
+            j = j + 1
+        son
+        eğer eşleşti ise
+            döndür doğru
+        son
+        i = i + 1
+    son
+    döndür yanlış
+son

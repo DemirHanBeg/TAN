@@ -1,0 +1,11 @@
+işlev kare(n)
+    döndür n * n
+son
+
+toplam = 0
+i = 0
+iken i < 100000
+    toplam = toplam + kare(i)
+    i = i + 1
+son
+yaz "toplam: " + toplam

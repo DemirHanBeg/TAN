@@ -1,0 +1,62 @@
+# ============================================================
+# vektor.tan — vektör işlemleri (saf Tan). Vektör = sayı listesi.
+# ============================================================
+içe al "kutuphane/temel.tan"
+
+işlev v_topla(a, b)
+    sonuç = []
+    i = 0
+    iken i < uzunluk(a)
+        ekle(sonuç, a[i] + b[i])
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+işlev v_çıkar(a, b)
+    sonuç = []
+    i = 0
+    iken i < uzunluk(a)
+        ekle(sonuç, a[i] - b[i])
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+işlev v_ölçekle(a, s)
+    sonuç = []
+    her x a içinde
+        ekle(sonuç, x * s)
+    son
+    döndür sonuç
+son
+
+# nokta çarpım (dot product)
+işlev v_nokta(a, b)
+    toplam = 0
+    i = 0
+    iken i < uzunluk(a)
+        toplam = toplam + a[i] * b[i]
+        i = i + 1
+    son
+    döndür toplam
+son
+
+# büyüklük (norm / uzunluk)
+işlev v_büyüklük(a)
+    döndür t_karekök(v_nokta(a, a))
+son
+
+# iki nokta arası mesafe
+işlev v_mesafe(a, b)
+    döndür v_büyüklük(v_çıkar(a, b))
+son
+
+# birim vektör (normalize)
+işlev v_birim(a)
+    b = v_büyüklük(a)
+    eğer b == 0 ise
+        döndür a
+    son
+    döndür v_ölçekle(a, 1 / b)
+son

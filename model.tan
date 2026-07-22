@@ -1,0 +1,74 @@
+# ============================================
+# Tan dil modeli v2 — veri artık DOSYADAN geliyor
+# Koda gömülü değil. Gerçek boru hattı.
+# ============================================
+
+# yardımcı: her ögeden sonra yeni satır koyup birleştir
+işlev satırlaştır(liste)
+    çıktı = ""
+    her e liste içinde
+        çıktı = çıktı + e + "\n"
+    son
+    döndür çıktı
+son
+
+# --- 1. Veriyi dosyadan oku ---
+isimler = satırlar(oku("isimler.txt"))
+yaz "Dosyadan " + uzunluk(isimler) + " isim okundu."
+
+başlangıç = "."
+bitiş = "."
+
+# --- 2. Öğrenme (sayım tablosu) ---
+sayımlar = sözlük()
+her isim isimler içinde
+    zincir = harfler(başlangıç + kırp(isim) + bitiş)
+    i = 0
+    iken i < uzunluk(zincir) - 1
+        şimdi = zincir[i]
+        sonra = zincir[i + 1]
+        eğer değil var_mı(sayımlar, şimdi) ise
+            sayımlar[şimdi] = []
+        son
+        ekle(sayımlar[şimdi], sonra)
+        i = i + 1
+    son
+son
+yaz "Model eğitildi. Harf sayısı: " + uzunluk(sayımlar)
+
+# --- 3. Üretim ---
+işlev üret()
+    sonuç = []
+    şimdi = başlangıç
+    adım = 0
+    iken adım < 20
+        seçenekler = sayımlar[şimdi]
+        sonraki = seçenekler[rastgele(uzunluk(seçenekler))]
+        eğer sonraki == bitiş ise
+            döndür birleştir(sonuç)
+        son
+        ekle(sonuç, sonraki)
+        şimdi = sonraki
+        adım = adım + 1
+    son
+    döndür birleştir(sonuç)
+son
+
+# --- 4. Üret + dosyaya kaydet ---
+üretilenler = []
+say = 1
+iken say <= 15
+    yeni = üret()
+    eğer uzunluk(yeni) > 1 ise
+        ekle(üretilenler, yeni)
+    son
+    say = say + 1
+son
+
+yaz "Üretilen yeni isimler:"
+her ü üretilenler içinde
+    yaz "  " + ü
+son
+
+yaz_dosya("uretilen.txt", satırlaştır(üretilenler))
+yaz "Sonuçlar 'uretilen.txt' dosyasına yazıldı."

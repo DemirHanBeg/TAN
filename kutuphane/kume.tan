@@ -1,0 +1,66 @@
+# ============================================================
+# kume.tan — küme işlemleri (saf Tan). Küme = benzersiz liste.
+# ============================================================
+
+işlev k_içeriyor(küme, öge)
+    her x küme içinde
+        eğer x == öge ise
+            döndür doğru
+        son
+    son
+    döndür yanlış
+son
+
+# kümeye çevir (tekrarları at)
+işlev kümeye(liste)
+    sonuç = []
+    her x liste içinde
+        eğer değil k_içeriyor(sonuç, x) ise
+            ekle(sonuç, x)
+        son
+    son
+    döndür sonuç
+son
+
+# birleşim (union)
+işlev birleşim(a, b)
+    sonuç = kümeye(a)
+    her x b içinde
+        eğer değil k_içeriyor(sonuç, x) ise
+            ekle(sonuç, x)
+        son
+    son
+    döndür sonuç
+son
+
+# kesişim (intersection)
+işlev kesişim(a, b)
+    sonuç = []
+    her x kümeye(a) içinde
+        eğer k_içeriyor(b, x) ise
+            ekle(sonuç, x)
+        son
+    son
+    döndür sonuç
+son
+
+# fark (difference: a - b)
+işlev fark(a, b)
+    sonuç = []
+    her x kümeye(a) içinde
+        eğer değil k_içeriyor(b, x) ise
+            ekle(sonuç, x)
+        son
+    son
+    döndür sonuç
+son
+
+# alt küme mi
+işlev alt_küme_mi(a, b)
+    her x a içinde
+        eğer değil k_içeriyor(b, x) ise
+            döndür yanlış
+        son
+    son
+    döndür doğru
+son

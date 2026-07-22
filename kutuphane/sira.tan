@@ -1,0 +1,110 @@
+# ============================================================
+# sira.tan — gelişmiş liste araçları (yüksek mertebeli işlevlerle)
+# ============================================================
+
+# eşle(liste, f): her ögeye f uygular, yeni liste döndürür
+işlev eşle(liste, f)
+    yeni = []
+    her ö liste içinde
+        ekle(yeni, f(ö))
+    son
+    döndür yeni
+son
+
+# filtrele(liste, koşul): koşul(ö) doğru olan ögeleri tutar
+işlev filtrele(liste, koşul)
+    yeni = []
+    her ö liste içinde
+        eğer koşul(ö) ise
+            ekle(yeni, ö)
+        son
+    son
+    döndür yeni
+son
+
+# indirge(liste, f, başlangıç): ögeleri tek değere katlar
+# f(biriken, öge) -> yeni biriken
+işlev indirge(liste, f, başlangıç)
+    biriken = başlangıç
+    her ö liste içinde
+        biriken = f(biriken, ö)
+    son
+    döndür biriken
+son
+
+# benzersiz(liste): tekrarları atar
+işlev benzersiz(liste)
+    yeni = []
+    her ö liste içinde
+        var = yanlış
+        her v yeni içinde
+            eğer v == ö ise
+                var = doğru
+                dur
+            son
+        son
+        eğer değil var ise
+            ekle(yeni, ö)
+        son
+    son
+    döndür yeni
+son
+
+# dilim(liste, baş, bit): baş'tan bit'e (bit hariç) alt liste
+işlev dilim(liste, baş, bit)
+    yeni = []
+    i = baş
+    iken i < bit
+        ekle(yeni, liste[i])
+        i = i + 1
+    son
+    döndür yeni
+son
+
+# dizin_bul(liste, aranan): ilk konumu, yoksa -1
+işlev dizin_bul(liste, aranan)
+    i = 0
+    iken i < uzunluk(liste)
+        eğer liste[i] == aranan ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# say(liste, koşul): koşulu sağlayan öge sayısı
+işlev say(liste, koşul)
+    n = 0
+    her ö liste içinde
+        eğer koşul(ö) ise
+            n = n + 1
+        son
+    son
+    döndür n
+son
+
+# hızlı_sırala(liste): quicksort (küçükten büyüğe)
+işlev hızlı_sırala(liste)
+    eğer uzunluk(liste) <= 1 ise
+        döndür liste
+    son
+    eksen = liste[0]
+    küçükler = []
+    büyükler = []
+    i = 1
+    iken i < uzunluk(liste)
+        eğer liste[i] < eksen ise
+            ekle(küçükler, liste[i])
+        değilse
+            ekle(büyükler, liste[i])
+        son
+        i = i + 1
+    son
+    sonuç = hızlı_sırala(küçükler)
+    ekle(sonuç, eksen)
+    her b hızlı_sırala(büyükler) içinde
+        ekle(sonuç, b)
+    son
+    döndür sonuç
+son

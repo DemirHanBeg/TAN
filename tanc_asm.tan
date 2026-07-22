@@ -1,0 +1,270 @@
+# ============================================================
+# tanc_asm — TAN İLE YAZILMIŞ, DOĞRUDAN ASSEMBLY ÜRETEN derleyici
+# C YOK. gcc YOK. libc YOK.  Tan -> x86-64 asm -> as -> ld -> ELF
+# Kullanım: tanc_asm <girdi.mt> <cikti-binary>
+# ============================================================
+
+işlev bosluk_mu(k)
+    döndür k == 32 veya k == 9 veya k == 13
+son
+
+işlev rakam_mi(k)
+    döndür k >= 48 ve k <= 57
+son
+
+işlev harf_mi(k)
+    döndür (k >= 97 ve k <= 122) veya (k >= 65 ve k <= 90) veya k == 95
+son
+
+işlev tokenle(satir)
+    tokenler = []
+    n = uzunluk(satir)
+    i = 0
+    iken i < n
+        k = kod(satir[i])
+        eğer bosluk_mu(k) ise
+            i = i + 1
+        değilse eğer rakam_mi(k) ise
+            s = ""
+            iken i < n ve rakam_mi(kod(satir[i]))
+                s = s + satir[i]
+                i = i + 1
+            son
+            tokenler = ekle(tokenler, s)
+        değilse eğer harf_mi(k) ise
+            ad = ""
+            iken i < n ve (harf_mi(kod(satir[i])) veya rakam_mi(kod(satir[i])))
+                ad = ad + satir[i]
+                i = i + 1
+            son
+            tokenler = ekle(tokenler, ad)
+        değilse
+            tokenler = ekle(tokenler, satir[i])
+            i = i + 1
+        son
+    son
+    döndür tokenler
+son
+
+işlev sayi_token_mu(t)
+    eğer uzunluk(t) == 0 ise
+        döndür 0
+    son
+    döndür rakam_mi(kod(t))
+son
+
+işlev son_oge(l)
+    n = uzunluk(l)
+    eğer n == 0 ise
+        döndür ""
+    son
+    döndür l[n - 1]
+son
+
+işlev cikar_son(l)
+    yeni = []
+    n = uzunluk(l)
+    i = 0
+    iken i < n - 1
+        yeni = ekle(yeni, l[i])
+        i = i + 1
+    son
+    döndür yeni
+son
+
+işlev islec_mi(t)
+    döndür t == "+" veya t == "-" veya t == "*" veya t == "/"
+son
+
+işlev oncelik(op)
+    eğer op == "+" veya op == "-" ise
+        döndür 1
+    son
+    eğer op == "*" veya op == "/" ise
+        döndür 2
+    son
+    döndür 0
+son
+
+# infix tokenleri -> RPN (shunting-yard). İşlem önceliğini TAN uygular.
+işlev rpn_yap(tokenler, basla)
+    cikti = []
+    yigin = []
+    i = basla
+    n = uzunluk(tokenler)
+    iken i < n
+        t = tokenler[i]
+        eğer islec_mi(t) ise
+            iken uzunluk(yigin) > 0 ve islec_mi(son_oge(yigin)) ve oncelik(son_oge(yigin)) >= oncelik(t)
+                cikti = ekle(cikti, son_oge(yigin))
+                yigin = cikar_son(yigin)
+            son
+            yigin = ekle(yigin, t)
+        değilse eğer t == "(" ise
+            yigin = ekle(yigin, t)
+        değilse eğer t == ")" ise
+            iken uzunluk(yigin) > 0 ve son_oge(yigin) != "("
+                cikti = ekle(cikti, son_oge(yigin))
+                yigin = cikar_son(yigin)
+            son
+            yigin = cikar_son(yigin)
+        değilse
+            cikti = ekle(cikti, t)
+        son
+        i = i + 1
+    son
+    iken uzunluk(yigin) > 0
+        cikti = ekle(cikti, son_oge(yigin))
+        yigin = cikar_son(yigin)
+    son
+    döndür cikti
+son
+
+# RPN -> x86-64 assembly (yığın makinesi)
+işlev rpn_asm(rpn)
+    nl = karakter(10)
+    kod = ""
+    her t rpn içinde
+        eğer islec_mi(t) ise
+            kod = kod + "    pop rcx" + nl
+            kod = kod + "    pop rax" + nl
+            eğer t == "+" ise
+                kod = kod + "    add rax, rcx" + nl
+            değilse eğer t == "-" ise
+                kod = kod + "    sub rax, rcx" + nl
+            değilse eğer t == "*" ise
+                kod = kod + "    imul rax, rcx" + nl
+            değilse
+                kod = kod + "    cqo" + nl
+                kod = kod + "    idiv rcx" + nl
+            son
+            kod = kod + "    push rax" + nl
+        değilse eğer sayi_token_mu(t) ise
+            kod = kod + "    mov rax, " + t + nl
+            kod = kod + "    push rax" + nl
+        değilse
+            kod = kod + "    mov rax, qword ptr [v_" + t + "]" + nl
+            kod = kod + "    push rax" + nl
+        son
+    son
+    döndür kod
+son
+
+işlev iceriyor_mu(liste, x)
+    her e liste içinde
+        eğer e == x ise
+            döndür 1
+        son
+    son
+    döndür 0
+son
+
+# elle yazılmış yaz_sayi rutini (libc yok, ham write syscall)
+işlev yardimci_asm()
+    nl = karakter(10)
+    a = ""
+    a = a + "yaz_sayi:" + nl
+    a = a + "    push rbp" + nl
+    a = a + "    mov rbp, rsp" + nl
+    a = a + "    sub rsp, 32" + nl
+    a = a + "    mov rax, rdi" + nl
+    a = a + "    lea rcx, [rbp-1]" + nl
+    a = a + "    mov byte ptr [rcx], 10" + nl
+    a = a + "    xor r8, r8" + nl
+    a = a + "    cmp rax, 0" + nl
+    a = a + "    jge .Lpoz" + nl
+    a = a + "    mov r8, 1" + nl
+    a = a + "    neg rax" + nl
+    a = a + ".Lpoz:" + nl
+    a = a + "    cmp rax, 0" + nl
+    a = a + "    jne .Ljegit" + nl
+    a = a + "    dec rcx" + nl
+    a = a + "    mov byte ptr [rcx], 48" + nl
+    a = a + "    jmp .Lisaret" + nl
+    a = a + ".Ljegit:" + nl
+    a = a + "    mov r9, 10" + nl
+    a = a + ".Ldongu:" + nl
+    a = a + "    cmp rax, 0" + nl
+    a = a + "    je .Lisaret" + nl
+    a = a + "    xor rdx, rdx" + nl
+    a = a + "    div r9" + nl
+    a = a + "    add dl, 48" + nl
+    a = a + "    dec rcx" + nl
+    a = a + "    mov [rcx], dl" + nl
+    a = a + "    jmp .Ldongu" + nl
+    a = a + ".Lisaret:" + nl
+    a = a + "    cmp r8, 0" + nl
+    a = a + "    je .Lyazdir" + nl
+    a = a + "    dec rcx" + nl
+    a = a + "    mov byte ptr [rcx], 45" + nl
+    a = a + ".Lyazdir:" + nl
+    a = a + "    mov rsi, rcx" + nl
+    a = a + "    lea rdx, [rbp]" + nl
+    a = a + "    sub rdx, rcx" + nl
+    a = a + "    mov rax, 1" + nl
+    a = a + "    mov rdi, 1" + nl
+    a = a + "    syscall" + nl
+    a = a + "    leave" + nl
+    a = a + "    ret" + nl
+    a = a + nl
+    döndür a
+son
+
+# ---------------- ANA DERLEYİCİ ----------------
+nl = karakter(10)
+girdi = arg(1)
+cikti = arg(2)
+kaynak = oku(girdi)
+satirlar = parçala(kaynak, "\n")
+
+# 1. geçiş: değişkenleri topla
+degiskenler = []
+her satir satirlar içinde
+    tk = tokenle(satir)
+    eğer uzunluk(tk) >= 2 ise
+        eğer tk[1] == "=" ise
+            eğer iceriyor_mu(degiskenler, tk[0]) == 0 ise
+                degiskenler = ekle(degiskenler, tk[0])
+            son
+        son
+    son
+son
+
+# 2. geçiş: gövde assembly'si
+govde = ""
+her satir satirlar içinde
+    tk = tokenle(satir)
+    eğer uzunluk(tk) > 0 ise
+        eğer tk[0] == "yaz" ise
+            rpn = rpn_yap(tk, 1)
+            govde = govde + rpn_asm(rpn)
+            govde = govde + "    pop rdi" + nl
+            govde = govde + "    call yaz_sayi" + nl
+        değilse
+            rpn = rpn_yap(tk, 2)
+            govde = govde + rpn_asm(rpn)
+            govde = govde + "    pop rax" + nl
+            govde = govde + "    mov qword ptr [v_" + tk[0] + "], rax" + nl
+        son
+    son
+son
+
+# tam assembly dosyası
+tam = "# tanc_asm (Tan ile yazildi) tarafindan uretildi. C yok, libc yok." + nl
+tam = tam + ".intel_syntax noprefix" + nl + nl
+tam = tam + ".section .bss" + nl
+her d degiskenler içinde
+    tam = tam + "v_" + d + ": .space 8" + nl
+son
+tam = tam + nl + ".section .text" + nl + ".global _start" + nl + nl
+tam = tam + yardimci_asm()
+tam = tam + "_start:" + nl
+tam = tam + govde
+tam = tam + "    mov rax, 60" + nl
+tam = tam + "    xor rdi, rdi" + nl
+tam = tam + "    syscall" + nl
+
+yaz_dosya(cikti + ".s", tam)
+çalıştır("as", "--64", "-o", cikti + ".o", cikti + ".s")
+çalıştır("ld", "-o", cikti, cikti + ".o")
+yaz("tanc_asm: derlendi -> " + cikti)

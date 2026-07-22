@@ -1,0 +1,70 @@
+içe al "kutuphane/temel.tan"
+# ============================================
+# metin.tan — saf Tan ile metin araçları
+# Köprüdeki Go-ödünç metin işlevlerinin saf Tan karşılıkları.
+# İskele sökme: bunlar artık Tan'ın kendisi, ödünç değil.
+# ============================================
+
+# büyüt_harf: tek harfi büyütür (Türkçe kurallı - i->İ)
+işlev büyüt_harf(h)
+    eğer h == "i" ise
+        döndür "İ"
+    son
+    eğer h == "ı" ise
+        döndür "I"
+    son
+    eğer h == "ç" ise
+        döndür "Ç"
+    son
+    eğer h == "ş" ise
+        döndür "Ş"
+    son
+    eğer h == "ğ" ise
+        döndür "Ğ"
+    son
+    eğer h == "ü" ise
+        döndür "Ü"
+    son
+    eğer h == "ö" ise
+        döndür "Ö"
+    son
+    # ASCII harfler için köprüye düş (henüz tam sökemedik)
+    döndür t_büyük_harf(h)
+son
+
+# büyüt: tüm metni Türkçe-doğru büyütür (saf Tan döngü)
+işlev büyüt(metin)
+    sonuç = ""
+    her h harfler(metin) içinde
+        sonuç = sonuç + büyüt_harf(h)
+    son
+    döndür sonuç
+son
+
+# uzunluk_metin: metnin harf sayısı (saf Tan, köprüsüz)
+işlev uzunluk_metin(metin)
+    döndür uzunluk(harfler(metin))
+son
+
+# ters_metin: metni tersine çevirir (saf Tan)
+işlev ters_metin(metin)
+    hrf = harfler(metin)
+    sonuç = ""
+    i = uzunluk(hrf) - 1
+    iken i >= 0
+        sonuç = sonuç + hrf[i]
+        i = i - 1
+    son
+    döndür sonuç
+son
+
+# tekrarla: metni n kez tekrarlar
+işlev tekrarla(metin, n)
+    sonuç = ""
+    i = 0
+    iken i < n
+        sonuç = sonuç + metin
+        i = i + 1
+    son
+    döndür sonuç
+son

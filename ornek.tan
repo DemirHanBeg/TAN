@@ -1,0 +1,60 @@
+içe al "kutuphane/temel.tan"
+# ==========================================
+# Tan dili - ilk program
+# Türkçe anahtar kelimeler, "son" ile blok
+# ==========================================
+
+yaz "Tan diline hoş geldin evlat"
+yaz "----------------------------"
+
+# Değişken atama ve aritmetik
+sayı = 5
+kare = sayı * sayı
+yaz "5'in karesi: " + kare
+
+# Koşul: eğer / ise / değilse / son
+eğer sayı > 3 ise
+    yaz "sayı büyük"
+değilse
+    yaz "sayı küçük"
+son
+
+# Mantık: ve / veya / değil
+eğer sayı > 0 ve sayı < 10 ise
+    yaz "sayı 0 ile 10 arasında"
+son
+
+# Döngü: iken / son
+sayaç = 1
+yaz "1'den 5'e sayıyorum:"
+iken sayaç <= 5
+    yaz sayaç
+    sayaç = sayaç + 1
+son
+
+# İşlev: işlev / döndür / son
+işlev topla(a, b)
+    döndür a + b
+son
+
+işlev faktöriyel(n)
+    eğer n <= 1 ise
+        döndür 1
+    son
+    döndür n * faktöriyel(n - 1)
+son
+
+yaz "topla(3, 4) = " + topla(3, 4)
+yaz "faktöriyel(5) = " + faktöriyel(5)
+
+# ==========================================
+# KÖPRÜ (A seçeneği) - iskele katmanı
+# Go'nun hazır yeteneklerini ödünç kullanıyoruz
+# Bunlar ileride saf Tan'la yeniden yazılacak
+# ==========================================
+yaz "----------------------------"
+yaz "Köprü (geçici iskele) testi:"
+yaz "16'nın karekökü: " + t_karekök(16)
+yaz "2'nin 10. üssü: " + t_üs(2, 10)
+yaz "BÜYÜK harf: " + t_büyüt("tan dili")
+yaz "'merhaba' uzunluğu: " + t_uzunluk("merhaba")

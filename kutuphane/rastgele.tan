@@ -1,0 +1,35 @@
+# ============================================================
+# rastgele.tan — rastgelelik araçları (saf Tan, rastgele üstüne)
+# ============================================================
+
+# aralık(alt, üst): alt ile üst-1 arası rastgele tam sayı
+işlev aralık(alt, üst)
+    döndür alt + rastgele(üst - alt)
+son
+
+# seç(liste): listeden rastgele bir öge
+işlev seç(liste)
+    döndür liste[rastgele(uzunluk(liste))]
+son
+
+# karıştır(liste): Fisher-Yates ile karıştırılmış yeni liste
+işlev karıştır(liste)
+    yeni = []
+    her ö liste içinde
+        ekle(yeni, ö)
+    son
+    i = uzunluk(yeni) - 1
+    iken i > 0
+        j = rastgele(i + 1)
+        geçici = yeni[i]
+        yeni[i] = yeni[j]
+        yeni[j] = geçici
+        i = i - 1
+    son
+    döndür yeni
+son
+
+# zar(): 1-6 arası
+işlev zar()
+    döndür aralık(1, 7)
+son
