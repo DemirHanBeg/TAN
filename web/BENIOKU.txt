@@ -1,0 +1,2 @@
+tan.wasm bu repoda yok (9.9 MB). Uretmek icin repo kokunde:
+GOOS=js GOARCH=wasm go build -o web/tan.wasm .
