@@ -1041,9 +1041,13 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         döndür []
     son
 
-    # tanınmayan deyim: tokeni yut, sonsuz döngüye girme
-    x = pIlerle(tokenler, pozKutu)
-    döndür []
+    # tanınmayan deyim: ÖNCEDEN sessizce yutup devam ediyordu — TAM avladığımız
+    # 8 hatanın deseniyle aynı sınıf (sessiz bozulma, açık hata yok). dene/
+    # yakala (Bucket C) bu yüzden [FARKLI] veriyordu: lexer tanıyor, buraya
+    # düşüyor, sessizce atlanıyordu. Artık açık hata + dur — TancElf'e
+    # eklenmemiş HİÇBİR deyim bundan sonra sessizce geçemez.
+    yaz("DERLEME HATASI: bilinmeyen deyim: " + d)
+    sistemDur(1)
 son
 
 # ---------------- BÖLÜM 4 (ÇEKİRDEK): MAKİNE KODU + ELF YAZICI ----------------

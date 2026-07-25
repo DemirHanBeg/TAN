@@ -1480,6 +1480,24 @@ func elfAd(ad string) string {
 	return string(b)
 }
 
+// asmDegiskenleriTopla: bir gövdedeki atanan değişken adlarını toplar
+// (yerel çerçeve boyutu hesaplamak için). Önceden arsiv/DerleAsm.go'da
+// (Kademe 2 arka ucuyla) paylaşılıyordu — asm arka ucu arşivlenince
+// elf arka ucunun kendi bağımlılığı olarak buraya taşındı.
+func asmDegiskenleriTopla(govde []Dugum, kume map[string]bool) {
+	for _, d := range govde {
+		switch n := d.(type) {
+		case AtamaDugum:
+			kume[n.Ad] = true
+		case EgerDugum:
+			asmDegiskenleriTopla(n.Govde, kume)
+			asmDegiskenleriTopla(n.Degilse, kume)
+		case IkenDugum:
+			asmDegiskenleriTopla(n.Govde, kume)
+		}
+	}
+}
+
 func (e *elfUretici) islevYaz(n IslevDugum) {
 	m := e.m
 	m.etiketKoy("f_" + elfAd(n.Ad))

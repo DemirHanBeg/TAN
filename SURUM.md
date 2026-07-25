@@ -10,6 +10,70 @@ Tan **semver** kullanır: BÜYÜK.KÜÇÜK.YAMA
 
 ---
 
+## 0.5.0 — Self-Hosting Tamamlandı
+
+**TancElf.tan artık kanıtlanmış şekilde kendi kendini derliyor.** Sabit nokta:
+`gen1 = tan elf TancElf.tan` (Go tohumuyla), `gen2 = gen1 TancElf.tan`,
+`gen3 = gen2 TancElf.tan` → `cmp gen2 gen3` SESSİZ (birebir aynı bayt).
+
+### Doğrulama (3 ayak + tuzak kontrolü)
+
+- **Tuzak kontrolü:** gen2 boş/sıfır-kod ikili üretmiyor — gerçek, çalışan
+  programlar derliyor (doğrulandı: trivial programdan gerçek çıktı).
+- **Ayak (a) — sabit nokta:** `cmp gen2 gen3` sessiz.
+- **Ayak (b) — gen2 gerçek derleyici mi:** TancElf'in çoğu özelliğini
+  kullanan programları (işlev, özyineleme, liste, metin, ondalık, dosya G/Ç)
+  derliyor ve doğru çalıştırıyor.
+- **Ayak (c) — anlam korunuyor mu:** gen2 çıktısı, Go'nun KENDİ elf arka ucu
+  (`tan elf`) çıktısıyla native-native karşılaştırıldığında (yorumlayıcı
+  DEĞİL — adil referans) 28 test dosyasından sadece bilinen kapsam
+  boşluklarında (`içe al` modül sistemi, `dene`/`yakala`) ayrışıyor —
+  ikisi de o durumlarda AÇIK HATA veriyor, sessiz bozulma yok.
+
+### Self-hosting sürecinde bulunan 9 hata (TancElf.tan'ın KENDİ derleyicisi)
+
+Hepsi AYNI kök desenin örnekleri: TancElf.tan'ın tip çıkarımı yalnız
+DEĞİŞKEN ATAMALARINI izler, İŞLEV PARAMETRELERİNİ asla (parametre her zaman
+"tam" varsayılır — dokümante temel sınır). Bu yüzden bir metin PARAMETRESİ
+üzerinde yapılan `==`, `+` (birleştirme), veya `[i]` (ham indeksleme)
+potansiyel olarak yanlış kod üretiyordu — hepsi Go tohumuyla (`tan elf`)
+GİZLİ kalıyordu çünkü Go'nun DerleElf.go'su bu sınırlamaya sahip değil,
+yalnızca TancElf.tan KENDİ KENDİNİ derlerken ortaya çıkıyordu:
+
+1. `bagla()`/`etiketBul()` — `op == "BAYT"` vb.
+2. `bc(op,a1,a2)` — bant kodlamasının temeli, `+` zinciri
+3. `cagriSonucTipi(ad)` — kendi `ad ==` karşılaştırması, TÜM `t==`/`d==`
+   çağrı noktalarını (pTur/pDeger) etkiliyordu
+4. `metneTamSayi(s)` — `s[i]` ham indeks (her SAYI token'ı)
+5. `metinVerisiBant(deger)` — `deger[i]` ham indeks (metin literalleri)
+6. `"f_" + ad` (işlev etiketi üretimi, TANIM tarafı) — 129 fonksiyonun
+   etiketini bozuyordu
+7. `yeniEtiket(sayacKutu, onEk)` — TÜM kontrol akışı (eğer/iken/her/işlev)
+   etiketlerini etkiliyordu
+8. `adAra(adlarKutu, ad)` — EN CİDDİSİ: değişken yuva çözümlemesi hiç
+   eşleşmiyordu, her referans YENİ yuva açıyordu (16 yerine 119 değişken)
+9. **Sessiz yutma kapatıldı:** `deyimDerle`'nin tanınmayan-deyim dalı artık
+   sessizce atlamak yerine `"DERLEME HATASI: bilinmeyen deyim: X"` basıp
+   duruyor — gelecekteki "gizli 10. hata" bu kapıdan giremez.
+
+### Go'nun rolü — Arşivlendi (silinmedi)
+
+Go artık TancElf'i **doğurmak için ZORUNLU değil** — self-hosted derleyici
+kendi kendini üretebiliyor (`gen1`/`gen2`/`gen3` zinciri). Ama Go referans
+olarak KALIYOR: `TestArkaUc.sh`/`FarkTesti.sh` çapraz kontrolü Go'nun
+`tan elf` çıktısına dayanıyor (Ken Thompson "Trusting Trust" gerekçesi —
+tek bağımsız referans yolu kaybolursa gen'e giren bir hata bir daha
+çapraz kontrol edilemez).
+
+- `arsiv/DerleC.go`, `arsiv/DerleAsm.go` — Kademe 1 (Tan→C→gcc) ve Kademe 2
+  (Tan→asm→as/ld) arka uçları arşivlendi (dış araç bağımlıydılar, `tan elf`
+  sıfır-dış-araç olduğundan gereksiz kaldılar). `tan derle`/`tan asm`
+  komutları artık arşiv konumunu gösteren bir mesajla çıkıyor.
+- `DerleElf.go` (yorumlayıcı + VM + elf arka ucu) **KALDI** — `tan elf`
+  hâlâ build zincirinde, referans/çapraz-kontrol rolünde.
+
+---
+
 ## Yayınlanmamış (self-hosting çalışması sırasında bulunan elf motor hataları)
 
 TancElf.tan (Tan'da yazılmış, doğrudan ELF üreten derleyici) geliştirilirken

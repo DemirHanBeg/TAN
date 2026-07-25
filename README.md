@@ -15,39 +15,43 @@ $ ldd cikti
 
 ---
 
-## What makes it different / Farkı ne
+## Self-hosting: Tan compiles Tan
 
-Most toy languages stop at "it compiles to C." Tan goes four stages down:
+**`TancElf.tan` — the compiler itself, written in Tan — compiles itself and reproduces itself byte-for-byte.**
 
-| Stage | Command | What Tan does itself | External tools | Binary size |
-|-------|---------|----------------------|----------------|-------------|
-| 1 | `tan derle` | expression tree → C | gcc + libc | 16 600 B |
-| 2 | `tan asm` | + register allocation, stack frames, calling convention | as + ld | 9 088 B |
-| 3+4 | `tan elf` | + **machine code bytes, ELF header, linking** | **none** | **1 048 B** |
+```bash
+./tan elf TancElf.tan gen1   # Go seed compiles the self-hosted compiler
+./gen1 TancElf.tan gen2      # gen1 compiles it again
+./gen2 TancElf.tan gen3      # gen2 compiles it again
+cmp gen2 gen3                 # silent — byte-identical, fixed point reached
+```
 
-At stage 3+4 Tan writes the REX prefixes, ModRM bytes, RIP-relative addressing, label fixups, the ELF64 header and the program header by hand. There is no `printf` — integer-to-string conversion is hand-written machine code and output goes through a raw `write` syscall.
+Go was used to build the first seed (`gen1`). After that, **Go's role in producing the compiler is retired** — `gen2` and every generation after it are produced entirely by Tan compiling Tan, zero external tools, zero Go. Go source (`DerleElf.go`, the interpreter, the VM) stays in the tree as an independent reference: `FarkTesti.sh` cross-checks `gen`'s output against Go's own `tan elf` output on every change, so a bug introduced into the self-hosted compiler can still be caught against an independent implementation (see `SURUM.md` 0.5.0 for the nine self-hosting bugs this caught).
 
-**Self-hosting:** the compiler is also written in Tan (`Tanc2.tan`) — its own lexer, its own shunting-yard operator precedence, emitting x86-64 assembly. Go is used exactly once, as a seed, then it leaves the chain.
+The two external-tool-dependent legacy backends (`tan derle` → C → gcc, `tan asm` → x86-64 asm → as/ld) are archived in `arsiv/` — superseded by `tan elf`, which needs nothing.
+
+At the machine-code level, Tan writes the REX prefixes, ModRM bytes, RIP-relative addressing, label fixups, the ELF64 header and the program header by hand. There is no `printf` — integer-to-string conversion is hand-written machine code and output goes through a raw `write` syscall. Strings and lists are backed by a hand-written `brk`-based bump allocator, no libc.
 
 ---
 
 ## Quick start
 
 ```bash
-git clone https://github.com/karaefendii/tan.git
-cd tan
-go build -o tan .          # Go is only needed to build the engine (seed)
+git clone https://github.com/DemirHanBeg/TAN.git
+cd TAN
+go build -o tan .          # Go seed — only needed once, to bootstrap gen1
 
-./tan Ornek.tan            # run with the interpreter
-./tan elf AsmTest.tan out  # compile to a native binary, no external tools
+./tan Ornek.tan             # run with the interpreter
+./tan elf AsmTest.tan out   # compile to a native binary, zero external tools
 ./out
 ```
 
-Verify everything:
+Verify everything, including the self-hosting fixed point:
 
 ```bash
-./Bootstrap.sh        # all four stages + self-hosting + regression tests
-./TestArkaUc.sh     # 24 backend regression tests
+./Bootstrap.sh          # elf backend + self-hosting chain + regression
+./TestArkaUc.sh elf   # 20 backend regression tests
+./FarkTesti.sh ornekler/*.tan   # interpreter vs native cross-check
 ```
 
 ---
@@ -109,46 +113,40 @@ Rules: `int OP int → int`, `int OP float → float`, `int / int → int if div
 
 This is the part most projects hide. Read it before you judge.
 
-**The `elf` and `asm` backends handle:** int64 arithmetic, variables, comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `dur/devam`, functions with recursion (up to 6 parameters), `yaz` for numbers and string literals.
+**The `elf` backend handles:** int64 and float64 arithmetic, string and list variables (with a hand-written heap allocator), comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `her...içinde`, `dur/devam`, functions with recursion, file I/O (`oku`/`yazBaytlar`), and is complete enough to compile itself (see Self-hosting above).
 
-**They do NOT handle:** floating point, string variables, lists, dictionaries, `her...içinde`, file or network I/O. Floating point needs SSE encoding; strings and lists need a heap allocator written against `brk`/`mmap`, since there is no libc. Attempting these raises a clear error rather than silently producing wrong output.
-
-All of the above **does work** on the C backend (`tan derle`) and in the interpreter.
+**It does NOT yet handle:** `içe al` (module imports — interpreter-only for now) and `dene/yakala` (try/catch — parsed by the lexer, not yet implemented in code generation; both raise a clear compile-time error rather than silently producing wrong output).
 
 **Other open items:**
-- `Tanc2.tan` (the Tan-written compiler) does not yet compile function definitions — it handles assignment, `yaz`, `eger`, `iken`, and full arithmetic with precedence.
-- The bytecode VM does not cover the entire language; it falls back to the interpreter.
-- x86-64 Linux only. Other architectures would need a new backend (the C path is portable and gets ARM/RISC-V for free).
+- x86-64 Linux only. Other architectures would need a new backend.
 - No DWARF debug info, so `gdb` sees no symbols.
 - The code generator is naive — no register allocation, no dead code elimination, no loop unrolling. Correct, not fast.
 - WASM build exists but has not been tested in a real browser.
+- The archived `derle`/`asm` backends (`arsiv/`) are frozen at whatever feature set they had when archived — not maintained further.
 
 **What never goes away:** the x86-64 instruction set and the Linux syscall ABI. Those are not dependencies; they are the language being spoken.
-
----
-
-## Why keep the C backend
-
-Deliberate. Three backends consume the same AST. Day-to-day language and library work happens on the C path — it is fast, portable, and libc is already there. The ELF path stands as the independence proof and for minimal deployment. Keeping both means development speed is not traded for independence.
 
 ---
 
 ## Repository layout
 
 ```
-*.go                engine: lexer, parser, interpreter, bytecode VM,
-                    Sayi.go (number system), and three backends:
-                    DerleC.go, DerleAsm.go, DerleElf.go
+*.go                Go seed engine: lexer, parser, interpreter, bytecode VM,
+                    Sayi.go (number system), DerleElf.go (elf backend —
+                    still the reference/cross-check for TancElf.tan)
+arsiv/              archived: DerleC.go, DerleAsm.go — the two external-
+                    tool-dependent backends, superseded by tan elf
+TancElf.tan         the self-hosting compiler, written entirely in Tan —
+                    compiles itself, byte-identical fixed point proven
 kutuphane/          31 standard library modules, written in Tan
-Tanc.tan            compiler written in Tan (emits C)
-TancAsm.tan        compiler written in Tan (emits assembly)
-Tanc2.tan           + comparison operators, eger, iken, nested blocks
+Tanc.tan, Tanc2.tan, TancAsm.tan   earlier Tan-written compiler attempts
 Kesim.tan           cutting-stock optimizer (real tool)
 Talay.tan           freight index scoring pipeline
 Noral.tan           neural network with backpropagation
 testler/            test programs
-TestArkaUc.sh     24 backend regression tests
-Bootstrap.sh        full verification
+TestArkaUc.sh     20 backend regression tests
+FarkTesti.sh        interpreter-vs-native cross-check
+Bootstrap.sh        elf backend + self-hosting chain + regression
 web/                browser REPL (build tan.wasm separately)
 ```
 
@@ -166,4 +164,4 @@ GOOS=js GOARCH=wasm go build -o web/tan.wasm .
 
 MIT — see [LICENSE](LICENSE).
 
-Contributions welcome. The most useful ones right now: SSE floating-point in the ELF backend, a `brk`/`mmap` heap allocator for strings and lists, function definitions in `Tanc2.tan`, or an ARM64 backend.
+Contributions welcome. The most useful ones right now: `içe al` (module import) support in the self-hosted compiler, `dene/yakala` (try/catch) code generation, the remaining handful of built-ins (`taban`, `tavan`, `sözlük`, `harfler`, `parçala`) in `TancElf.tan`'s own runtime, or an ARM64 backend.

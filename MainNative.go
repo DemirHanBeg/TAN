@@ -52,24 +52,20 @@ func main() {
 		return
 	}
 
-	// 3c. asm komutu: tan asm program.tan çıktı  (Tan -> x86-64 asm -> as/ld, C YOK)
+	// 3c. asm komutu: ARŞİVLENDİ (self-hosting sonrası, bkz. arsiv/DerleAsm.go).
+	// Kaynak dış-araç bağımlı Kademe 2 arka ucuydu; "tan elf" (sıfır dış araç,
+	// self-hosted TancElf.tan tarafından da üretiliyor) onu gereksiz kıldı.
 	if os.Args[1] == "asm" {
-		if len(os.Args) < 4 {
-			fmt.Println("Kullanım: tan asm <program.tan> <çıktı-binary>")
-			os.Exit(1)
-		}
-		derleAsm(os.Args[2], os.Args[3], true)
-		return
+		fmt.Println("tan asm arşivlendi — bkz. arsiv/DerleAsm.go. Yerine 'tan elf' kullanın.")
+		os.Exit(1)
 	}
 
-	// 3b. derle komutu:  tan derle program.tan çıktı   (Tan -> C -> native binary)
+	// 3b. derle komutu: ARŞİVLENDİ (self-hosting sonrası, bkz. arsiv/DerleC.go).
+	// Kaynak dış-araç bağımlı Kademe 1 arka ucuydu (gcc gerektiriyordu);
+	// "tan elf" onu gereksiz kıldı.
 	if os.Args[1] == "derle" {
-		if len(os.Args) < 4 {
-			fmt.Println("Kullanım: tan derle <program.tan> <çıktı-binary>")
-			os.Exit(1)
-		}
-		derleC(os.Args[2], os.Args[3])
-		return
+		fmt.Println("tan derle arşivlendi — bkz. arsiv/DerleC.go. Yerine 'tan elf' kullanın.")
+		os.Exit(1)
 	}
 
 	// 4. Normal dosya çalıştırma
