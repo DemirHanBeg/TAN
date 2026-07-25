@@ -1,0 +1,30 @@
+# indeks ataması + işleve gösterici geçişi + her döngüsü + dur/devam
+işlev topluArtir(k)
+    i = 0
+    her x k içinde
+        k[i] = x + 100
+        i = i + 1
+    son
+    döndür 0
+son
+
+l = [1, 2, 3, 4, 5]
+l[0] = 99
+yaz(l[0])
+
+x = topluArtir(l)
+her v l içinde
+    yaz(v)
+son
+
+toplam = 0
+her v l içinde
+    eğer v == 102 ise
+        devam
+    son
+    eğer v == 105 ise
+        dur
+    son
+    toplam = toplam + v
+son
+yaz(toplam)

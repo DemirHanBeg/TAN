@@ -1,0 +1,19 @@
+# ============================================================
+# Zaman.tan — zaman/tarih araçları (zaman yerleşiği üstüne)
+# ============================================================
+
+# saniyeFarkı(baş, son): iki zaman damgası arası saniye
+işlev saniyeFarkı(baş, bit)
+    döndür bit - baş
+son
+
+# günSay(saniye): saniyeyi güne çevirir
+işlev günSay(saniye)
+    döndür saniye / 86400
+son
+
+# geçenSüre(f): bir işlevi çalıştırıp kaç saniye sürdüğünü döndürür
+# (basit ölçüm; f argümansız işlev)
+işlev şimdi()
+    döndür zaman()
+son

@@ -1,0 +1,4 @@
+liste = [1, 2, 3]
+yaz uzunluk(liste)
+işlev kare(n) döndür n * n son
+yaz kare(9)

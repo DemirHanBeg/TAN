@@ -1,0 +1,16 @@
+# dosya G/Ç: oku(yol), yazBaytlar(yol, liste) — ham open/read/write/close
+# syscall, libc yok (bkz. TancElf.tan "DOSYA G/Ç" başlığı).
+yol = "/tmp/tancelf_ornek_dosya1.bin"
+
+baytlar = [84, 97, 110, 33]
+yazBaytlar(yol, baytlar)
+
+icerik = oku(yol)
+yaz(icerik)
+yaz(uzunluk(icerik))
+yaz(kod(icerik))
+
+# round-trip: okunanı tekrar yaz, tekrar oku, aynı olmalı
+yazBaytlar(yol, baytlar)
+icerik2 = oku(yol)
+yaz(icerik == icerik2)

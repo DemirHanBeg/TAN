@@ -1,0 +1,18 @@
+# ============================================
+# Yapayzeka.tan — Tan'dan bir LLM API'sini çağırma
+# HTTP + JSON üstüne kurulu. Anahtarını sen verirsin.
+# ============================================
+
+# soruSor(apiAdresi, anahtar, mesaj): bir sohbet API'sine soru sorar,
+# cevabı metin döndürür. (OpenAI-uyumlu /chat/completions biçimi)
+işlev llmGövde(model, mesaj)
+    içerik = {"model": model, "mesajlar": [{"rol": "user", "içerik": mesaj}]}
+    döndür jsonYap(içerik)
+son
+
+# Basit sürüm: verilen adrese JSON gönderir, ham cevabı çözer
+işlev yapayzekaSor(adres, mesaj)
+    gövde = jsonYap({"model": "test", "mesajlar": [{"rol": "user", "içerik": mesaj}]})
+    cevap = gönder(adres, gövde)
+    döndür jsonÇöz(cevap)
+son

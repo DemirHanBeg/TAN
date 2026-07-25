@@ -1,0 +1,101 @@
+=====================================================================
+ TAN — MADDE 1, 2, 3 CALISMASI  (ELF backend'in buyuk genislemesi)
+=====================================================================
+
+Bu tur once: ELF backend sadece int64 aritmetigi derliyordu.
+Bu tur sonra: metin, liste, ondalik, dosya G/C, islev tip cikarimi.
+Hepsi SIFIR dis arac ile — as/ld/gcc/libc hicbiri yok.
+
+---------------------------------------------------------------------
+ MADDE 1 — YIGIN AYIRICI  [TAMAM]
+---------------------------------------------------------------------
+brk syscall tabanli bump allocator. libc YOK, malloc YOK.
+  _start'ta brk(0) ile program sonu alinir, brk(son+64MB) ile alan ayrilir.
+  f_tan_ayir(n): 8'e hizalar, isaretciyi ilerletir.
+  Cop toplayici YOK (kisa omurlu programlar icin yeterli).
+
+METIN  : [uzunluk:8][baytlar...]   kayitta bu yapiya isaretci
+LISTE  : [uzunluk:8][oge0:8][oge1:8]...
+
+Eklenen calisma zamani (hepsi elle makine kodu):
+  f_tan_ayir         yigin ayirici
+  f_bellek_kopyala   bayt kopyalama
+  f_metin_birlestir  metin + metin
+  f_sayi_metne       int64 -> ondalik metin
+  f_kesir_metne      float64 -> metin (6 basamak, sifir kirpma)
+  f_yaz_metin_deger  uzunluk-onekli metni stdout'a
+  f_yaz_kesir        ondalik yazdirma
+  f_liste_ekle       ekle(liste, oge) -> yeni liste
+  f_metin_indeks     metin[i] -> tek harflik metin
+  f_karakter         karakter(kod) -> metin
+  f_kod              kod(metin) -> ilk bayt
+  f_oku              oku(yol)  -> open/read/close syscall
+  f_yaz_dosya        yaz_dosya(yol, icerik) -> open/write/close
+
+---------------------------------------------------------------------
+ MADDE 2 — ONDALIK SAYI (SSE)  [TAMAM]
+---------------------------------------------------------------------
+Elle kodlanan SSE komutlari:
+  movq xmm<->r64, addsd, subsd, mulsd, divsd,
+  cvtsi2sd (tam->ondalik), cvttsd2si (ondalik->tam), comisd
+Ondalik degerler kayitta HAM BIT DESENI olarak tasinir; islem aninda
+xmm'e tasinir. Tam sayi ile karisik islemde otomatik yukseltme yapilir.
+Yazdirma: kendi float->metin cevirici (libc printf YOK).
+  Tam degerler "4" olarak yazilir, "4.0" degil (yorumlayiciyla ayni).
+
+---------------------------------------------------------------------
+ MADDE 3 — SELF-HOSTING  [KISMI — durust degerlendirme asagida]
+---------------------------------------------------------------------
+YAPILAN: ELF backend artik bir derleyicinin ihtiyac duydugu
+         ozelliklerin BUYUK COGUNLUGUNU destekliyor:
+           islev + ozyineleme, liste, metin, her...icinde,
+           metin indeksleme, kod/karakter, dosya oku/yaz.
+         Ayrica islev DONUS ve PARAMETRE tipleri otomatik cikariliyor
+         (sabit noktaya kadar yinelenen cok gecisli cikarim).
+         Yani metin donduren, liste donduren, ondalik donduren
+         islevler artik native derleniyor.
+
+YAPILMAYAN: tanc'in KENDINI derlemesi.
+         Bunun icin gereken kalan parcalar:
+           - parçala() yerlesigi (metin bolme)
+           - sozluk (map) destegi
+           - cok boyutlu/ic ice liste tip cikarimi
+           - ve en onemlisi: ELF ureten bir derleyicinin TAN'DA
+             bastan yazilmasi (binlerce satir)
+         Bu tek oturumluk is degil. Altyapi artik hazir; eksik olan
+         derleyicinin kendisinin Tan'da yazilmasi.
+
+---------------------------------------------------------------------
+ TEST
+---------------------------------------------------------------------
+  ./TestArkaUc.sh elf   -> 20/20 gecti
+Kapsam: aritmetik, karsilastirma, mantik, kosul, dongu, ozyineleme,
+  ic ice dongu, 64-bit buyuk sayi, 6 parametre, obeb, asal sayaci,
+  metin sabiti, metin yigin, metin cevirme, liste, metin listesi,
+  ondalik, dosya G/C, islev tip cikarimi, karisik.
+
+Yorumlayici regresyonu: kesim, talay, noral, model, tokenizer, ornek
+  -> hepsi calisiyor.
+asm ve C backend'leri bozulmadi.
+
+---------------------------------------------------------------------
+ OLCUM (hepsi statically linked, not a dynamic executable)
+---------------------------------------------------------------------
+  int64 program              1048 bayt
+  metin + dongu              1144 bayt
+  dosya G/C                  1712 bayt
+  liste + her + indeksleme   2200 bayt
+  ondalik                    2464 bayt
+  islev+liste+metin+ondalik  2976 bayt
+
+---------------------------------------------------------------------
+ HENUZ YOK
+---------------------------------------------------------------------
+  sozluk (map)
+  parçala / birleştir yerlesikleri
+  cop toplayici (bump allocator geri almaz)
+  ic ice liste tip cikarimi (liste<liste<...>>)
+  asm backend metin/liste/ondalik desteklemiyor — sadece ELF
+  cok mimari (yalniz x86-64 Linux)
+  DWARF hata ayiklama bilgisi
+  optimizasyon (register tahsisi, olu kod eleme yok)

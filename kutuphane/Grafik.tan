@@ -1,0 +1,32 @@
+# ============================================================
+# Grafik.tan — konsol ASCII grafikleri (saf Tan)
+# ============================================================
+içe al "kutuphane/Temel.tan"
+içe al "kutuphane/Liste.tan"
+
+# yatayÇubuk(etiket, değer, enBüyük, genişlik): tek çubuk satırı
+işlev yatayÇubuk(etiket, değer, enBüyük, genişlik)
+    dolu = 0
+    eğer enBüyük > 0 ise
+        dolu = tYuvarla((değer / enBüyük) * genişlik)
+    son
+    çubuk = ""
+    i = 0
+    iken i < dolu
+        çubuk = çubuk + "█"
+        i = i + 1
+    son
+    döndür etiket + " |" + çubuk + " " + değer
+son
+
+# çubukGrafik(etiketler, değerler, genişlik): tüm satırlar
+işlev çubukGrafik(etiketler, değerler, genişlik)
+    enb = enBüyükÖge(değerler)
+    çıktı = ""
+    i = 0
+    iken i < uzunluk(etiketler)
+        çıktı = çıktı + yatayÇubuk(etiketler[i], değerler[i], enb, genişlik) + "\n"
+        i = i + 1
+    son
+    döndür çıktı
+son

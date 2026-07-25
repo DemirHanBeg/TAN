@@ -1,0 +1,8 @@
+dene
+    yaz "başladı"
+    x = oku("olmayanDosya.txt")
+    yaz "buraya gelmemeli"
+yakala hata
+    yaz "yakalandı: " + hata
+son
+yaz "program devam ediyor"

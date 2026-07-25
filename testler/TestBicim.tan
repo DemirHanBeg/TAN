@@ -1,0 +1,8 @@
+içe al "kutuphane/Bicim.tan"
+
+yaz paraBiçim(1234567)
+yaz paraBiçim(1000)
+yaz paraBiçim(42)
+yaz solaYasla("ad", 10, ".")
+yaz sağaYasla("42", 6, "0")
+yaz tekrarMetin("ab", 3)

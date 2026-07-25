@@ -1,0 +1,9 @@
+l = [10, 20, 30]
+yaz(uzunluk(l))
+yaz(l[0])
+yaz(l[1])
+yaz(l[2])
+l2 = ekle(l, 40)
+yaz(uzunluk(l2))
+yaz(l2[3])
+yaz(uzunluk(l))

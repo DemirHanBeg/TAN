@@ -1,0 +1,43 @@
+# metin indeksleme s[i], kod(s), karakter(n), metin(sayi), == / !=
+s = "Tan"
+yaz(s[0])
+yaz(s[1])
+yaz(s[2])
+
+yaz(kod(s))
+yaz(kod("A"))
+yaz(karakter(65))
+yaz(karakter(kod("z")))
+
+n = 123
+m = metin(n)
+yaz(m)
+yaz(uzunluk(m))
+yaz(m == "123")
+
+a = "abc"
+b = "abc"
+c = "xyz"
+eğer a == b ise
+    yaz(1)
+son
+eğer a != c ise
+    yaz(2)
+son
+eğer a == c ise
+    yaz(999)
+değilse
+    yaz(3)
+son
+
+# metin(x) zaten metin ise no-op (ayni icerigi dondurur)
+z = metin(m)
+yaz(z == m)
+
+toplam = 0
+i = 0
+iken i < uzunluk(s)
+    toplam = toplam + kod(s[i])
+    i = i + 1
+son
+yaz(toplam)

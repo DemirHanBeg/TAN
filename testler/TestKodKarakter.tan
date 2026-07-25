@@ -1,0 +1,5 @@
+yaz kod("A")
+yaz kod("a")
+yaz karakter(65)
+yaz karakter(97)
+yaz karakter(kod("Z") + 1)

@@ -1,0 +1,33 @@
+# ============================================================
+# Yol.tan — dosya yolu işlemleri (saf Tan)
+# ============================================================
+içe al "kutuphane/Metin2.tan"
+
+# uzantı(dosya): son noktadan sonrası
+işlev uzantı(dosya)
+    hrf = harfler(dosya)
+    sonNokta = -1
+    i = 0
+    iken i < uzunluk(hrf)
+        eğer hrf[i] == "." ise
+            sonNokta = i
+        son
+        i = i + 1
+    son
+    eğer sonNokta == -1 ise
+        döndür ""
+    son
+    sonuç = ""
+    i = sonNokta + 1
+    iken i < uzunluk(hrf)
+        sonuç = sonuç + hrf[i]
+        i = i + 1
+    son
+    döndür sonuç
+son
+
+# dosyaAdı(yol): son / işaretinden sonrası
+işlev dosyaAdı(yol)
+    parçalar = parçala(yol, "/")
+    döndür parçalar[uzunluk(parçalar) - 1]
+son

@@ -1,0 +1,5 @@
+x = 5
+eğer x > 3 ise
+yaz 111
+son
+yaz 777

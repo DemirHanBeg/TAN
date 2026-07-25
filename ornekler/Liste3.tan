@@ -1,0 +1,35 @@
+# iç içe liste (matris) + kutu tekniği (tek elemanlı liste = gösterici)
+m = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+yaz(uzunluk(m))
+yaz(m[0][0])
+yaz(m[1][1])
+yaz(m[2][2])
+yaz(m[1][2])
+
+m[0][0] = 99
+yaz(m[0][0])
+
+toplam = 0
+her satir m içinde
+    her v satir içinde
+        toplam = toplam + v
+    son
+son
+yaz(toplam)
+
+kutu = [0]
+işlev sifirla(k)
+    k[0] = 0
+    döndür 0
+son
+işlev birerArtir(k, n)
+    i = 0
+    iken i < n
+        k[0] = k[0] + 1
+        i = i + 1
+    son
+    döndür 0
+son
+x = sifirla(kutu)
+x = birerArtir(kutu, 7)
+yaz(kutu[0])

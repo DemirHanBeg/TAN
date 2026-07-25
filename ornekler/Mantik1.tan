@@ -1,0 +1,68 @@
+# mantık tabloları (ve/veya) + KISA DEVRE testi.
+# Kısa devre olmasaydı: sağ operandaki l[999999999] indeks sınır dışına
+# çıkıp yığın-dışı belleğe erişir, SEGFAULT ile çöker (bu dosyada elle
+# doğrulandı — bkz. TancElf.tan "kisaDevreBirlestir" notu, TancElf kendi
+# kaynağında (harfMi, rakamMi, ...) 35 yerde ve/veya kullanıyor, kısa
+# devre olmadan kendi kendini derlerken çökme riski taşıyordu).
+
+# --- mantık tabloları ---
+eğer 1 == 1 ve 1 == 1 ise
+    yaz(1)
+son
+eğer 1 == 1 ve 1 == 0 ise
+    yaz(999)
+değilse
+    yaz(2)
+son
+eğer 1 == 0 ve 1 == 1 ise
+    yaz(999)
+değilse
+    yaz(3)
+son
+eğer 1 == 0 ve 1 == 0 ise
+    yaz(999)
+değilse
+    yaz(4)
+son
+
+eğer 1 == 1 veya 1 == 1 ise
+    yaz(5)
+son
+eğer 1 == 1 veya 1 == 0 ise
+    yaz(6)
+son
+eğer 1 == 0 veya 1 == 1 ise
+    yaz(7)
+son
+eğer 1 == 0 veya 1 == 0 ise
+    yaz(999)
+değilse
+    yaz(8)
+son
+
+# --- kısa devre: sağ taraf sınır dışı indeks, HİÇ ÇALIŞMAMALI ---
+l = [1, 2, 3]
+
+eğer 0 ve l[999999999] == 1 ise
+    yaz(999)
+değilse
+    yaz(9)
+son
+
+eğer 1 veya l[999999999] == 1 ise
+    yaz(10)
+son
+
+# değişkenle de aynı davranış
+yanlisDegisken = 0
+dogruDegisken = 1
+eğer yanlisDegisken ve l[999999999] == 1 ise
+    yaz(999)
+değilse
+    yaz(11)
+son
+eğer dogruDegisken veya l[999999999] == 1 ise
+    yaz(12)
+son
+
+yaz(13)

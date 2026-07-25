@@ -1,0 +1,13 @@
+işlev topla(a, b)
+    döndür a + b
+son
+
+işlev faktoriyel(n)
+    eğer n <= 1 ise
+        döndür 1
+    son
+    döndür n * faktoriyel(n - 1)
+son
+
+yaz(topla(3, 4))
+yaz(faktoriyel(10))

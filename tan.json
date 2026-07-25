@@ -1,0 +1,8 @@
+{
+  "ad": "tan",
+  "surum": "0.3.0",
+  "giris": "Ornek.tan",
+  "aciklama": "Kendi assembler'i ve linker'i olan, sifir dis bagimlilikla native ELF ureten programlama dili",
+  "lisans": "MIT",
+  "bagimliliklar": {}
+}

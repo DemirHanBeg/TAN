@@ -1,0 +1,52 @@
+içe al "kutuphane/Bicim.tan"
+# ============================================================
+# Tablo.tan — metin tablosu (saf Tan; Bicim.tan üstüne)
+# ============================================================
+
+# satırMetni(hücreler, genişlikler): "| a | bb | c |" biçiminde tek satır üretir
+işlev satırMetni(hücreler, genişlikler)
+    metin = "|"
+    c = 0
+    iken c < uzunluk(hücreler)
+        metin = metin + " " + solaYasla(hücreler[c], genişlikler[c], " ") + " |"
+        c = c + 1
+    son
+    döndür metin
+son
+
+# metinTablo(başlıklar, satırlar): hizalanmış, ASCII çerçeveli tablo metni.
+# başlıklar: metin listesi. satırlar: metin listelerinin listesi.
+# Sütun genişliği o sütundaki en uzun hücreye (başlık dahil) göre ayarlanır.
+işlev metinTablo(başlıklar, satırlar)
+    sütunSayısı = uzunluk(başlıklar)
+
+    genişlikler = []
+    c = 0
+    iken c < sütunSayısı
+        genişlik = uzunluk(başlıklar[c])
+        her satır satırlar içinde
+            h = uzunluk(satır[c])
+            eğer h > genişlik ise
+                genişlik = h
+            son
+        son
+        genişlikler = ekle(genişlikler, genişlik)
+        c = c + 1
+    son
+
+    çizgi = "+"
+    c = 0
+    iken c < sütunSayısı
+        çizgi = çizgi + tekrarMetin("-", genişlikler[c] + 2) + "+"
+        c = c + 1
+    son
+
+    sonuç = çizgi + "\n"
+    sonuç = sonuç + satırMetni(başlıklar, genişlikler) + "\n"
+    sonuç = sonuç + çizgi + "\n"
+    her satır satırlar içinde
+        sonuç = sonuç + satırMetni(satır, genişlikler) + "\n"
+    son
+    sonuç = sonuç + çizgi
+    döndür sonuç
+son

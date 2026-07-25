@@ -1,0 +1,23 @@
+# metin literali + birleştirme (+) + uzunluk(s)
+# NOT: ASCII içerik — çok baytlı UTF-8 karakterler (ç ğ ı ö ş ü İ) burada
+# bilinçli kullanılmadı; DOKUMANTASYON.md'de belgeli kod()/karakter()
+# rune-vs-bayt sınırı yüzünden interpreter/native arasında farklı bayt
+# üretebilirler (bkz. TancElf.tan "METİN ÇALIŞMA ZAMANI" başlığı).
+
+selam = "merhaba"
+yaz(selam)
+yaz(uzunluk(selam))
+
+ad = "Tan"
+yaz("dil: " + ad)
+yaz(ad + " dili")
+
+toplamMetin = "a" + "b" + "c"
+yaz(toplamMetin)
+yaz(uzunluk(toplamMetin))
+
+sayiMetin = "deger: " + 42
+yaz(sayiMetin)
+
+karisik = 1 + 2
+yaz("sonuc: " + karisik)

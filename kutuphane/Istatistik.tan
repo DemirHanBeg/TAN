@@ -1,0 +1,65 @@
+içe al "kutuphane/Sira.tan"
+içe al "kutuphane/Temel.tan"
+# ============================================================
+# Istatistik.tan — temel istatistik işlevleri (saf Tan)
+# ============================================================
+
+# toplaSayılar(liste): tüm sayıların toplamı
+işlev toplaSayılar(liste)
+    toplam = 0
+    her sayı liste içinde
+        toplam = toplam + sayı
+    son
+    döndür toplam
+son
+
+# istOrtalama(liste): aritmetik ortalama
+# (adı "ortalama" değil "istOrtalama" — Liste.tan'daki ortalama ile çakışmasın diye)
+işlev istOrtalama(liste)
+    döndür toplaSayılar(liste) / uzunluk(liste)
+son
+
+# istEnBüyük(liste): en büyük değer
+işlev istEnBüyük(liste)
+    enb = liste[0]
+    her sayı liste içinde
+        eğer sayı > enb ise
+            enb = sayı
+        son
+    son
+    döndür enb
+son
+
+# istEnKüçük(liste): en küçük değer
+işlev istEnKüçük(liste)
+    enk = liste[0]
+    her sayı liste içinde
+        eğer sayı < enk ise
+            enk = sayı
+        son
+    son
+    döndür enk
+son
+
+# medyan(liste): sıralayıp ortadaki değer(ler)
+işlev medyan(liste)
+    sıralı = hızlıSırala(liste)
+    n = uzunluk(sıralı)
+    orta = n / 2
+    eğer n % 2 == 0 ise
+        döndür (sıralı[orta - 1] + sıralı[orta]) / 2
+    son
+    döndür sıralı[orta]
+son
+
+# stdSapma(liste): standart sapma (popülasyon)
+işlev stdSapma(liste)
+    ort = istOrtalama(liste)
+    karelerToplamı = 0
+    her sayı liste içinde
+        fark = sayı - ort
+        karelerToplamı = karelerToplamı + fark * fark
+    son
+    varyans = karelerToplamı / uzunluk(liste)
+    döndür tKarekök(varyans)
+son

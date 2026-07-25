@@ -1,0 +1,4 @@
+# Satir sonlarini her platformda LF tut (Windows/WSL round-trip bozmasin)
+* text=auto eol=lf
+*.png binary
+*.wasm binary
