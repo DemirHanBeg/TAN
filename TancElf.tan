@@ -239,9 +239,9 @@ son
 #
 # Konum imleci ("poz") özyineli ayrıştırma fonksiyonları arasında paylaşılmalı
 # ama Tan'da referans/gösterici yok. Çözüm: poz TEK ELEMANLI bir liste
-# ("kutu") olarak taşınır — liste[i]=x YERİNDE değiştirir (bu oturumda
-# doğrulandı ve elf arka ucuna İLK KEZ eklendi — bkz. DerleElf.go
-# IndeksAtamaDugum: "elf: bu deyim desteklenmiyor" hatası veriyordu),
+# ("kutu") olarak taşınır — liste[i]=x YERİNDE değiştirir (doğrulandı
+# ve elf arka ucuna İLK KEZ eklendi — bkz. DerleElf.go IndeksAtamaDugum:
+# "elf: bu deyim desteklenmiyor" hatası veriyordu),
 # böylece kutu[0]=... çağıran tarafın da gördüğü şekilde konumu ilerletir.
 # ekle() ise HER ZAMAN YENİ liste döndürür (yerinde DEĞİL, bkz.
 # DOKUMANTASYON.md) — bu yüzden RPN bantları kutu yöntemiyle DEĞİL, her
@@ -257,7 +257,7 @@ işlev listeBirlestir(a, b)
 son
 
 # ---------------- TAMPON (büyüyen, amortize O(1) ekleme) ----------------
-# BULUNAN SORUN (bu oturumda, sabit nokta denemesinde): "kod = listeBirlestir
+# BULUNAN SORUN (sabit nokta denemesinde): "kod = listeBirlestir
 # (kod, X)" deseni TancElf.tan'ın KENDİ kod üretiminde HER YERDE kullanılıyor
 # — "kod" büyüdükçe her ekleme MEVCUT boyut kadar kopyalıyor (ekle() yeni
 # liste döndürüyor, DOKUMANTASYON.md gereği). n statement/RPN girişi için
@@ -423,7 +423,7 @@ son
 
 # kisaDevreBirlestir: "ve"/"veya" İÇİN KISA DEVRE üretir — sağ operandın
 # RPN'i (sag) SOLUN sonucuna göre HİÇ ÇALIŞTIRILMAYABİLİR (üretilen makine
-# kodunda jcc ile atlanır). Bu oturumda bulundu: RPN düz (postfix) bant
+# kodunda jcc ile atlanır). Bulundu: RPN düz (postfix) bant
 # olduğu için "IKILI ve/veya" öncekiyle AYNI şekilde ele alınıyordu — yani
 # iki operand da HER ZAMAN çalıştırılıyordu, kısa devre YOKTU. TancElf'in
 # KENDİ kaynağı (harfMi, rakamMi, ...) 35 yerde ve/veya kullanıyor; kısa
@@ -1027,7 +1027,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
 
         eğer pTur(tokenler, pozKutu) == "PARAC" ise
             # İFADE DEYİMİ: sonucu bir değişkene atamadan çağrı (yan etki
-            # için — oku()/yazBaytlar() gibi). Bu oturumda bulundu: bu dal
+            # için — oku()/yazBaytlar() gibi). Bulundu: bu dal
             # hiç yoktu, "yazBaytlar(yol, liste)" gibi bağımsız çağrılar
             # SESSİZCE atlanıyordu (aşağıdaki eski yorum: "ifade deyimi
             # henüz desteklenmiyor" — dosya G/Ç bunu ZORUNLU kıldı). Konumu
@@ -1691,8 +1691,8 @@ son
 
 # baytListesindenMetin: bayt listesini (0-255) HAM bayt dizisi olan bir
 # metne çevirir. Bu ancak elf arka ucunun karakter()/metin-birleştirme
-# RUNE değil BAYT bazlı çalışması sayesinde doğru (bu oturumda doğrulandı:
-# karakter(200) tek bir 0xC8 baytı üretiyor, 2 baytlık UTF-8 kodlaması değil).
+# RUNE değil BAYT bazlı çalışması sayesinde doğru (doğrulandı: karakter(200)
+# tek bir 0xC8 baytı üretiyor, 2 baytlık UTF-8 kodlaması değil).
 işlev baytListesindenMetin(baytlar)
     s = ""
     her b baytlar içinde
@@ -1807,12 +1807,11 @@ son
 # (veri alanı) değişkende tutuyor — TancElf artık AYNI mekanizmayı kullanıyor
 # (bkz. leaVeri/movGenelOku/movGenelYaz). ÖNCEKİ SÜRÜM r12/r13'ü register
 # olarak ayırmıştı ("kırılgan: ikisi de callee-saved, üretilen bir işlev
-# kaydetmeden kullanırsa yığın durumu sessizce bozulur" — bu oturumda
-# bulundu). Veri alanı mekanizması eklenince buraya taşındı, Go arka
-# ucuyla aynı yaklaşım.
+# kaydetmeden kullanırsa yığın durumu sessizce bozulur"). Veri alanı
+# mekanizması eklenince buraya taşındı, Go arka ucuyla aynı yaklaşım.
 #
-# SINIR KONTROLÜ (bu oturumda DerleElf.go'da bulunan hatanın aynısı burada
-# da vardı): kontrolsüz haliyle
+# SINIR KONTROLÜ (DerleElf.go'da bulunan hatanın aynısı burada da vardı):
+# kontrolsüz haliyle
 # 64 MB'ı aşan her çıktı programı SESSİZCE segfault veriyordu, ölçek
 # bağımlı olduğu için kod üretim hatası gibi görünüyordu. v_yiginSon =
 # geçerli yığın sınırı; aşılırsa brk ile 64 MB daha istenir, brk başarısız
@@ -1925,7 +1924,7 @@ son
 
 # liste_yap(rdi=n, rsi=başlangıç değeri) -> rax = n öğeli liste, TEK
 # SEFERDE ayrılır. ekle() ile n kez büyütmenin O(n²) maliyetini önler —
-# Go referansı (f_liste_yap) ile birebir aynı. Bu oturumda bulundu:
+# Go referansı (f_liste_yap) ile birebir aynı. Bulundu:
 # TancElf.tan'ın KENDİSİ ~72 KB kod üretiyor, kod birikimi listeBirlestir/
 # ekle ile yapıldığında bu O(n²) desen kendi kendini derlerken WSL'i
 # çökertecek kadar bellek istiyordu (bkz. SURUM.md). listeYap, Tampon.tan
@@ -1964,13 +1963,13 @@ son
 
 # ---------------- METİN ÇALIŞMA ZAMANI ----------------
 # Bellek düzeni DerleElf.go ile BİREBİR aynı: [uzunluk:8][baytlar...].
-# ÖNEMLİ (bu oturumda üç hataya sebep olan tuzak — bkz. SURUM.md): metin
-# elf'te BAYT dizisidir, RUNE değil. Aşağıdaki hiçbir yerde 128 üstü bayt
-# değerlerine üst sınır KONMADI (harfMi'deki gibi). metinVerisiBant kod()
-# ile bayt bazlı üretir — ASCII (kod<128) içerik interpreter/native
-# arasında bire bir aynı, çok baytlı UTF-8 karakterler DerleElf.go'nun
-# ZATEN belgelenmiş kod()/karakter() rune-vs-bayt sınırını miras alır
-# (bu turda ÇÖZÜLMEDİ, kapsam dışı — Metin1/Metin2 örnekleri ASCII).
+# ÖNEMLİ (üç hataya sebep olan tuzak — bkz. SURUM.md): metin elf'te BAYT
+# dizisidir, RUNE değil. Aşağıdaki hiçbir yerde 128 üstü bayt değerlerine
+# üst sınır KONMADI (harfMi'deki gibi). metinVerisiBant kod() ile bayt
+# bazlı üretir — ASCII (kod<128) içerik interpreter/native arasında bire
+# bir aynı, çok baytlı UTF-8 karakterler DerleElf.go'nun ZATEN belgelenmiş
+# kod()/karakter() rune-vs-bayt sınırını miras alır (ÇÖZÜLMEDİ, kapsam
+# dışı — Metin1/Metin2 örnekleri ASCII).
 
 # metinVerisiBant: bir metin DEĞERİNİ [uzunluk:8][baytlar...] ham veri
 # bandına çevirir (leaVeri ile işaretlenen etiketin ALTINA gömülür).
@@ -2492,8 +2491,8 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu)
             # olarak kodlanıyordu ama ifadeBantYaz'da HİÇ İŞLENMİYORDU — kod
             # üretmeden sessizce atlanıyordu. TancElf.tan'ın kendi kaynağında
             # bu literaller HİÇ kullanılmadığından (koşullar hep gerçek
-            # karşılaştırma), eksiklik hiç ortaya çıkmamıştı. Bu oturumda
-            # deyimDerle'nin "eğer/değilse eğer" düzeltmesi "iken doğru"
+            # karşılaştırma), eksiklik hiç ortaya çıkmamıştı. deyimDerle'nin
+            # "eğer/değilse eğer" düzeltmesi "iken doğru"
             # kullanmaya başlayınca (zincir döngüsü için) İLK KEZ tetiklendi:
             # "doğru" sıfır bayt üretiyor, koşul kontrolü rax'taki ÇÖP
             # değeri okuyordu — sabit nokta denemesinde gen2'nin blokDerle
