@@ -1,0 +1,51 @@
+# LsmBenchmark: kutuphane/LsmDeposu.tan için FazB_MVP.md madde 6 (ilk
+# gerçek benchmark sayıları). Tan'ın kendi zaman() çözünürlüğü saniye
+# (Unix epoch) olduğu için TOPLAM süre dıştan ölçülmeli:
+#   wsl.exe -d Ubuntu -- bash -lc "cd /mnt/c/Users/karab/Desktop/tan && time ./tan testler/LsmBenchmark.tan"
+# N (adet) ve ESIK aşağıdan değiştirilebilir.
+
+içe al "kutuphane/LsmDeposu.tan"
+
+N = 10000
+ESIK = 1000
+taban = "testler/_lsmbench_gecici"
+
+i = 0
+iken i < 20
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")
+
+db = lsmAc(taban, ESIK)
+
+yaz("koyuluyor...")
+i = 0
+iken i < N
+    lsmKoy(db, "anahtar" + metin(i), "deger" + metin(i))
+    i = i + 1
+son
+lsmKapat(db)
+
+yaz("okunuyor...")
+db2 = lsmAc(taban, ESIK)
+dogruSayisi = 0
+i = 0
+iken i < N
+    v = lsmAl(db2, "anahtar" + metin(i))
+    eğer metinEsit(v, "deger" + metin(i)) ise
+        dogruSayisi = dogruSayisi + 1
+    son
+    i = i + 1
+son
+yaz("dogru okuma: " + metin(dogruSayisi) + " / " + metin(N))
+yaz("segment sayisi: " + metin(uzunluk(db2.sstableYollari)))
+
+i = 0
+iken i < 20
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")

@@ -76,11 +76,25 @@ func (s *TanSozluk) koy(anahtar string, deger Deger) {
 type Kapsam struct {
 	degiskenler map[string]Deger
 	ust         *Kapsam
+	islevSiniri bool // bkz. YeniIslevKapsami + ata() notu
 }
 
 func YeniKapsam(ust *Kapsam) *Kapsam {
 	return &Kapsam{degiskenler: map[string]Deger{}, ust: ust}
 }
+
+// YeniIslevKapsami: bir İŞLEV ÇAĞRISININ (islevCagir/cagriIfadeDegerle/
+// metotCagriDegerle/CagriDugum çağrı yolu) kendi aktivasyon kapsamı için
+// kullanılır — YeniKapsam ile AYNI ama islevSiniri=true işaretler. Bkz.
+// ata() içindeki "değişken sızması" düzeltmesi notu: eğer/iken/her/dene
+// BLOK gövdeleri (aynı aktivasyon içindeki iç içe bloklar) için HÂLÂ düz
+// YeniKapsam kullanılmalı (blok sınırı yok, dışarıdaki AYNI çağrının
+// değişkenini mutasyona uğratmak GEREKİR — ör. "i=0; iken i<n ... i=i+1
+// ... son").
+func YeniIslevKapsami(ust *Kapsam) *Kapsam {
+	return &Kapsam{degiskenler: map[string]Deger{}, ust: ust, islevSiniri: true}
+}
+
 func (k *Kapsam) al(ad string) (Deger, bool) {
 	if d, ok := k.degiskenler[ad]; ok {
 		return d, true
@@ -92,14 +106,43 @@ func (k *Kapsam) al(ad string) (Deger, bool) {
 }
 func (k *Kapsam) koy(ad string, d Deger) { k.degiskenler[ad] = d }
 
-// ata: değişken zincirde daha önce tanımlıysa orada günceller,
-// değilse mevcut kapsamda oluşturur. Böylece iken/eğer blokları
-// üst kapsamdaki değişkeni gerçekten değiştirir.
+// ata: değişken zincirde daha önce tanımlıysa orada günceller, değilse
+// MEVCUT İŞLEV AKTİVASYONU içinde (islevSiniri'ye kadar) oluşturur.
+//
+// BULUNAN CİDDİ BUG (bu oturumda, LSM motoru benchmark'ında yakalandı):
+// ÖNCEDEN bu döngü islevSiniri kontrolü YAPMADAN sınırsız yukarı tırmanıyordu
+// — bir işlevin kendi YERELİ olması gereken bir değişken (ör. "i" bir
+// arama döngüsü sayacı), eğer AYNI ADLI bir değişken ÇAĞIRANIN (hatta üst
+// düzey betiğin) kapsamında ZATEN varsa, o ÇAĞIRANIN değişkenini SESSİZCE
+// EZİYORDU (fonksiyonun kendi lokal kapsamı GLOBAL'e kadar YÜRÜYORDU,
+// islev.Kapsam GENELDE global olduğundan — üst düzey işlevler global'i
+// yakalar). Somut belirti: "iken i<N ... x=birIslevCagir() ... i=i+1 ...
+// son" biçiminde bir üst-düzey döngü, eğer birIslevCagir() KENDİ İÇİNDE de
+// "i" adlı bir yerel kullanıyorsa, işlev çağrısı ÇAĞIRANIN "i"sini resetleyip
+// kendi döngüsünü çalıştırıp geri dönüyordu — dış döngü SONSUZA KADAR aynı
+// i değerinde takılı kalıyordu (isim çakışması TAMAMEN kazara, iki taraf da
+// birbirinden habersiz). Blok (eğer/iken/her/dene) gövdeleri AYNI SORUNU
+// YAŞAMAZ çünkü onlar islevSiniri=false ile işaretli, döngü DOĞRU şekilde
+// aynı aktivasyonun kendi dışındaki bloğuna kadar tırmanmaya devam eder.
+//
+// Düzeltme: islevSiniri=true olan bir kapsama (kendi degiskenler'inde
+// bulunamadıktan SONRA) ulaşılırsa tırmanma DURUR — değişken bu işlev
+// çağrısının kendi aktivasyonunda (ya da onu saran bloklarda) YOKSA,
+// dışarıdaki (kapatan/closure) kapsamda RASTGELE aynı isimde bir şey varsa
+// bile ona DOKUNULMAZ, bunun yerine BURADA (çağrının başladığı kapsamda)
+// YENİ bir yerel değişken oluşturulur — tıpkı çoğu dilin "atama varsayılan
+// olarak yerel" kuralı gibi. Gerçek closure MUTASYONU (iç içe işlev
+// tanımının SARAN İŞLEV AKTİVASYONUNU değiştirmesi) codebase'de HİÇBİR
+// YERDE kullanılmıyor (grep ile doğrulandı — carpanUret/çarp örneği bile
+// sadece OKUYOR, atamıyor) — bu yüzden bu kısıtlama regresyon YARATMIYOR.
 func (k *Kapsam) ata(ad string, d Deger) {
 	for k2 := k; k2 != nil; k2 = k2.ust {
 		if _, ok := k2.degiskenler[ad]; ok {
 			k2.degiskenler[ad] = d
 			return
+		}
+		if k2.islevSiniri {
+			break
 		}
 	}
 	k.degiskenler[ad] = d
@@ -131,7 +174,7 @@ var kuresel_yorumlayici *Yorumlayici
 
 // islevCagir: bir Tan işlevini (IslevDeger) Go tarafından çağırır
 func (y *Yorumlayici) islevCagir(islev IslevDeger, args []Deger) Deger {
-	yeni := YeniKapsam(islev.Kapsam)
+	yeni := YeniIslevKapsami(islev.Kapsam)
 	for i, p := range islev.Parametreler {
 		if i < len(args) {
 			yeni.koy(p, args[i])
@@ -406,7 +449,7 @@ func (y *Yorumlayici) cagriIfadeDegerle(d CagriIfadeDugum, k *Kapsam) Deger {
 	if !ok {
 		firlat(d.Satir, "çağrılan değer bir işlev değil")
 	}
-	yeni := YeniKapsam(islev.Kapsam)
+	yeni := YeniIslevKapsami(islev.Kapsam)
 	for i, p := range islev.Parametreler {
 		if i < len(d.Argumanlar) {
 			yeni.koy(p, y.degerle(d.Argumanlar[i], k))
@@ -455,7 +498,7 @@ func (y *Yorumlayici) metotCagriDegerle(d MetotCagriDugum, k *Kapsam) Deger {
 	if !var_ {
 		firlat(d.Satir, "'%s' tipinde '%s' metodu yok", kayit.Tip.Ad, d.Metot)
 	}
-	yeni := YeniKapsam(metot.Kapsam)
+	yeni := YeniIslevKapsami(metot.Kapsam)
 	if len(metot.Parametreler) > 0 {
 		yeni.koy(metot.Parametreler[0], kayit) // bu
 	}
@@ -538,7 +581,7 @@ func (y *Yorumlayici) cagriDegerle(d CagriDugum, k *Kapsam) Deger {
 	if !ok {
 		firlat(d.Satir, "'%s' bir işlev değil", d.Ad)
 	}
-	yeni := YeniKapsam(islev.Kapsam)
+	yeni := YeniIslevKapsami(islev.Kapsam)
 	for i, p := range islev.Parametreler {
 		if i < len(d.Argumanlar) {
 			yeni.koy(p, y.degerle(d.Argumanlar[i], k))

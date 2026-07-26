@@ -1,0 +1,278 @@
+# ============================================================
+# LsmDeposu.tan — LSM-tree tabanlı anahtar/değer depolama motoru (saf Tan)
+# ------------------------------------------------------------
+# NexusCore/FazB_MVP.md'nin tasarımının kodlanmış hali — Katman 0 (basit
+# RAM/disk tier) + Katman 1'den LSM Engine. kutuphane/KVDeposu.tan'dan FARKI:
+# KVDeposu tek bir sözlük + sınırsız büyüyen WAL'dır (bellek sınırsız büyür,
+# compaction yok). Bu modül gerçek bir LSM: sınırlı memtable, eşik aşılınca
+# SIRALI SSTable dosyasına flush, birden fazla SSTable birikince compaction
+# (k-yollu birleştirme + tombstone temizliği).
+#
+# Hedef çalışma yolu: YORUMLAYICI (`./tan program.tan`), `elf` DEĞİL — LSM
+# uzun ömürlü sürekli tahsis/serbest bırakma yapar, `elf` yolunun bump
+# allocator'ı geri alma yapamaz (bkz. FazA_Kapsam.md #5), yorumlayıcının
+# GC'si var.
+#
+# Dosya düzeni (dizin YOK — Tan'da mkdir/dizin-listeleme yerleşiği yok,
+# bu yüzden tek bir "taban yolu" öneki kullanılıyor, sadece taban yolunun
+# İÇİNDE BULUNDUĞU dizinin (genelde ".") önceden var olması yeterli):
+#   <taban>.wal                  — write-ahead log (S/D satırları)
+#   <taban>.meta                 — [sonrakiSstableNo, aktif sstable yolları (en yeni ilk)]
+#   <taban>_sstable_<no>.dat     — sıralı "anahtar\tdeğer\n" satırları
+#
+# Bilinen sınırlar (v1, FazB_MVP.md'de bilinçli kapsam dışı bırakıldı):
+#   - anahtar/değer TAB (karakter 9) veya SATIRSONU (karakter 10) İÇEREMEZ
+#     (satır/TAB tabanlı basit format, KVDeposu.tan'ın boşluk-ayraç sınırıyla
+#     AYNI sınıf — gerçek escape/uzunluk-önekli format v2 işi).
+#   - aralık taraması (aralik()) YOK — memtable+SSTable merge iterator ister.
+#   - sparse index / bloom filter YOK — SSTable okuma tam-tarama + ikili arama.
+#   - compaction HER ZAMAN TÜM segmentleri tek seferde birleştirir (kademeli
+#     / katmanlı compaction değil) — küçük/orta ölçek için yeterli, çok
+#     sayıda büyük segment'te pahalı olabilir.
+#
+# Kullanım:
+#   içe al "kutuphane/LsmDeposu.tan"
+#   db = lsmAc("veri/deneme", 500)
+#   lsmKoy(db, "ad", "Ayşe")
+#   yaz(lsmAl(db, "ad"))       # Ayşe
+#   lsmSil(db, "ad")
+#   yaz(lsmAl(db, "ad"))       # yok
+#   lsmKapat(db)               # bekleyen memtable'ı flush eder
+# ============================================================
+
+kayıt LsmDb
+    memtable
+    tabanYolu
+    walYolu
+    sstableYollari
+    esik
+    sonrakiNo
+    memtableBoyut   # anahtarlar(memtable) HER koy/sil'de O(boyut) kopyalar
+                     # yapıp uzunluk() almak yerine ayrı sayaç (bkz. lsmKoy/
+                     # lsmSil notu — 10k+ girişte O(esik²) toplam maliyetin
+                     # BÜYÜK kısmı buydu, ölçülerek bulundu)
+son
+
+kLsmTombstone = karakter(1) + "TOMBSTONE" + karakter(1)
+kLsmCompactEsik = 4
+
+# --- sıralama: basit ekleme sıralaması (insertion sort), YERİNDE (liste[i]
+# atamasıyla, ekle() kullanmaz — ekle() her çağrıda kopyalar, O(n²) olur) ---
+işlev lsmSirala(liste)
+    n = uzunluk(liste)
+    i = 1
+    iken i < n
+        deger = liste[i]
+        j = i - 1
+        iken j >= 0 ve liste[j] > deger
+            liste[j + 1] = liste[j]
+            j = j - 1
+        son
+        liste[j + 1] = deger
+        i = i + 1
+    son
+    döndür liste
+son
+
+işlev lsmMetaKaydet(db)
+    icerik = metin(db.sonrakiNo) + karakter(10)
+    her y db.sstableYollari içinde
+        icerik = icerik + y + karakter(10)
+    son
+    yaz_dosya(db.tabanYolu + ".meta", icerik)
+    döndür 0
+son
+
+# lsmAc(tabanYolu, esik): meta'dan var olan SSTable listesini + WAL'ı
+# replay eder (crash recovery — WAL flush edilmeden kalan yazmalar).
+işlev lsmAc(tabanYolu, esik)
+    db = LsmDb(sözlük(), tabanYolu, tabanYolu + ".wal", [], esik, 0, 0)
+
+    metaYolu = tabanYolu + ".meta"
+    eğer dosyaVarMi(metaYolu) ise
+        metaSatirlari = satırlar(oku(metaYolu))
+        eğer uzunluk(metaSatirlari) > 0 ise
+            db.sonrakiNo = sayı(metaSatirlari[0])
+            i = 1
+            iken i < uzunluk(metaSatirlari)
+                db.sstableYollari = ekle(db.sstableYollari, metaSatirlari[i])
+                i = i + 1
+            son
+        son
+    son
+
+    eğer dosyaVarMi(db.walYolu) ise
+        walSatirlari = satırlar(oku(db.walYolu))
+        her satir walSatirlari içinde
+            parcalar = parçala(satir, karakter(9))
+            eğer uzunluk(parcalar) >= 3 ve metinEsit(parcalar[0], "S") ise
+                eğer var_mı(db.memtable, parcalar[1]) == 0 ise
+                    db.memtableBoyut = db.memtableBoyut + 1
+                son
+                db.memtable[parcalar[1]] = parcalar[2]
+            son
+            eğer uzunluk(parcalar) == 2 ve metinEsit(parcalar[0], "D") ise
+                eğer var_mı(db.memtable, parcalar[1]) == 0 ise
+                    db.memtableBoyut = db.memtableBoyut + 1
+                son
+                db.memtable[parcalar[1]] = kLsmTombstone
+            son
+        son
+    son
+
+    döndür db
+son
+
+# lsmSstableAra(yol, anahtar): sıralı SSTable dosyasında ikili arama.
+# Döndürür: [1, değer] bulunduysa (tombstone dahil), [0, ""] bulunamadıysa.
+işlev lsmSstableAra(yol, anahtar)
+    satirlar_ = satırlar(oku(yol))
+    dusuk = 0
+    yuksek = uzunluk(satirlar_) - 1
+    iken dusuk <= yuksek
+        orta = tamBol(dusuk + yuksek, 2)
+        parcalar = parçala(satirlar_[orta], karakter(9))
+        k = parcalar[0]
+        eğer metinEsit(k, anahtar) ise
+            döndür [1, parcalar[1]]
+        son
+        eğer k < anahtar ise
+            dusuk = orta + 1
+        değilse
+            yuksek = orta - 1
+        son
+    son
+    döndür [0, ""]
+son
+
+işlev lsmAl(db, anahtar)
+    eğer var_mı(db.memtable, anahtar) ise
+        deger = db.memtable[anahtar]
+        eğer metinEsit(deger, kLsmTombstone) ise
+            döndür yok
+        son
+        döndür deger
+    son
+    i = 0
+    n = uzunluk(db.sstableYollari)
+    iken i < n
+        sonuc = lsmSstableAra(db.sstableYollari[i], anahtar)
+        eğer sonuc[0] == 1 ise
+            eğer metinEsit(sonuc[1], kLsmTombstone) ise
+                döndür yok
+            son
+            döndür sonuc[1]
+        son
+        i = i + 1
+    son
+    döndür yok
+son
+
+# lsmCompactEt: TÜM aktif SSTable segmentlerini (en eskiden en yeniye
+# uygulanarak, yani YENİ değer kazanır) tek bir sıralı segmente birleştirir.
+# TÜM segmentleri kapsadığı için tombstone'lar GÜVENLE atılabilir (daha
+# eski, kapsam-dışı bir segmentte gizlenecek gerçek değer kalmadı).
+işlev lsmCompactEt(db)
+    birlesik = sözlük()
+    i = uzunluk(db.sstableYollari) - 1
+    iken i >= 0
+        satirlar_ = satırlar(oku(db.sstableYollari[i]))
+        her satir satirlar_ içinde
+            parcalar = parçala(satir, karakter(9))
+            birlesik[parcalar[0]] = parcalar[1]
+        son
+        i = i - 1
+    son
+
+    anahtarListesi = lsmSirala(anahtarlar(birlesik))
+    icerik = ""
+    her k anahtarListesi içinde
+        deger = birlesik[k]
+        eğer metinEsit(deger, kLsmTombstone) == 0 ise
+            icerik = icerik + k + karakter(9) + deger + karakter(10)
+        son
+    son
+
+    yeniYol = db.tabanYolu + "_sstable_" + metin(db.sonrakiNo) + ".dat"
+    yaz_dosya(yeniYol, icerik)
+    db.sonrakiNo = db.sonrakiNo + 1
+
+    her eskiYol db.sstableYollari içinde
+        dosyaSil(eskiYol)
+    son
+    db.sstableYollari = [yeniYol]
+    lsmMetaKaydet(db)
+    döndür 0
+son
+
+# lsmFlushEt: memtable'ı sıralı yeni bir SSTable'a yazar, memtable'ı ve
+# WAL'ı boşaltır. Segment sayısı eşiği aşarsa compaction tetiklenir.
+işlev lsmFlushEt(db)
+    anahtarListesi = anahtarlar(db.memtable)
+    eğer uzunluk(anahtarListesi) == 0 ise
+        döndür 0
+    son
+    anahtarListesi = lsmSirala(anahtarListesi)
+
+    icerik = ""
+    her k anahtarListesi içinde
+        icerik = icerik + k + karakter(9) + db.memtable[k] + karakter(10)
+    son
+
+    yeniYol = db.tabanYolu + "_sstable_" + metin(db.sonrakiNo) + ".dat"
+    yaz_dosya(yeniYol, icerik)
+    db.sonrakiNo = db.sonrakiNo + 1
+
+    yeniListe = [yeniYol]
+    her y db.sstableYollari içinde
+        yeniListe = ekle(yeniListe, y)
+    son
+    db.sstableYollari = yeniListe
+
+    db.memtable = sözlük()
+    db.memtableBoyut = 0
+    yaz_dosya(db.walYolu, "")
+    lsmMetaKaydet(db)
+
+    eğer uzunluk(db.sstableYollari) >= kLsmCompactEsik ise
+        lsmCompactEt(db)
+    son
+    döndür 0
+son
+
+# NOT (performans): eşik kontrolü ÖNCEDEN "uzunluk(anahtarlar(db.memtable))"
+# kullanıyordu — anahtarlar() sözlüğün TÜM anahtar listesini HER koy/sil
+# çağrısında YENİDEN kopyalıyor (O(mevcut boyut)), bu yüzden bir flush
+# döngüsü boyunca toplam maliyet O(eşik²) oluyordu — 10k+ girişte
+# ölçülebilir yavaşlığın büyük kısmı buydu (benchmark ile bulundu).
+# memtableBoyut ayrı bir sayaç olarak tutuluyor, O(1) artıyor.
+işlev lsmKoy(db, anahtar, deger)
+    ekle_dosya(db.walYolu, "S" + karakter(9) + anahtar + karakter(9) + deger + karakter(10))
+    eğer var_mı(db.memtable, anahtar) == 0 ise
+        db.memtableBoyut = db.memtableBoyut + 1
+    son
+    db.memtable[anahtar] = deger
+    eğer db.memtableBoyut >= db.esik ise
+        lsmFlushEt(db)
+    son
+    döndür 0
+son
+
+işlev lsmSil(db, anahtar)
+    ekle_dosya(db.walYolu, "D" + karakter(9) + anahtar + karakter(10))
+    eğer var_mı(db.memtable, anahtar) == 0 ise
+        db.memtableBoyut = db.memtableBoyut + 1
+    son
+    db.memtable[anahtar] = kLsmTombstone
+    eğer db.memtableBoyut >= db.esik ise
+        lsmFlushEt(db)
+    son
+    döndür 0
+son
+
+# lsmKapat: bekleyen memtable'ı flush eder (WAL zaten crash-recovery için
+# yeterli ama kapanışta temiz bir SSTable durumu bırakmak için).
+işlev lsmKapat(db)
+    lsmFlushEt(db)
+    döndür 0
+son

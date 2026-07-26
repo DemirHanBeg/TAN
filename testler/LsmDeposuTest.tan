@@ -1,0 +1,84 @@
+# LsmDeposuTest: kutuphane/LsmDeposu.tan için doğruluk sınaması —
+# FazB_MVP.md'nin test planı (bölüm 4) madde 1-5'i kapsar (aralık/madde 6
+# hariç, v1 kapsamı dışı). Beklenen çıktı yorumda satır satır belirtildi.
+
+içe al "kutuphane/LsmDeposu.tan"
+
+# --- temizlik: önceki koşumdan kalan dosyalar varsa sil (idempotent koşum) ---
+taban = "testler/_lsmtest_gecici"
+i = 0
+iken i < 10
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")
+
+# --- 1) Doğruluk: temel koy/al ---
+db = lsmAc(taban, 3)
+lsmKoy(db, "a", "1")
+lsmKoy(db, "b", "2")
+yaz(lsmAl(db, "a"))            # 1
+yaz(lsmAl(db, "b"))            # 2
+yaz(lsmAl(db, "yok-boyle-bir-anahtar"))  # yok
+
+# --- 2) Silme: koy->sil->al "yok" dönmeli (henüz flush olmadan, memtable'da) ---
+lsmSil(db, "a")
+yaz(lsmAl(db, "a"))            # yok
+
+# --- 3) Flush tetikleme: eşik=3, 3. koy ile memtable flush olur ---
+lsmKoy(db, "c", "3")
+yaz(lsmAl(db, "b"))            # 2  (artık SSTable'da)
+yaz(lsmAl(db, "c"))            # 3  (artık SSTable'da)
+yaz(lsmAl(db, "a"))            # yok (tombstone SSTable'a flush edildi, hâlâ gizli)
+
+# --- 4) Çoklu SSTable + "en yeni kazanır": aynı anahtara farklı flush'larda
+#     farklı değer yaz, en son (en yeni segment) değerin döndüğünü doğrula ---
+lsmKoy(db, "d", "eski-deger")
+lsmKoy(db, "e", "dolgu1")
+lsmKoy(db, "f", "dolgu2")   # 3. koy -> flush (d,e,f yeni segmente gider)
+lsmKoy(db, "d", "yeni-deger")
+lsmKoy(db, "g", "dolgu3")
+lsmKoy(db, "h", "dolgu4")   # 3. koy -> flush (d=yeni-deger yeni segmente gider)
+yaz(lsmAl(db, "d"))            # yeni-deger
+
+# --- 4b) Compaction: bir flush daha tetikleyip segment sayısını eşiğe
+#     (4) ulaştır, compaction'ın tetiklendiğini (segment sayısı 1'e düştü)
+#     VE verinin hâlâ doğru okunduğunu doğrula ---
+yaz(uzunluk(db.sstableYollari))   # 3 (henüz compaction eşiğine ulaşmadı)
+lsmKoy(db, "i", "dolgu5")
+lsmKoy(db, "j", "dolgu6")
+lsmKoy(db, "k", "dolgu7")      # 4. segment -> compaction tetiklenmeli
+yaz(uzunluk(db.sstableYollari))   # 1 (compaction sonrası tek segmente indi)
+yaz(lsmAl(db, "b"))            # 2  (compaction sonrası hâlâ doğru)
+yaz(lsmAl(db, "d"))            # yeni-deger (compaction sonrası hâlâ doğru)
+yaz(lsmAl(db, "a"))            # yok (tombstone compaction'da temizlendi ama görünür sonuç hâlâ "yok")
+yaz(lsmAl(db, "k"))            # dolgu7
+
+lsmKapat(db)
+
+# --- 5) Crash recovery: yeni bir "db" handle'ı (aynı taban) aç, flush
+#     olmamış hiçbir şey kalmadığı için (lsmKapat flush etti) hepsi
+#     SSTable'dan gelmeli, veri kaybı olmamalı ---
+db2 = lsmAc(taban, 3)
+yaz(lsmAl(db2, "b"))           # 2
+yaz(lsmAl(db2, "d"))           # yeni-deger
+yaz(lsmAl(db2, "a"))           # yok
+
+# --- 6) Gerçek crash-recovery (flush OLMADAN): WAL'dan replay ---
+lsmKoy(db2, "kalici-olmayan-flush", "wal-ile-kurtar")
+# lsmKapat ÇAĞRILMADI — WAL'da duruyor, memtable henüz flush olmadı (esik altında)
+db3 = lsmAc(taban, 3)
+yaz(lsmAl(db3, "kalici-olmayan-flush"))  # wal-ile-kurtar
+lsmKapat(db3)
+
+# --- temizlik ---
+i = 0
+iken i < 10
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")
+
+yaz("LSM_TEST_TAMAM")

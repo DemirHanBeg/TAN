@@ -153,11 +153,15 @@ func init() {
 			if !ok {
 				firlat(satir, "birleştir() argümanı liste olmalı")
 			}
-			sonuc := ""
+			// strings.Builder: O(n) -- önceki "sonuc += metne(o)" döngüsü her
+			// eklemede TÜM önceki içeriği kopyalıyordu (O(n²)), büyük liste
+			// birleştirmede (ör. LSM SSTable flush, binlerce satır) ciddi
+			// yavaşlık kaynağıydı. Davranış AYNI, sadece asimptotik maliyet düzeldi.
+			var b strings.Builder
 			for _, o := range liste.Elemanlar {
-				sonuc += metne(o)
+				b.WriteString(metne(o))
 			}
-			return sonuc
+			return b.String()
 		},
 
 		// kod(h): bir karakterin sayısal kod noktasını (rune) döndürür
@@ -287,6 +291,18 @@ func init() {
 		"dosyaVarMi": func(a []Deger, satir int) Deger {
 			_, err := os.Stat(metne(a[0]))
 			return err == nil
+		},
+
+		// dosyaSil(yol): dosyayı siler (yoksa sessizce geçer — çağıran
+		// dosyaVarMi ile önceden kontrol edebilir ama zorunlu değil).
+		// LSM depolama motorunun compaction sonrası eski segment dosyalarını
+		// temizlemesi için eklendi (bkz. kutuphane/LsmDeposu.tan).
+		"dosyaSil": func(a []Deger, satir int) Deger {
+			err := os.Remove(metne(a[0]))
+			if err != nil && !os.IsNotExist(err) {
+				firlat(satir, "dosya silinemedi: %v", err)
+			}
+			return int64(0)
 		},
 
 		// yaz_dosya(dosya, metin): metni dosyaya yazar (üzerine)
