@@ -50,6 +50,21 @@ func YeniSozluk() *TanSozluk {
 	return &TanSozluk{Cift: map[string]Deger{}, Sira: []string{}}
 }
 
+// TanKayitTipi: "kayıt Ad ... son" tanımının şeması — alan sırası + metotlar.
+// Kapsam'da işlev gibi ada bağlanır (k.koy(d.Ad, tip)).
+type TanKayitTipi struct {
+	Ad       string
+	Alanlar  []string
+	Metotlar map[string]IslevDeger
+}
+
+// TanKayit: bir kayıt örneği (işaretçi, alan ataması yerinde değişir —
+// TanListe/TanSozluk ile aynı referans semantiği).
+type TanKayit struct {
+	Tip      *TanKayitTipi
+	Degerler map[string]Deger
+}
+
 func (s *TanSozluk) koy(anahtar string, deger Deger) {
 	if _, var_ := s.Cift[anahtar]; !var_ {
 		s.Sira = append(s.Sira, anahtar)
@@ -92,10 +107,17 @@ func (k *Kapsam) ata(ad string, d Deger) {
 
 // ---- Yorumlayıcı ----
 type Yorumlayici struct {
-	global    *Kapsam
-	kopru     *Kopru
-	alinanlar map[string]bool
+	global      *Kapsam
+	kopru       *Kopru
+	alinanlar   map[string]bool
 	kaynakDizin string // içe al çözümlemesi için
+
+	// hamBellek: hamOku/hamYaz/hamAyir için SİMÜLE EDİLMİŞ düz (linear)
+	// bellek — gerçek işlem belleği DEĞİL, Go dilimi (slice) üzerinde bump
+	// allocator (elf arka ucundaki tan_ayir ile aynı model). "İşaretçi"
+	// burada sadece bu dilime bir int64 indekstir; pointer aritmetiği
+	// (ptr+1 gibi) normal tam sayı toplamasıyla çalışır.
+	hamBellek []byte
 }
 
 func YeniYorumlayici() *Yorumlayici {
@@ -185,6 +207,22 @@ func (y *Yorumlayici) calistirDeyim(dugum Dugum, k *Kapsam) Deger {
 		fmt.Fprintln(Cikti, metne(y.degerle(d.Deger, k)))
 	case IslevDugum:
 		k.koy(d.Ad, IslevDeger{d.Parametreler, d.Govde, k})
+	case KayitTanimDugum:
+		metotlar := map[string]IslevDeger{}
+		for _, m := range d.Metotlar {
+			metotlar[m.Ad] = IslevDeger{m.Parametreler, m.Govde, k}
+		}
+		k.koy(d.Ad, &TanKayitTipi{Ad: d.Ad, Alanlar: d.Alanlar, Metotlar: metotlar})
+	case AlanAtamaDugum:
+		hedef := y.degerle(d.Hedef, k)
+		kayit, ok := hedef.(*TanKayit)
+		if !ok {
+			firlat(d.Satir, "alan ataması bir kayıt bekliyor")
+		}
+		if _, var_ := kayit.Degerler[d.Alan]; !var_ {
+			firlat(d.Satir, "'%s' tipinde '%s' alanı yok", kayit.Tip.Ad, d.Alan)
+		}
+		kayit.Degerler[d.Alan] = y.degerle(d.Deger, k)
 	case EgerDugum:
 		if dogruMu(y.degerle(d.Kosul, k)) {
 			return y.blokCalistir(d.Govde, YeniKapsam(k))
@@ -339,6 +377,97 @@ func (y *Yorumlayici) degerle(dugum Dugum, k *Kapsam) Deger {
 		return s
 	case IndeksDugum:
 		return y.indeksDegerle(d, k)
+	case KayitOlusturDugum:
+		return y.kayitOlustur(d, k)
+	case AlanErisimDugum:
+		hedef := y.degerle(d.Hedef, k)
+		kayit, ok := hedef.(*TanKayit)
+		if !ok {
+			firlat(d.Satir, "alan erişimi bir kayıt bekliyor")
+		}
+		deger, var_ := kayit.Degerler[d.Alan]
+		if !var_ {
+			firlat(d.Satir, "'%s' tipinde '%s' alanı yok", kayit.Tip.Ad, d.Alan)
+		}
+		return deger
+	case MetotCagriDugum:
+		return y.metotCagriDegerle(d, k)
+	case CagriIfadeDugum:
+		return y.cagriIfadeDegerle(d, k)
+	}
+	return nil
+}
+
+// cagriIfadeDegerle: "hedef(args)" — hedef bir ad değil keyfi bir ifade
+// (liste[0], carpanUret(2) gibi). Fonksiyon pointer/callback çağrısı.
+func (y *Yorumlayici) cagriIfadeDegerle(d CagriIfadeDugum, k *Kapsam) Deger {
+	hedef := y.degerle(d.Hedef, k)
+	islev, ok := hedef.(IslevDeger)
+	if !ok {
+		firlat(d.Satir, "çağrılan değer bir işlev değil")
+	}
+	yeni := YeniKapsam(islev.Kapsam)
+	for i, p := range islev.Parametreler {
+		if i < len(d.Argumanlar) {
+			yeni.koy(p, y.degerle(d.Argumanlar[i], k))
+		}
+	}
+	s := y.blokCalistir(islev.Govde, yeni)
+	if ds, ok := s.(DondurSinyali); ok {
+		return ds.Deger
+	}
+	return nil
+}
+
+// kayitOlustur: "Ad{alan: deger, ...}" örneği kurar. Belirtilmeyen alanlar
+// yok (nil) ile başlar.
+func (y *Yorumlayici) kayitOlustur(d KayitOlusturDugum, k *Kapsam) Deger {
+	v, ok := k.al(d.Ad)
+	if !ok {
+		firlat(d.Satir, "tanımsız kayıt tipi '%s'", d.Ad)
+	}
+	tip, ok := v.(*TanKayitTipi)
+	if !ok {
+		firlat(d.Satir, "'%s' bir kayıt tipi değil", d.Ad)
+	}
+	degerler := map[string]Deger{}
+	for _, alan := range tip.Alanlar {
+		degerler[alan] = nil
+	}
+	for i, alanAdi := range d.AlanAdlari {
+		if _, var_ := degerler[alanAdi]; !var_ {
+			firlat(d.Satir, "'%s' tipinde '%s' alanı yok", tip.Ad, alanAdi)
+		}
+		degerler[alanAdi] = y.degerle(d.Degerler[i], k)
+	}
+	return &TanKayit{Tip: tip, Degerler: degerler}
+}
+
+// metotCagriDegerle: "hedef.metot(args)" — ilk parametre ("bu") alıcı
+// örneğe bağlanır, kalan argümanlar sırayla ikinci parametreden itibaren.
+func (y *Yorumlayici) metotCagriDegerle(d MetotCagriDugum, k *Kapsam) Deger {
+	hedef := y.degerle(d.Hedef, k)
+	kayit, ok := hedef.(*TanKayit)
+	if !ok {
+		firlat(d.Satir, "metot çağrısı bir kayıt bekliyor")
+	}
+	metot, var_ := kayit.Tip.Metotlar[d.Metot]
+	if !var_ {
+		firlat(d.Satir, "'%s' tipinde '%s' metodu yok", kayit.Tip.Ad, d.Metot)
+	}
+	yeni := YeniKapsam(metot.Kapsam)
+	if len(metot.Parametreler) > 0 {
+		yeni.koy(metot.Parametreler[0], kayit) // bu
+	}
+	for i, arg := range d.Argumanlar {
+		pi := i + 1
+		if pi < len(metot.Parametreler) {
+			yeni.koy(metot.Parametreler[pi], y.degerle(arg, k))
+		}
+	}
+	s := y.blokCalistir(metot.Govde, yeni)
+	if ds, ok := s.(DondurSinyali); ok {
+		return ds.Deger
 	}
 	return nil
 }
@@ -393,6 +522,18 @@ func (y *Yorumlayici) cagriDegerle(d CagriDugum, k *Kapsam) Deger {
 	if !ok {
 		firlat(d.Satir, "'%s' adında işlev yok", d.Ad)
 	}
+	if tip, ok := v.(*TanKayitTipi); ok {
+		// Nokta(1, 2) -> alanlara tanım sırasıyla ata (kısayol, {alan:deger}'in alternatifi)
+		degerler := map[string]Deger{}
+		for i, alan := range tip.Alanlar {
+			if i < len(d.Argumanlar) {
+				degerler[alan] = y.degerle(d.Argumanlar[i], k)
+			} else {
+				degerler[alan] = nil
+			}
+		}
+		return &TanKayit{Tip: tip, Degerler: degerler}
+	}
 	islev, ok := v.(IslevDeger)
 	if !ok {
 		firlat(d.Satir, "'%s' bir işlev değil", d.Ad)
@@ -422,7 +563,22 @@ func (y *Yorumlayici) ikiliDegerle(d IkiliDugum, k *Kapsam) Deger {
 		if f, ok := v.(float64); ok {
 			return -f
 		}
+		if s, ok := v.(*TanSabitTam); ok {
+			maske := sabitMaske(s.Genislik)
+			return &TanSabitTam{s.Genislik, s.Imzali, (^s.Bit + 1) & maske}
+		}
 		return nil
+	}
+	if d.Islec == "bitdegil" {
+		v := y.degerle(d.Sol, k)
+		if s, ok := v.(*TanSabitTam); ok {
+			return &TanSabitTam{s.Genislik, s.Imzali, ^s.Bit & sabitMaske(s.Genislik)}
+		}
+		i, ok := v.(int64)
+		if !ok {
+			firlat(0, "'~' yalnızca tam sayıda çalışır")
+		}
+		return ^i
 	}
 	sol := y.degerle(d.Sol, k)
 	// kısa devre
@@ -433,6 +589,66 @@ func (y *Yorumlayici) ikiliDegerle(d IkiliDugum, k *Kapsam) Deger {
 		return dogruMu(sol) || dogruMu(y.degerle(d.Sag, k))
 	}
 	sag := y.degerle(d.Sag, k)
+
+	// sabit genişlikli tamsayı işlemleri (u8/u16/u32/u64/i8/i16/i32/i64)
+	// — iki operand da AYNI genişlik+işaretlilikte olmalı, taşma tanımlı sarma.
+	if sa, ok := sol.(*TanSabitTam); ok {
+		sb, ok2 := sag.(*TanSabitTam)
+		if !ok2 || !sabitUyumlu(sa, sb) {
+			bAdi := "?"
+			if ok2 {
+				bAdi = sabitAdi(sb)
+			}
+			firlat(0, "tip uyuşmazlığı: '%s' ile '%s' birlikte kullanılamaz ('%s')", sabitAdi(sa), bAdi, d.Islec)
+		}
+		maske := sabitMaske(sa.Genislik)
+		switch d.Islec {
+		case "+", "-", "*", "/", "%":
+			sonuc, sifirBolme := sabitIslem(d.Islec, sa, sb)
+			if sifirBolme {
+				firlat(0, "sıfıra bölme")
+			}
+			return sonuc
+		case ">", "<", ">=", "<=", "==", "!=":
+			return sabitKarsilastir(d.Islec, sa, sb)
+		case "&":
+			return &TanSabitTam{sa.Genislik, sa.Imzali, sa.Bit & sb.Bit}
+		case "|":
+			return &TanSabitTam{sa.Genislik, sa.Imzali, sa.Bit | sb.Bit}
+		case "^":
+			return &TanSabitTam{sa.Genislik, sa.Imzali, sa.Bit ^ sb.Bit}
+		case "<<":
+			return &TanSabitTam{sa.Genislik, sa.Imzali, (sa.Bit << uint(sb.Bit)) & maske}
+		case ">>":
+			if sa.Imzali {
+				av := sabitIsaretUzat(sa.Bit, sa.Genislik)
+				return &TanSabitTam{sa.Genislik, true, uint64(av>>uint(sb.Bit)) & maske}
+			}
+			return &TanSabitTam{sa.Genislik, false, sa.Bit >> uint(sb.Bit)}
+		}
+	}
+
+	// bit operatörleri: yalnızca tam sayı (int64) operandlarda
+	switch d.Islec {
+	case "&", "|", "^", "<<", ">>":
+		si, siOk := sol.(int64)
+		sj, sjOk := sag.(int64)
+		if !siOk || !sjOk {
+			firlat(0, "bit operatörü ('%s') yalnızca tam sayılarda çalışır", d.Islec)
+		}
+		switch d.Islec {
+		case "&":
+			return si & sj
+		case "|":
+			return si | sj
+		case "^":
+			return si ^ sj
+		case "<<":
+			return si << uint(sj)
+		case ">>":
+			return si >> uint(sj)
+		}
+	}
 
 	// metin birleştirme
 	if sifreMetin(sol) || sifreMetin(sag) {
@@ -493,6 +709,8 @@ func dogruMu(d Deger) bool {
 		return v != 0
 	case string:
 		return v != ""
+	case *TanSabitTam:
+		return v.Bit != 0
 	}
 	return true
 }
@@ -538,6 +756,19 @@ func metne(d Deger) string {
 			parcalar[i] = "\"" + anahtar + "\": " + degMetin
 		}
 		return "{" + strings.Join(parcalar, ", ") + "}"
+	case *TanKayit:
+		parcalar := make([]string, len(v.Tip.Alanlar))
+		for i, alan := range v.Tip.Alanlar {
+			deger := v.Degerler[alan]
+			degMetin := metne(deger)
+			if s, ok := deger.(string); ok {
+				degMetin = "\"" + s + "\""
+			}
+			parcalar[i] = alan + ": " + degMetin
+		}
+		return v.Tip.Ad + "{" + strings.Join(parcalar, ", ") + "}"
+	case *TanSabitTam:
+		return sabitMetne(v)
 	}
 	return fmt.Sprintf("%v", d)
 }

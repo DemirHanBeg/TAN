@@ -27,6 +27,12 @@ const (
 	OP_VEYA // kullanılmıyor
 	OP_DEGIL
 	OP_NEGATIF
+	OP_BITVE         // &
+	OP_BITVEYA       // |
+	OP_BITXOR        // ^
+	OP_BITDEGIL      // ~ (tekli)
+	OP_SOLA_KAYDIR   // <<
+	OP_SAGA_KAYDIR   // >>
 	OP_DEGISKEN_OKU  // operand: değişken adı indeksi
 	OP_DEGISKEN_YAZ  // operand: değişken adı indeksi
 	OP_YAZDIR        // yaz
@@ -208,6 +214,11 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 			d.yay(OP_NEGATIF, 0)
 			return
 		}
+		if n.Islec == "bitdegil" {
+			d.ifadeDerle(n.Sol)
+			d.yay(OP_BITDEGIL, 0)
+			return
+		}
 		d.ifadeDerle(n.Sol)
 		d.ifadeDerle(n.Sag)
 		switch n.Islec {
@@ -233,6 +244,18 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 			d.yay(OP_BUYUK_ESIT, 0)
 		case "<=":
 			d.yay(OP_KUCUK_ESIT, 0)
+		case "&":
+			d.yay(OP_BITVE, 0)
+		case "|":
+			d.yay(OP_BITVEYA, 0)
+		case "^":
+			d.yay(OP_BITXOR, 0)
+		case "<<":
+			d.yay(OP_SOLA_KAYDIR, 0)
+		case ">>":
+			d.yay(OP_SAGA_KAYDIR, 0)
+		default:
+			panic(vmDesteklemiyor{})
 		}
 	case CagriDugum:
 		// Yerleşik işlevler (uzunluk, ekle, harfler, köprü vb.) henüz VM

@@ -1,0 +1,59 @@
+# Generic/tip parametresi kaniti: Tan dinamik tipli oldugu icin TEK bir
+# kayit veri yapisi (Yigin) ayri sozdizimi/tip parametresi olmadan
+# HERHANGI bir deger tipiyle (tam sayi, metin, baska bir kayit) calisir.
+
+kayıt Yigin
+    ogeler
+
+    işlev ekle(bu, x)
+        bu.ogeler = ekle(bu.ogeler, x)
+    son
+
+    işlev cikar(bu)
+        n = uzunluk(bu.ogeler)
+        son_ = bu.ogeler[n - 1]
+        yeni = []
+        i = 0
+        iken i < n - 1
+            yeni = ekle(yeni, bu.ogeler[i])
+            i = i + 1
+        son
+        bu.ogeler = yeni
+        döndür son_
+    son
+
+    işlev bosMu(bu)
+        döndür uzunluk(bu.ogeler) == 0
+    son
+son
+
+kayıt Nokta
+    x
+    y
+son
+
+# --- tam sayı ile ---
+yigin1 = Yigin{ogeler: []}
+yigin1.ekle(1)
+yigin1.ekle(2)
+yigin1.ekle(3)
+yaz(yigin1.cikar())   # 3
+yaz(yigin1.cikar())   # 2
+yaz(yigin1.bosMu())   # yanlış
+
+# --- metin ile (AYNI kayıt tanımı, farklı tip, degisiklik yok) ---
+yigin2 = Yigin{ogeler: []}
+yigin2.ekle("a")
+yigin2.ekle("b")
+yaz(yigin2.cikar())   # b
+yaz(yigin2.bosMu())   # yanlış
+yaz(yigin2.cikar())
+yaz(yigin2.bosMu())   # doğru
+
+# --- baska bir kayit tipi ile (AYNI Yigin tanimi, degisiklik yok) ---
+yigin3 = Yigin{ogeler: []}
+yigin3.ekle(Nokta{x: 1, y: 2})
+yigin3.ekle(Nokta{x: 3, y: 4})
+p = yigin3.cikar()
+yaz(p.x)              # 3
+yaz(p.y)              # 4

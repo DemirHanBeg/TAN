@@ -1,0 +1,36 @@
+# Fonksiyonlarin birinci-sinif deger olarak calisip calismadigini sinar
+# (degiskene atama, parametre olarak gecme, ad uzerinden dinamik cagri)
+
+işlev kare(n)
+    döndür n * n
+son
+
+işlev kup(n)
+    döndür n * n * n
+son
+
+işlev uygula(f, x)
+    döndür f(x)
+son
+
+yaz(uygula(kare, 5))   # 25
+yaz(uygula(kup, 3))    # 27
+
+x = kare               # fonksiyonu degiskene ata
+yaz(x(6))               # 36
+
+# liste icinde fonksiyon degerleri (callback tablosu)
+tablo = [kare, kup]
+yaz(tablo[0](4))        # 16
+yaz(tablo[1](2))        # 8
+
+# closure: ust kapsami yakalayan ic ice islev
+işlev carpanUret(çarpan)
+    işlev çarp(n)
+        döndür n * çarpan
+    son
+    döndür çarp
+son
+
+ikiyleCarp = carpanUret(2)
+yaz(ikiyleCarp(10))      # 20

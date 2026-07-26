@@ -554,6 +554,74 @@ func init() {
 	yerlesikler["listeMi"] = yerlesikler["liste_mi"]
 	yerlesikler["varMı"] = yerlesikler["var_mı"]
 	yerlesikler["eÜssü"] = yerlesikler["e_üssü"]
+
+	// --- sabit genişlikli tamsayı kurucuları (u8/u16/u32/u64/i8/i16/i32/i64) ---
+	// Taşma tanımlı davranış: verilen değer Genislik bite maskelenir (sarma).
+	sabitKurucu := func(genislik int, imzali bool) func([]Deger, int) Deger {
+		return func(a []Deger, satir int) Deger {
+			if len(a) < 1 {
+				firlat(satir, "sabit genişlikli tamsayı kurucusu bir argüman ister")
+			}
+			deger, ok := sabitDegerCikar(a[0])
+			if !ok {
+				firlat(satir, "sabit genişlikli tamsayı kurucusu sayı bekliyor")
+			}
+			return sabitOlustur(genislik, imzali, deger)
+		}
+	}
+	yerlesikler["u8"] = sabitKurucu(8, false)
+	yerlesikler["u16"] = sabitKurucu(16, false)
+	yerlesikler["u32"] = sabitKurucu(32, false)
+	yerlesikler["u64"] = sabitKurucu(64, false)
+	yerlesikler["i8"] = sabitKurucu(8, true)
+	yerlesikler["i16"] = sabitKurucu(16, true)
+	yerlesikler["i32"] = sabitKurucu(32, true)
+	yerlesikler["i64"] = sabitKurucu(64, true)
+
+	// --- ham bellek erişimi (simüle edilmiş düz bellek, bkz. Yorumlayici.hamBellek) ---
+
+	// hamAyir(bayt): bump allocator ile yeni alan ayırır, başlangıç işaretçisini döndürür.
+	yerlesikler["hamAyir"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "hamAyir(bayt) bir argüman ister")
+		}
+		boyut, ok := tamAl(a[0])
+		if !ok || boyut < 0 {
+			firlat(satir, "hamAyir() negatif olmayan tam sayı bekliyor")
+		}
+		isaretci := int64(len(kuresel_yorumlayici.hamBellek))
+		kuresel_yorumlayici.hamBellek = append(kuresel_yorumlayici.hamBellek, make([]byte, boyut)...)
+		return isaretci
+	}
+
+	// hamOku(isaretci): belirtilen adresten tek bayt okur (0-255 tam sayı olarak).
+	yerlesikler["hamOku"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "hamOku(isaretci) bir argüman ister")
+		}
+		p, ok := tamAl(a[0])
+		if !ok || p < 0 || p >= int64(len(kuresel_yorumlayici.hamBellek)) {
+			firlat(satir, "hamOku(): sınır dışı adres")
+		}
+		return int64(kuresel_yorumlayici.hamBellek[p])
+	}
+
+	// hamYaz(isaretci, deger): belirtilen adrese tek bayt yazar (deger mod 256).
+	yerlesikler["hamYaz"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "hamYaz(isaretci, deger) iki argüman ister")
+		}
+		p, ok := tamAl(a[0])
+		if !ok || p < 0 || p >= int64(len(kuresel_yorumlayici.hamBellek)) {
+			firlat(satir, "hamYaz(): sınır dışı adres")
+		}
+		v, ok := sabitDegerCikar(a[1])
+		if !ok {
+			firlat(satir, "hamYaz() değeri tam sayı olmalı")
+		}
+		kuresel_yorumlayici.hamBellek[p] = byte(v)
+		return nil
+	}
 }
 
 // goDegeriTana: json_çöz'ün ürettiği Go değerini Tan değerine çevirir

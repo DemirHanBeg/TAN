@@ -1,0 +1,9 @@
+yaz(6 & 3)      # 2
+yaz(6 | 3)      # 7
+yaz(6 ^ 3)      # 5
+yaz(~6)         # -7
+yaz(1 << 4)     # 16
+yaz(256 >> 4)   # 16
+yaz(255 & 15)   # 15
+yaz(1 + 2 & 3)  # (1+2)=3, 3&3=3 -- bitsel toplamadan dusuk oncelikli olmali
+yaz(1 << 4 + 1) # 4+1=5, 1<<5=32 -- kaydirma toplamadan dusuk oncelikli olmali

@@ -1,0 +1,22 @@
+kayıt Nokta
+    x
+    y
+
+    işlev topla(bu, digeri)
+        döndür Nokta{x: bu.x + digeri.x, y: bu.y + digeri.y}
+    son
+
+    işlev yazDeger(bu)
+        yaz(bu.x)
+        yaz(bu.y)
+    son
+son
+
+a = Nokta(1, 2)
+b = Nokta{x: 10, y: 20}
+c = a.topla(b)
+c.yazDeger()
+a.x = 99
+yaz(a.x)
+yaz(a.y)
+yaz(a)

@@ -117,6 +117,53 @@ type IndeksAtamaDugum struct {
 	Satir  int
 }
 
+// kayıt Ad \n alan1 \n alan2 \n işlev metot(bu, ...) ... son \n son  (struct tanımı)
+type KayitTanimDugum struct {
+	Ad       string
+	Alanlar  []string
+	Metotlar []IslevDugum
+}
+
+// Ad{alan1: v1, alan2: v2}  (kayıt örneği oluşturma, alan sırasız)
+type KayitOlusturDugum struct {
+	Ad         string
+	AlanAdlari []string
+	Degerler   []Dugum
+	Satir      int
+}
+
+// hedef.alan  (kayıt alanı okuma)
+type AlanErisimDugum struct {
+	Hedef Dugum
+	Alan  string
+	Satir int
+}
+
+// hedef.alan = deger
+type AlanAtamaDugum struct {
+	Hedef Dugum
+	Alan  string
+	Deger Dugum
+	Satir int
+}
+
+// hedef.metot(args)  (kayıt metodu çağrısı, ilk parametre alıcı örneğe bağlanır)
+type MetotCagriDugum struct {
+	Hedef      Dugum
+	Metot      string
+	Argumanlar []Dugum
+	Satir      int
+}
+
+// hedef(args) — hedef bir AD değil KEYFİ bir ifade (liste[i], carpanUret(2) gibi
+// zincirli çağrı sonucu). Çalışma zamanında IslevDeger'e çözülür — "fonksiyon
+// pointer/callback" çağrısı: liste[0](x), tablo[ad](x) gibi dolaylı çağrılar için.
+type CagriIfadeDugum struct {
+	Hedef      Dugum
+	Argumanlar []Dugum
+	Satir      int
+}
+
 // ---- Parser ----
 type Parser struct {
 	tokenlar []Token
@@ -212,6 +259,8 @@ func (p *Parser) deyim() Dugum {
 			return IceAlDugum{dosya, satir}
 		case "dene":
 			return p.deneAyristir()
+		case "kayıt":
+			return p.kayitAyristir()
 		}
 	}
 
@@ -225,6 +274,8 @@ func (p *Parser) deyim() Dugum {
 			return AtamaDugum{h.Ad, deger}
 		case IndeksDugum:
 			return IndeksAtamaDugum{h.Hedef, h.Indeks, deger, h.Satir}
+		case AlanErisimDugum:
+			return AlanAtamaDugum{h.Hedef, h.Alan, deger, h.Satir}
 		}
 		firlat(0, "atama hedefi geçersiz")
 	}
@@ -324,14 +375,57 @@ func (p *Parser) islevAyristir() Dugum {
 	return IslevDugum{ad, parametreler, govde}
 }
 
+// kayıt Ad \n alan1 \n alan2 \n işlev metot(bu) ... son \n son
+func (p *Parser) kayitAyristir() Dugum {
+	p.ilerle()             // kayıt
+	ad := p.ilerle().Deger // tip adı
+	var alanlar []string
+	var metotlar []IslevDugum
+	for {
+		p.satirSonlariniAtla()
+		t := p.simdiki()
+		if t.Tur == T_SON_DOSYA {
+			break
+		}
+		if t.Tur == T_ANAHTAR && t.Deger == "son" {
+			break
+		}
+		if t.Tur == T_ANAHTAR && t.Deger == "işlev" {
+			metotlar = append(metotlar, p.islevAyristir().(IslevDugum))
+			continue
+		}
+		if t.Tur == T_TANIMLAYICI {
+			alanlar = append(alanlar, p.ilerle().Deger)
+			continue
+		}
+		firlat(t.Satir, "kayıt tanımında beklenmeyen belirteç: '%s'", t.Deger)
+	}
+	if p.simdiki().Deger == "son" {
+		p.ilerle()
+	}
+	return KayitTanimDugum{ad, alanlar, metotlar}
+}
+
 // ---- İfade ayrıştırma (öncelik sıralı) ----
 func (p *Parser) ifade() Dugum { return p.mantiksal() }
 
 func (p *Parser) mantiksal() Dugum {
-	sol := p.karsilastirma()
+	sol := p.bitsel()
 	for p.simdiki().Tur == T_ANAHTAR && (p.simdiki().Deger == "ve" || p.simdiki().Deger == "veya") {
 		islec := p.ilerle().Deger
 		p.satirSonlariniAtla() // işleçten sonra satır sonu: ifade devam ediyor
+		sag := p.bitsel()
+		sol = IkiliDugum{islec, sol, sag}
+	}
+	return sol
+}
+
+// bitsel: & | ^ (bit düzeyinde ve/veya/özel-veya, yalnız tam sayılarda)
+func (p *Parser) bitsel() Dugum {
+	sol := p.karsilastirma()
+	for p.simdiki().Tur == T_ISLEC && (p.simdiki().Deger == "&" || p.simdiki().Deger == "|" || p.simdiki().Deger == "^") {
+		islec := p.ilerle().Deger
+		p.satirSonlariniAtla()
 		sag := p.karsilastirma()
 		sol = IkiliDugum{islec, sol, sag}
 	}
@@ -339,17 +433,29 @@ func (p *Parser) mantiksal() Dugum {
 }
 
 func (p *Parser) karsilastirma() Dugum {
-	sol := p.toplama()
+	sol := p.kaydirma()
 	for p.simdiki().Tur == T_ISLEC {
 		o := p.simdiki().Deger
 		if o == ">" || o == "<" || o == ">=" || o == "<=" || o == "==" || o == "!=" {
 			p.ilerle()
 			p.satirSonlariniAtla()
-			sag := p.toplama()
+			sag := p.kaydirma()
 			sol = IkiliDugum{o, sol, sag}
 		} else {
 			break
 		}
+	}
+	return sol
+}
+
+// kaydirma: << >> (bit kaydırma)
+func (p *Parser) kaydirma() Dugum {
+	sol := p.toplama()
+	for p.simdiki().Tur == T_ISLEC && (p.simdiki().Deger == "<<" || p.simdiki().Deger == ">>") {
+		islec := p.ilerle().Deger
+		p.satirSonlariniAtla()
+		sag := p.toplama()
+		sol = IkiliDugum{islec, sol, sag}
 	}
 	return sol
 }
@@ -390,16 +496,55 @@ func (p *Parser) sonEk() Dugum {
 	return dugum
 }
 
-// birincil: temel değeri okur, ardından son-ek indekslemeyi uygular
-// (liste[0], zincirli m[0][1] dahil)
+// birincil: temel değeri okur, ardından son-ek indekslemeyi/alan erişimini
+// uygular (liste[0], zincirli m[0][1], kayit.alan, kayit.metot(...) dahil)
 func (p *Parser) birincil() Dugum {
 	dugum := p.temel()
-	for p.simdiki().Tur == T_KOSELI_AC {
-		satir := p.simdiki().Satir
-		p.ilerle() // [
-		indeks := p.ifade()
-		p.ilerle() // ]
-		dugum = IndeksDugum{dugum, indeks, satir}
+	for {
+		if p.simdiki().Tur == T_KOSELI_AC {
+			satir := p.simdiki().Satir
+			p.ilerle() // [
+			indeks := p.ifade()
+			p.ilerle() // ]
+			dugum = IndeksDugum{dugum, indeks, satir}
+			continue
+		}
+		if p.simdiki().Tur == T_NOKTA {
+			satir := p.simdiki().Satir
+			p.ilerle()             // .
+			ad := p.ilerle().Deger // alan veya metot adı
+			if p.simdiki().Tur == T_PARANTEZ_AC {
+				p.ilerle() // (
+				var argumanlar []Dugum
+				for p.simdiki().Tur != T_PARANTEZ_KAPA && p.simdiki().Tur != T_SON_DOSYA {
+					argumanlar = append(argumanlar, p.ifade())
+					if p.simdiki().Tur == T_VIRGUL {
+						p.ilerle()
+					}
+				}
+				p.ilerle() // )
+				dugum = MetotCagriDugum{dugum, ad, argumanlar, satir}
+			} else {
+				dugum = AlanErisimDugum{dugum, ad, satir}
+			}
+			continue
+		}
+		// dolaylı çağrı: hedef zaten bir AD değilse (liste[0](x), f(2)(x) gibi)
+		if p.simdiki().Tur == T_PARANTEZ_AC {
+			satir := p.simdiki().Satir
+			p.ilerle() // (
+			var argumanlar []Dugum
+			for p.simdiki().Tur != T_PARANTEZ_KAPA && p.simdiki().Tur != T_SON_DOSYA {
+				argumanlar = append(argumanlar, p.ifade())
+				if p.simdiki().Tur == T_VIRGUL {
+					p.ilerle()
+				}
+			}
+			p.ilerle() // )
+			dugum = CagriIfadeDugum{dugum, argumanlar, satir}
+			continue
+		}
+		break
 	}
 	return dugum
 }
@@ -410,6 +555,11 @@ func (p *Parser) temel() Dugum {
 	if t.Tur == T_ISLEC && t.Deger == "-" {
 		p.ilerle()
 		return IkiliDugum{"negatif", p.temel(), nil}
+	}
+	// tekli bit değili: ~5, ~x
+	if t.Tur == T_ISLEC && t.Deger == "~" {
+		p.ilerle()
+		return IkiliDugum{"bitdegil", p.temel(), nil}
 	}
 	switch t.Tur {
 	case T_SAYI:
@@ -504,6 +654,29 @@ func (p *Parser) temel() Dugum {
 			}
 			p.ilerle() // )
 			return CagriDugum{ad, argumanlar, t.Satir}
+		}
+		// kayıt örneği oluşturma: Ad{alan1: v1, alan2: v2}
+		if p.simdiki().Tur == T_SUSLU_AC {
+			p.ilerle() // {
+			var alanAdlari []string
+			var degerler []Dugum
+			for p.simdiki().Tur != T_SUSLU_KAPA && p.simdiki().Tur != T_SON_DOSYA {
+				p.satirSonlariniAtla()
+				if p.simdiki().Tur == T_SUSLU_KAPA {
+					break
+				}
+				alanAdlari = append(alanAdlari, p.ilerle().Deger)
+				if p.simdiki().Tur == T_IKI_NOKTA {
+					p.ilerle() // :
+				}
+				degerler = append(degerler, p.ifade())
+				if p.simdiki().Tur == T_VIRGUL {
+					p.ilerle()
+				}
+				p.satirSonlariniAtla()
+			}
+			p.ilerle() // }
+			return KayitOlusturDugum{ad, alanAdlari, degerler, t.Satir}
 		}
 		return DegiskenDugum{ad, t.Satir}
 	}

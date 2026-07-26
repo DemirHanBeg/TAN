@@ -29,6 +29,23 @@ func (vm *SanalMakine) al() Deger {
 	return d
 }
 
+// al2: iki değeri yığından iter (b sonra a, itilme sırasıyla a,b döner)
+func (vm *SanalMakine) al2() (Deger, Deger) {
+	b := vm.al()
+	a := vm.al()
+	return a, b
+}
+
+// vmBitOperandlar: bit operatörleri yalnızca tam sayıda (int64) çalışır
+func vmBitOperandlar(a, b Deger) (int64, int64) {
+	ai, aOk := a.(int64)
+	bi, bOk := b.(int64)
+	if !aOk || !bOk {
+		firlat(0, "bit operatörü yalnızca tam sayılarda çalışır")
+	}
+	return ai, bi
+}
+
 // cerceve: bir çağrı çerçevesi (call frame). Her işlev çağrısı kendi
 // bytecode'unu (kod), kendi komut işaretçisini (ip) ve kendi yerel
 // değişken map'ini (degerler) taşır — özyinelemede her çağrı katmanı
@@ -198,6 +215,27 @@ func (vm *SanalMakine) Calistir() {
 			} else {
 				vm.it(nil)
 			}
+		case OP_BITDEGIL:
+			i, ok := vm.al().(int64)
+			if !ok {
+				firlat(0, "'~' yalnızca tam sayıda çalışır")
+			}
+			vm.it(^i)
+		case OP_BITVE:
+			a, b := vmBitOperandlar(vm.al2())
+			vm.it(a & b)
+		case OP_BITVEYA:
+			a, b := vmBitOperandlar(vm.al2())
+			vm.it(a | b)
+		case OP_BITXOR:
+			a, b := vmBitOperandlar(vm.al2())
+			vm.it(a ^ b)
+		case OP_SOLA_KAYDIR:
+			a, b := vmBitOperandlar(vm.al2())
+			vm.it(a << uint(b))
+		case OP_SAGA_KAYDIR:
+			a, b := vmBitOperandlar(vm.al2())
+			vm.it(a >> uint(b))
 		case OP_YAZDIR:
 			fmt.Fprintln(Cikti, metne(vm.al()))
 		case OP_ATLA:

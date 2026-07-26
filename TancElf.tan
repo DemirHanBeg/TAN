@@ -2286,6 +2286,52 @@ işlev okuBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# dosyaVarMi(rdi=yol metni) -> rax=1/0 — oku() ÖNCESİ varlık kontrolü için
+# (oku() eksik dosyada hata denetimi yapmadan çöp uzunluk üretir). Mantık
+# DerleElf.go'nun f_dosya_var_mi'siyle BİREBİR aynı (open+close syscall,
+# fd negatifse yok) ama ETİKET ADI FARKLI: bu, TancElf'in KENDİ genel CAGRI
+# dispatch'i "f_"+ad ürettiği için "f_dosyaVarMi" (alt çizgisiz) — Go'nun
+# "f_dosya_var_mi" etiketiyle karıştırılmamalı, iki bağımsız derleyicinin
+# kendi iç adları, davranış aynı olması yeterli. içe al'ın kendi kendini
+# derlerken (gen1→gen2) modül dosyasının var olup olmadığını sınamak için
+# kullanılıyor (bkz. tokenGenislet/iceAlYoluCoz, SÜRÜCÜ bölümünden önce).
+işlev dosyaVarMiBant()
+    b = [bcEtiket("f_dosyaVarMi")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 32))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 7))     # [-8] = yol metni
+    b = listeBirlestir(b, movPtrOku(0, 7))           # rax = yol uzunluğu
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 0))    # [-16] = uzunluk
+    b = listeBirlestir(b, movKayit(7, 0))
+    b = listeBirlestir(b, addImm32(7, 16))
+    b = listeBirlestir(b, callBant("f_tan_ayir"))    # rax = C-string tamponu (sıfırlanmış)
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))    # [-24] = C-string tamponu
+    b = listeBirlestir(b, movKayit(7, 0))
+    b = listeBirlestir(b, movYerelOku(6, 0 - 8))
+    b = listeBirlestir(b, leaDolayli(6, 6, 8))       # rsi = yol+8 (baytlar)
+    b = listeBirlestir(b, movYerelOku(2, 0 - 16))    # rdx = uzunluk
+    b = listeBirlestir(b, callBant("f_bellek_kopyala"))
+    b = listeBirlestir(b, movYerelOku(7, 0 - 24))    # rdi = C-string tamponu
+    b = listeBirlestir(b, xorKayit(6, 6))            # rsi = 0 (O_RDONLY)
+    b = listeBirlestir(b, xorKayit(2, 2))            # rdx = 0
+    b = listeBirlestir(b, movImm32(0, 2))            # sys_open
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelYaz(0 - 32, 0))    # [-32] = fd (negatifse hata)
+    b = listeBirlestir(b, cmpImm32(0, 0))
+    b = listeBirlestir(b, jccBant(140, "Ldvm_yok"))  # jl
+    b = listeBirlestir(b, movYerelOku(7, 0 - 32))
+    b = listeBirlestir(b, movImm32(0, 3))            # sys_close
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movImm32(0, 1))
+    b = listeBirlestir(b, leaveBant())
+    b = listeBirlestir(b, retBant())
+    b = listeBirlestir(b, [bcEtiket("Ldvm_yok")])
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
 # yazBaytlar(rdi=yol metni, rsi=liste) -> rax=0. Listenin her ögesinin
 # DÜŞÜK BAYTINI ham yazar — UTF-8 kodlaması YAPILMAZ (yazDosya'dan farkı).
 işlev yazBaytlarBant()
@@ -2470,6 +2516,25 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu)
             z = tamponEkleTumu(kodKutu, nKutu, movImm32(0, v))
             z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
             tipYigin = ekle(tipYigin, "tam")
+
+        değilse eğer op == "SAYIKESIR" ise
+            # BULUNDU: ondalık (kesir) sayı literalleri ("0.5" gibi) temelAyristir
+            # tarafından ayrı bir RPN op'una ("SAYIKESIR") kodlanıyordu ama burada
+            # HİÇ İŞLENMİYORDU — hiçbir kod üretilmeden, kodKutu'ya HİÇBİR ŞEY
+            # eklenmeden (pushKayit YOK) sessizce atlanıyordu. Tek başına bir
+            # ifade olduğunda (örn "yaz(0.5)") fark edilmiyordu (rax'taki ÇÖP
+            # değer basılıyordu, çökme yok) ama bir İKİLİ işlecin (örn "3+0.5")
+            # bir operandı olduğunda İKİLİ dalı "popKayit" ile HİÇ PUSH EDİLMEMİŞ
+            # bir değeri yığından ÇEKMEYE çalışıyor, bu da çalışma zamanı
+            # yığınını (RSP) kaydırıp SEGFAULT'a yol açıyordu (izole edildi:
+            # `3 >= 0.5` ve `3 + 0.5` gen2'yi DERLEME SIRASINDA çökertiyordu,
+            # `yaz(0.5)` tek başına çökmüyordu ama yanlış/çöp değer basıyordu).
+            # Bu derleyicide 'kesir' (ondalık) tipi HENÜZ YOK (bkz. NEGATIF/DEGIL
+            # notları) — gerçek IEEE754 desteği eklemek yerine (kapsamlı, ayrı
+            # bir görev), SessizYutma düzeltmesiyle AYNI ilke: sessiz bozulma
+            # yerine TEMİZ, AÇIK hata.
+            yaz(metinBirlestir("DERLEME HATASI: ondalık (kesir) sayı literalleri bu derleyicide henüz desteklenmiyor: ", a1))
+            sistemDur(1)
 
         değilse eğer op == "METIN" ise
             # Metin literali: veri BULUNDUĞU YERE gömülü üretilir (işlev
@@ -2902,6 +2967,102 @@ işlev islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu)
     döndür tamponSonuc(onSozKutu, onSozNKutu)
 son
 
+# ---------------- İÇE AL (MODÜL) GENİŞLETME — derleme-zamanı statik ekleme ----------------
+# elf yolu çalışma anında dosya sistemine bakamaz — Go'nun DerleElf.go'daki
+# "elfIceAlGenislet" ile AYNI strateji: "içe al" TOKEN AKIŞINDA (blokDerle'ye
+# hiç girmeden ÖNCE) çözülür, modülün token'ları olduğu yere satır içi
+# eklenir. deyimDerle/blokDerle'ye HİÇ DOKUNULMADI (bu ikisi self-hosting'i
+# defalarca kıran en kırılgan kod) — tüm yeni mantık SADECE tokenle()'nin
+# çıktısı üzerinde, deyimDerle'den TAMAMEN BAĞIMSIZ çalışıyor.
+
+# dosyaDizini(yol): son "/" karakterine kadar olan kısmı döndürür (yoksa ".").
+işlev dosyaDizini(yol)
+    n = uzunluk(yol)
+    i = n - 1
+    iken i >= 0 ve değil metinEsit(metinAl(yol, i), "/")
+        i = i - 1
+    son
+    eğer i < 0 ise
+        döndür "."
+    son
+    sonuc = ""
+    j = 0
+    iken j < i
+        sonuc = metinBirlestir(sonuc, metinAl(yol, j))
+        j = j + 1
+    son
+    döndür sonuc
+son
+
+# iceAlYoluCoz: basitleştirilmiş modül arama — 1) kaynak dosyanın yanı,
+# 2) kaynak dosyanın kutuphane/ alt dizini, 3) verilen yol olduğu gibi
+# (çalışma dizinine göre, "kutuphane/X.tan" tarzı çağrılar için).
+işlev iceAlYoluCoz(yol, kaynakDizin)
+    aday1 = metinBirlestir(kaynakDizin, metinBirlestir("/", yol))
+    eğer dosyaVarMi(aday1) ise
+        döndür aday1
+    son
+    aday2 = metinBirlestir(kaynakDizin, metinBirlestir("/kutuphane/", yol))
+    eğer dosyaVarMi(aday2) ise
+        döndür aday2
+    son
+    döndür yol
+son
+
+# tokenGenislet: token akışını baştan sona tarar, "içe al "yol"" gördüğü
+# yerde o üç token'ı SİLİP yerine modülün (yinelemeli genişletilmiş)
+# token'larını yerleştirir. Aynı modül (mutlak/verilen yola göre) bir daha
+# alınmaz (gorulenlerKutu[0] ile izlenir, döngüsel içe almaya karşı da korur).
+işlev tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
+    cikisKutu = tamponOlustur()
+    cN = [0]
+    poz = [0]
+    iken pTur(tokenler, poz) != "DOSYASONU"
+        t = pTur(tokenler, poz)
+        d = pDeger(tokenler, poz)
+        eğer t == "ANAHTAR" ve d == "içe" ise
+            x = pIlerle(tokenler, poz)
+            eğer pTur(tokenler, poz) == "ANAHTAR" ve pDeger(tokenler, poz) == "al" ise
+                x = pIlerle(tokenler, poz)
+            son
+            yol = pDeger(tokenler, poz)
+            x = pIlerle(tokenler, poz)
+
+            tamYol = iceAlYoluCoz(yol, kaynakDizin)
+
+            zatenVar = 0
+            gorulen = gorulenlerKutu[0]
+            i = 0
+            iken i < uzunluk(gorulen)
+                eğer metinEsit(gorulen[i], tamYol) ise
+                    zatenVar = 1
+                son
+                i = i + 1
+            son
+
+            eğer zatenVar == 1 ise
+                # atla — bu modül daha önce alınmış (döngüsel/tekrar koruması)
+            değilse
+                gorulenlerKutu[0] = ekle(gorulenlerKutu[0], tamYol)
+                icKaynak = oku(tamYol)
+                icTokenler = tokenle(icKaynak)
+                icDizin = dosyaDizini(tamYol)
+                genisTokenler = tokenGenislet(icTokenler, icDizin, gorulenlerKutu)
+                j = 0
+                iken j < uzunluk(genisTokenler) - 1
+                    z = tamponEkle(cikisKutu, cN, genisTokenler[j])
+                    j = j + 1
+                son
+            son
+        değilse
+            z = tamponEkle(cikisKutu, cN, tokenler[poz[0]])
+            x = pIlerle(tokenler, poz)
+        son
+    son
+    z = tamponEkle(cikisKutu, cN, tokenler[poz[0]])
+    döndür tamponSonuc(cikisKutu, cN)
+son
+
 # ---------------- SÜRÜCÜ: TAM KAYNAK DOSYASI DERLEME ----------------
 # Kullanim:  TancElf <girdi.tan> <cikti-binary>
 # Destek: tam sayi ifadeleri, degisken atamasi, yaz, eger/degilse, iken.
@@ -2910,6 +3071,9 @@ girdiYolu = arg(1)
 ciktiYolu = arg(2)
 kaynak = oku(girdiYolu)
 tokenler = tokenle(kaynak)
+kaynakDizin = dosyaDizini(girdiYolu)
+gorulenlerKutu = [[]]
+tokenler = tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
 pozKutu = [0]
 adlarKutu = [[], []]
 sayacKutu = [0]
@@ -2950,6 +3114,7 @@ z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, kodBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, karakterBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yazMetinBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, okuBant())
+z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, dosyaVarMiBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yazBaytlarBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, argsayBant())
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, argBant())

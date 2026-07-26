@@ -1,0 +1,29 @@
+# Sabit genislikli tamsayilar: kurucu + tasma (wraparound) + isaretli/isaretsiz + bit ops
+
+yaz(u8(300))          # 300 mod 256 = 44
+yaz(u8(255) + u8(1))  # 256 mod 256 = 0  (tasma sarmasi)
+yaz(u8(0) - u8(1))    # -1 mod 256 = 255 (alt tasma)
+yaz(u16(70000))       # 70000 mod 65536 = 4464
+
+yaz(i8(-1))           # -1 (isaret genisletme dogru)
+yaz(i8(127) + i8(1))  # tasma: 128 biti -128 olarak yorumlanir
+yaz(i8(-128) / i8(-1))# klasik tasma: 128 bit deseni -128'e sarar
+
+yaz(i32(2147483647) + i32(1))  # i32 max+1 -> i32 min'e sarar (-2147483648)
+
+yaz(u8(240) & u8(15)) # 0xF0 & 0x0F = 0
+yaz(u8(240) | u8(15)) # 0xF0 | 0x0F = 255
+yaz(u8(170) ^ u8(255))# 0xAA ^ 0xFF = 85
+yaz(u8(1) << u8(4))   # 16
+yaz(u8(255) >> u8(4)) # 15
+yaz(i8(-1) >> i8(1))  # isaretli kaydirma: -1 (isaret korunur)
+
+yaz(u8(200) > u8(100))  # dogru (isaretsiz karsilastirma)
+yaz(i8(-5) < i8(3))     # dogru (isaretli karsilastirma, ham bit karsilastirmasi degil)
+
+dene
+    x = u8(1) + i8(1)   # tip uyusmazligi -> hata beklenir
+    yaz("HATA: buraya ulasilmamali")
+yakala h
+    yaz("yakalandi: tip uyusmazligi")
+son

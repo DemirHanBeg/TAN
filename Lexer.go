@@ -21,6 +21,7 @@ const (
 	T_IKI_NOKTA
 	T_VIRGUL
 	T_YENI_SATIR
+	T_NOKTA
 )
 
 type Token struct {
@@ -39,6 +40,7 @@ var anahtarKelimeler = map[string]bool{
 	"ve": true, "veya": true, "değil": true,
 	"köprü": true, // A seçeneği: dış yetenek çağırma
 	"dene":  true, "yakala": true,
+	"kayıt": true, // kayıt tipi tanımı (struct)
 }
 
 type Lexer struct {
@@ -191,7 +193,12 @@ func (l *Lexer) Tokenle() []Token {
 			l.konum++
 			continue
 		}
-		// İşleçler (çok karakterli önce: >= <= == !=)
+		if r == '.' {
+			tokenlar = append(tokenlar, Token{T_NOKTA, ".", l.satir})
+			l.konum++
+			continue
+		}
+		// İşleçler (çok karakterli önce: >= <= == != << >>)
 		if r == '>' || r == '<' || r == '=' || r == '!' {
 			if l.sonraki() == '=' {
 				tokenlar = append(tokenlar, Token{T_ISLEC, string([]rune{r, '='}), l.satir})
@@ -199,7 +206,18 @@ func (l *Lexer) Tokenle() []Token {
 				continue
 			}
 		}
-		if r == '+' || r == '-' || r == '*' || r == '/' || r == '%' || r == '>' || r == '<' || r == '=' {
+		if r == '<' && l.sonraki() == '<' {
+			tokenlar = append(tokenlar, Token{T_ISLEC, "<<", l.satir})
+			l.konum += 2
+			continue
+		}
+		if r == '>' && l.sonraki() == '>' {
+			tokenlar = append(tokenlar, Token{T_ISLEC, ">>", l.satir})
+			l.konum += 2
+			continue
+		}
+		if r == '+' || r == '-' || r == '*' || r == '/' || r == '%' || r == '>' || r == '<' || r == '=' ||
+			r == '&' || r == '|' || r == '^' || r == '~' {
 			tokenlar = append(tokenlar, Token{T_ISLEC, string(r), l.satir})
 			l.konum++
 			continue
