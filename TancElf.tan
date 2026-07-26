@@ -2523,6 +2523,17 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu)
             z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
             tipYigin = ekle(tipYigin, "tam")
 
+        değilse eğer op == "NEGATIF" ise
+            # tekli eksi (-x). Bu derleyicide "kesir" (ondalık) tipi HENÜZ
+            # YOK — bu yüzden sadece tam sayı negKayit ile ele alınıyor.
+            # DEGIL ile AYNI eksiklik: parser RPN'e üretiyordu ama burada
+            # hiç işlenmiyordu — deger DEĞİŞMEDEN yığında kalıyordu (SESSİZ
+            # yanlış sonuç, çökme bile yoktu çünkü sadece atlanıyordu).
+            z = tamponEkleTumu(kodKutu, nKutu, popKayit(0))
+            z = tamponEkleTumu(kodKutu, nKutu, negKayit(0))
+            z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
+            # tip değişmez — tek girdi tek çıktı, tipYigin'e dokunulmuyor.
+
         değilse eğer op == "AD" ise
             # değişken okuma: rbp-göreli yuvadan
             yuva = adAra(adlarKutu, a1)

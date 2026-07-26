@@ -1,0 +1,320 @@
+# ============================================================
+# BAgaci.tan — B+Tree tam sayı indeks motoru (saf Tan)
+# ------------------------------------------------------------
+# NEXUS Core tarzı bir depolama motorunun EN TEMEL parçası: sıralı
+# anahtar -> tam sayı değer (örn. bir "heap" dosyasındaki satır ofseti)
+# eşlemesi, düğüm bölünmesiyle dengeli tutulan gerçek bir B+Ağacı.
+#
+# TASARIM KISITLARI (bilerek, gizlemeden — ikisi de bu modülü yazarken
+# EMPİRİK olarak doğrulandı, varsayım değil):
+#
+#   1) STRUCT YOK: elf arka ucu heterojen alanlı kayıt tipi desteklemiyor
+#      (liste/sözlük TEK bir eleman tipiyle statik çıkarılıyor). Düğümler
+#      "yapı dizisi" (structure-of-arrays) deseniyle temsil ediliyor: her
+#      düğüm bir kayıt DEĞİL, PARALEL sözlüklerdeki bir anahtar (id).
+#
+#   2) FONKSİYON İÇİNDEN GLOBAL YENİDEN ATAMA YOK: "kX = ekle(kX, y)" bir
+#      işlev gövdesi içinde yazılırsa, o işlev İÇİNDE yeni bir YEREL
+#      değişken oluşturur (asmDegiskenleriTopla HER atanan adı yerel
+#      sanıyor) — işlev dönünce değişiklik KAYBOLUR. Hem VM'de hem elf'te
+#      doğrulandı. Bu yüzden büyüyebilen listeler (ekle() ile) global
+#      durum OLAMAZ. YERİNDE mutasyon (liste[i]=x, sözlük[k]=v) ise
+#      değişkenin kendisini DEĞİL işaret ettiği NESNEYİ değiştirdiğinden
+#      HER YERDEN çalışır — bu modül SADECE bu ikisine dayanıyor:
+#        - düğüm depoları: sözlük (koy = yerinde mutasyon)
+#        - skaler durum (kök id, sayaç, derece, WAL yolu): TEK-ELEMANLI
+#          "kutu" listeler (kKokKutu[0] = x de yerinde mutasyon)
+#
+#   3) RASTGELE DOSYA ERİŞİMİ YOK: seek/pwrite yok, sadece tam oku() /
+#      yaz_dosya() / ekle_dosya(). Kalıcılık EKLEME-ÖNCELİKLİ bir WAL:
+#      her ekle() "S anahtar değer\n" olarak dosyanın SONUNA eklenir,
+#      açılışta WAL BAŞTAN SONA okunup yeniden oynatılır.
+#
+#   4) TEK ÖRNEK: modül durumu İÇE ALINDIĞINDA BİR KEZ ilklenir (üstteki
+#      kısıt #2 yüzünden "ağacı sıfırla" işlevi YAZILAMAZ — sıfırlama
+#      sözlükleri YENİDEN ATAMAK gerektirir, bu da işlev içinden mümkün
+#      değil). Aynı programda birden çok bağımsız ağaç GEREKİYORSA bu
+#      modülün YENİ bir kopyası (farklı değişken önekiyle) gerekir.
+#
+#   5) sil() düğüm BİRLEŞTİRME/yeniden-dengeleme YAPMAZ — sadece yapraktan
+#      anahtarı çıkarır. Arama/ekleme için HER ZAMAN doğru kalır, çok
+#      sayıda silmeden sonra minimum doluluk garantisi kaybolabilir.
+#
+# Kullanım:
+#   içe al "kutuphane/BAgaci.tan"
+#   bagacAyarla(4, "veri.wal")     # derece=4, WAL yolu ("" = kalıcılık kapalı)
+#   bagacEkle(10, 100)
+#   yaz(bagacAra(10))              # 100
+#   yaz(bagacAraligiTara(5, 50))   # [[10, 100], ...]
+# ============================================================
+
+kKokKutu = [0]
+kDereceKutu = [4]
+kWalYoluKutu = [""]
+kSayacKutu = [0]
+kYaprakMi = sözlük()
+kAnahtarlar = sözlük()
+kDegerler = sözlük()
+kCocuklar = sözlük()
+kSonraki = sözlük()
+
+# --- yardımcı: liste[bas, sonIndeks) aralığını yeni liste olarak döndürür
+#     (bu SAF/yerel bir işlev — global durum kısıtına takılmaz) ---
+işlev araligi(liste, bas, sonIndeks)
+    sonuc = []
+    i = bas
+    iken i < sonIndeks
+        sonuc = ekle(sonuc, liste[i])
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# --- yardımcı: liste'ye konum'a deger ekleyerek yeni liste üretir (SAF) ---
+işlev digerleriEkleyerekOlustur(liste, konum, deger)
+    sonuc = []
+    i = 0
+    iken i < konum
+        sonuc = ekle(sonuc, liste[i])
+        i = i + 1
+    son
+    sonuc = ekle(sonuc, deger)
+    iken i < uzunluk(liste)
+        sonuc = ekle(sonuc, liste[i])
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# --- derece/WAL yolunu ayarlar (kutu mutasyonu — işlev içinden güvenli) ---
+işlev bagacAyarla(derece, walYolu)
+    kDereceKutu[0] = derece
+    kWalYoluKutu[0] = walYolu
+son
+
+# --- yeni (boş) düğüm oluşturur, id'sini döndürür (sözlük+kutu mutasyonu) ---
+işlev bagacDugumOlustur(yaprakMi)
+    id = kSayacKutu[0]
+    kSayacKutu[0] = id + 1
+    kYaprakMi[id] = yaprakMi
+    kAnahtarlar[id] = []
+    kDegerler[id] = []
+    kCocuklar[id] = []
+    kSonraki[id] = 0 - 1
+    döndür id
+son
+
+# kök düğüm (id 0) — modül içe alındığında BİR KEZ oluşturulur.
+kKokKutu[0] = bagacDugumOlustur(1)
+
+# --- taşan yaprağı ikiye böler, [ortaAnahtar, yeniDugumId] döndürür ---
+işlev yaprakBol(dugumId)
+    anahtarlar = kAnahtarlar[dugumId]
+    degerler = kDegerler[dugumId]
+    n = uzunluk(anahtarlar)
+    orta = n / 2
+    solAnahtarlar = araligi(anahtarlar, 0, orta)
+    solDegerler = araligi(degerler, 0, orta)
+    sagAnahtarlar = araligi(anahtarlar, orta, n)
+    sagDegerler = araligi(degerler, orta, n)
+    yeniId = bagacDugumOlustur(1)
+    kAnahtarlar[dugumId] = solAnahtarlar
+    kDegerler[dugumId] = solDegerler
+    kAnahtarlar[yeniId] = sagAnahtarlar
+    kDegerler[yeniId] = sagDegerler
+    kSonraki[yeniId] = kSonraki[dugumId]
+    kSonraki[dugumId] = yeniId
+    döndür [sagAnahtarlar[0], yeniId]
+son
+
+# --- taşan iç düğümü ikiye böler, orta anahtar YUKARI taşınır ---
+işlev icBol(dugumId)
+    anahtarlar = kAnahtarlar[dugumId]
+    cocuklar = kCocuklar[dugumId]
+    n = uzunluk(anahtarlar)
+    orta = n / 2
+    ortaAnahtar = anahtarlar[orta]
+    solAnahtarlar = araligi(anahtarlar, 0, orta)
+    sagAnahtarlar = araligi(anahtarlar, orta + 1, n)
+    solCocuklar = araligi(cocuklar, 0, orta + 1)
+    sagCocuklar = araligi(cocuklar, orta + 1, n + 1)
+    yeniId = bagacDugumOlustur(0)
+    kAnahtarlar[dugumId] = solAnahtarlar
+    kCocuklar[dugumId] = solCocuklar
+    kAnahtarlar[yeniId] = sagAnahtarlar
+    kCocuklar[yeniId] = sagCocuklar
+    döndür [ortaAnahtar, yeniId]
+son
+
+# --- iç ekleme: bölünme olduysa [ortaAnahtar, yeniDugumId], olmadıysa [] ---
+işlev bagacEkleIc(dugumId, anahtar, deger)
+    eğer kYaprakMi[dugumId] == 1 ise
+        anahtarlar = kAnahtarlar[dugumId]
+        degerler = kDegerler[dugumId]
+        i = 0
+        iken i < uzunluk(anahtarlar) ve anahtarlar[i] < anahtar
+            i = i + 1
+        son
+        eğer i < uzunluk(anahtarlar) ve anahtarlar[i] == anahtar ise
+            degerler[i] = deger
+            kDegerler[dugumId] = degerler
+            döndür []
+        son
+        kAnahtarlar[dugumId] = digerleriEkleyerekOlustur(anahtarlar, i, anahtar)
+        kDegerler[dugumId] = digerleriEkleyerekOlustur(degerler, i, deger)
+        eğer uzunluk(kAnahtarlar[dugumId]) < kDereceKutu[0] ise
+            döndür []
+        son
+        döndür yaprakBol(dugumId)
+    son
+
+    cocuklar = kCocuklar[dugumId]
+    anahtarlar = kAnahtarlar[dugumId]
+    i = 0
+    iken i < uzunluk(anahtarlar) ve anahtar >= anahtarlar[i]
+        i = i + 1
+    son
+    sonuc = bagacEkleIc(cocuklar[i], anahtar, deger)
+    eğer uzunluk(sonuc) == 0 ise
+        döndür []
+    son
+    kAnahtarlar[dugumId] = digerleriEkleyerekOlustur(kAnahtarlar[dugumId], i, sonuc[0])
+    kCocuklar[dugumId] = digerleriEkleyerekOlustur(kCocuklar[dugumId], i + 1, sonuc[1])
+    eğer uzunluk(kAnahtarlar[dugumId]) < kDereceKutu[0] ise
+        döndür []
+    son
+    döndür icBol(dugumId)
+son
+
+# --- WAL'a yazmadan ekle (yeniden-oynatma sırasında kullanılır) ---
+işlev bagacEkleSessiz(anahtar, deger)
+    sonuc = bagacEkleIc(kKokKutu[0], anahtar, deger)
+    eğer uzunluk(sonuc) > 0 ise
+        yeniKokId = bagacDugumOlustur(0)
+        kAnahtarlar[yeniKokId] = [sonuc[0]]
+        kCocuklar[yeniKokId] = [kKokKutu[0], sonuc[1]]
+        kKokKutu[0] = yeniKokId
+    son
+son
+
+# --- anahtar=deger ekler/günceller (WAL yolu ayarlıysa günlüğe de yazar) ---
+işlev bagacEkle(anahtar, deger)
+    bagacEkleSessiz(anahtar, deger)
+    eğer metinEsit(kWalYoluKutu[0], "") == 0 ise
+        ekle_dosya(kWalYoluKutu[0], "S " + metin(anahtar) + " " + metin(deger) + "\n")
+    son
+son
+
+# --- anahtarı arar, bulamazsa -1 döndürür ---
+işlev bagacAra(anahtar)
+    d = kKokKutu[0]
+    iken kYaprakMi[d] == 0
+        cocuklar = kCocuklar[d]
+        anahtarlar = kAnahtarlar[d]
+        i = 0
+        iken i < uzunluk(anahtarlar) ve anahtar >= anahtarlar[i]
+            i = i + 1
+        son
+        d = cocuklar[i]
+    son
+    anahtarlar = kAnahtarlar[d]
+    degerler = kDegerler[d]
+    i = 0
+    iken i < uzunluk(anahtarlar)
+        eğer anahtarlar[i] == anahtar ise
+            döndür degerler[i]
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# --- WAL'a yazmadan sil (yeniden-oynatma sırasında kullanılır) ---
+işlev bagacSilSessiz(anahtar)
+    d = kKokKutu[0]
+    iken kYaprakMi[d] == 0
+        cocuklar = kCocuklar[d]
+        anahtarlar = kAnahtarlar[d]
+        i = 0
+        iken i < uzunluk(anahtarlar) ve anahtar >= anahtarlar[i]
+            i = i + 1
+        son
+        d = cocuklar[i]
+    son
+    anahtarlar = kAnahtarlar[d]
+    degerler = kDegerler[d]
+    yeniAnahtarlar = []
+    yeniDegerler = []
+    i = 0
+    bulunduMu = 0
+    iken i < uzunluk(anahtarlar)
+        eğer anahtarlar[i] == anahtar ise
+            bulunduMu = 1
+        değilse
+            yeniAnahtarlar = ekle(yeniAnahtarlar, anahtarlar[i])
+            yeniDegerler = ekle(yeniDegerler, degerler[i])
+        son
+        i = i + 1
+    son
+    kAnahtarlar[d] = yeniAnahtarlar
+    kDegerler[d] = yeniDegerler
+    döndür bulunduMu
+son
+
+# --- anahtarı yapraktan siler (düğüm birleştirme YOK, üstte açıklandı) ---
+işlev bagacSil(anahtar)
+    bulunduMu = bagacSilSessiz(anahtar)
+    eğer bulunduMu == 1 ve metinEsit(kWalYoluKutu[0], "") == 0 ise
+        ekle_dosya(kWalYoluKutu[0], "D " + metin(anahtar) + "\n")
+    son
+    döndür bulunduMu
+son
+
+# --- [baslangic, bitis] aralığındaki tüm [anahtar, deger] çiftlerini
+#     sıralı döndürür (yaprak-zinciri üzerinden tek geçişli tarama) ---
+işlev bagacAraligiTara(baslangic, bitis)
+    sonuc = []
+    d = kKokKutu[0]
+    iken kYaprakMi[d] == 0
+        cocuklar = kCocuklar[d]
+        anahtarlar = kAnahtarlar[d]
+        i = 0
+        iken i < uzunluk(anahtarlar) ve baslangic >= anahtarlar[i]
+            i = i + 1
+        son
+        d = cocuklar[i]
+    son
+    iken d != 0 - 1
+        anahtarlar = kAnahtarlar[d]
+        degerler = kDegerler[d]
+        i = 0
+        iken i < uzunluk(anahtarlar)
+            eğer anahtarlar[i] >= baslangic ve anahtarlar[i] <= bitis ise
+                sonuc = ekle(sonuc, [anahtarlar[i], degerler[i]])
+            son
+            i = i + 1
+        son
+        d = kSonraki[d]
+    son
+    döndür sonuc
+son
+
+# --- WAL dosyasından ağacı yeniden kurar (bagacAyarla'dan SONRA çağır) ---
+işlev bagacYukle()
+    eğer dosyaVarMi(kWalYoluKutu[0]) == 0 ise
+        döndür 0
+    son
+    icerik = oku(kWalYoluKutu[0])
+    satirlar = parçala(icerik, "\n")
+    her satir satirlar içinde
+        eğer uzunluk(satir) > 0 ise
+            parcalar = parçala(satir, " ")
+            eğer parcalar[0] == "S" ise
+                bagacEkleSessiz(sayı(parcalar[1]), sayı(parcalar[2]))
+            değilse eğer parcalar[0] == "D" ise
+                bagacSilSessiz(sayı(parcalar[1]))
+            son
+        son
+    son
+    döndür 1
+son

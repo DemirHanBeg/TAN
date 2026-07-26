@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -308,6 +309,7 @@ func (m *makineKodu) jcc(kod byte, etiket string) {
 func (m *makineKodu) ret()     { m.bayt(0xC3) }
 func (m *makineKodu) leave()   { m.bayt(0xC9) }
 func (m *makineKodu) syscall() { m.bayt(0x0F, 0x05) }
+func (m *makineKodu) rdtsc()   { m.bayt(0x0F, 0x31) } // edx:eax = zaman damgasi sayaci (rastgele() tohumu)
 
 // mov byte ptr [rcx], imm8  (C6 /0)
 func (m *makineKodu) movBaytImm(r byte, v byte) {
@@ -466,6 +468,15 @@ func (m *makineKodu) shlImm(r byte, v byte) {
 	m.bayt(rex, 0xC1, modrm(3, 4, r), v)
 }
 
+// shr r64, imm8 (C1 /5) — mantiksal (isaretsiz) sag kaydirma
+func (m *makineKodu) shrImm(r byte, v byte) {
+	rex := byte(0x48)
+	if r >= 8 {
+		rex |= 1
+	}
+	m.bayt(rex, 0xC1, modrm(3, 5, r), v)
+}
+
 // movzx r64, byte [taban+indeks]  -> tek bayt oku
 func (m *makineKodu) movzxBaytDolayli(hedef, taban, indeks byte) {
 	rex := byte(0x48)
@@ -585,6 +596,7 @@ const (
 	CMetin              // yigin isaretcisi: [uzunluk:8][baytlar...]
 	CListe              // yigin isaretcisi: [uzunluk:8][oge0:8][oge1:8]...
 	CKesir              // float64, kayitta HAM BIT DESENI olarak tasinir
+	CSozluk             // yigin isaretcisi: [uzunluk:8][kovaDizisiPtr:8], bkz f_sozluk_*
 )
 
 type Tip struct {
@@ -595,6 +607,7 @@ type Tip struct {
 var TipTam = Tip{Cesit: CTam}
 var TipMetin = Tip{Cesit: CMetin}
 var TipKesir = Tip{Cesit: CKesir}
+var TipSozluk = Tip{Cesit: CSozluk}
 
 func TipListe(e Tip) Tip { return Tip{Cesit: CListe, Eleman: &e} }
 
@@ -650,6 +663,12 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 		}
 		return TipTam
 	case IkiliDugum:
+		if n.Islec == "negatif" {
+			return e.tipCikar(n.Sol)
+		}
+		if n.Islec == "değil" {
+			return TipTam
+		}
 		if n.Islec == "+" {
 			if e.tipCikar(n.Sol).Cesit == CMetin || e.tipCikar(n.Sag).Cesit == CMetin {
 				return TipMetin
@@ -667,6 +686,12 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			return TipListe(TipTam)
 		}
 		return TipListe(e.tipCikar(n.Elemanlar[0]))
+	case SozlukDugum:
+		if len(n.Degerler) == 0 {
+			return TipSozluk
+		}
+		et := e.tipCikar(n.Degerler[0])
+		return Tip{Cesit: CSozluk, Eleman: &et}
 	case IndeksDugum:
 		ht := e.tipCikar(n.Hedef)
 		if ht.Cesit == CMetin {
@@ -675,12 +700,25 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 		if ht.Cesit == CListe && ht.Eleman != nil {
 			return *ht.Eleman
 		}
+		if ht.Cesit == CSozluk && ht.Eleman != nil {
+			return *ht.Eleman
+		}
 		return TipTam
 	case CagriDugum:
 		switch n.Ad {
-		case "uzunluk", "kod", "tamBol", "metinEsit":
+		case "uzunluk", "kod", "tamBol", "metinEsit", "sayı":
 			return TipTam
-		case "metin", "karakter", "oku", "arg", "metinBirlestir", "metinAl":
+		case "taban", "tavan", "yuvarla", "kök", "log", "e_üssü", "eÜssü":
+			return TipKesir
+		case "harfler":
+			return TipListe(TipMetin)
+		case "sözlük":
+			return TipSozluk
+		case "anahtarlar":
+			return TipListe(TipMetin)
+		case "varMı", "var_mı":
+			return TipTam
+		case "metin", "karakter", "oku", "arg", "metinBirlestir", "metinAl", "birleştir":
 			return TipMetin
 		case "listeYap":
 			if len(n.Argumanlar) > 1 {
@@ -725,6 +763,64 @@ func (e *elfUretici) govdeTipleriniTopla(govde []Dugum) {
 			e.govdeTipleriniTopla(n.Degilse)
 		case IkenDugum:
 			e.govdeTipleriniTopla(n.Govde)
+		}
+	}
+}
+
+// sozlukElemanTipiBul: govde (ic ice bloklar dahil) icinde "ad" degiskenine
+// yapilan ILK sozluk[anahtar] = deger atamasindaki degerin tipini bulur.
+// SADECE govde icinde OLUSTURULUP DOLDURULAN yerel sozlukler icindir —
+// parametre olarak gelen sozluklerin Eleman tipi cagri yerinden
+// e.parametreTipi ile ayrica tasinir (bkz. parametreTipleriniOgren).
+func (e *elfUretici) sozlukElemanTipiBul(govde []Dugum, ad string) (Tip, bool) {
+	for _, d := range govde {
+		switch n := d.(type) {
+		case IndeksAtamaDugum:
+			if dv, ok := n.Hedef.(DegiskenDugum); ok && dv.Ad == ad {
+				return e.tipCikar(n.Deger), true
+			}
+		case EgerDugum:
+			if t, ok := e.sozlukElemanTipiBul(n.Govde, ad); ok {
+				return t, true
+			}
+			if t, ok := e.sozlukElemanTipiBul(n.Degilse, ad); ok {
+				return t, true
+			}
+		case IkenDugum:
+			if t, ok := e.sozlukElemanTipiBul(n.Govde, ad); ok {
+				return t, true
+			}
+		case HerDugum:
+			if t, ok := e.sozlukElemanTipiBul(n.Govde, ad); ok {
+				return t, true
+			}
+		}
+	}
+	return TipTam, false
+}
+
+// sozlukElemanlariniCoz: e.tipler icindeki, Eleman'i henuz cozulmemis her
+// CSozluk degiskeni icin verilen govdelerin HER BIRINI (sirayla) tarayip
+// deger tipini bulur. Birden cok govde kabul eder cunku GLOBAL bir sozluk
+// (modul ust-seviyesinde olusturulan) bir ISLEV GOVDESI icinden doldurulmus
+// olabilir (bkz. BAgaci.tan: "kYaprakMi = sozluk()" ust seviyede ama
+// "kYaprakMi[id] = x" bagacDugumOlustur() icinde) — TEK govde arasa bunu
+// hic bulamaz. Cagri yeri bu fonksiyonu her-islev-govdesi-ayri degil, TUM
+// govdeleri (anaGovde + islevler) BIRLIKTE vererek cagirmali — aksi halde
+// per-islev "e.tipler = eski" restore'u cozumlemeyi siler (bu tam olarak
+// yasanan bug'di: cozum bagacDugumOlustur govdesinde BULUNUYORDU ama o
+// islevin eski-restore'u ile birlikte KAYBOLUYORDU cunku anaGovde'nin
+// kendi e.tipler girisi hic guncellenmemisti).
+func (e *elfUretici) sozlukElemanlariniCoz(govdeler ...[]Dugum) {
+	for ad, t := range e.tipler {
+		if t.Cesit == CSozluk && t.Eleman == nil {
+			for _, govde := range govdeler {
+				if vt, ok := e.sozlukElemanTipiBul(govde, ad); ok {
+					vtKopya := vt
+					e.tipler[ad] = Tip{Cesit: CSozluk, Eleman: &vtKopya}
+					break
+				}
+			}
 		}
 	}
 }
@@ -792,8 +888,22 @@ func (e *elfUretici) parametreTipleriniOgren(agac []Dugum, islevler []IslevDugum
 			}
 		case AtamaDugum:
 			gez(n.Deger)
+		case IndeksAtamaDugum:
+			// liste[i] = f(...) / sözlük[k] = f(...): n.Deger'e ULASILMIYORDU
+			// (bu case hic yoktu) — bu yola giren cagri yerleri parametre tipi
+			// hic ogrenemiyordu (bkz. BAgaci.tan digerleriEkleyerekOlustur()).
+			gez(n.Hedef)
+			gez(n.Indeks)
+			gez(n.Deger)
 		case YazDugum:
 			gez(n.Deger)
+		case SozlukDugum:
+			for _, x := range n.Anahtarlar {
+				gez(x)
+			}
+			for _, x := range n.Degerler {
+				gez(x)
+			}
 		case IkiliDugum:
 			gez(n.Sol)
 			gez(n.Sag)
@@ -904,6 +1014,29 @@ func (e *elfUretici) ifade(d Dugum) {
 		}
 
 	case IkiliDugum:
+		// tekli eksi (-x): Parser bunu Sag=nil IkiliDugum{"negatif", x, nil} olarak
+		// veriyor. Once ele alinmali — asagidaki genel yol n.Sag'i KOSULSUZ
+		// okur, nil ile cakisir ("elf: bu ifade desteklenmiyor (<nil>)").
+		if n.Islec == "negatif" {
+			e.ifade(n.Sol)
+			if e.tipCikar(n.Sol).Cesit == CKesir {
+				m.movImm64(rRCX, int64(-1)<<63) // isaret biti: 0x8000000000000000
+				m.xorKayit(rRAX, rRCX)
+			} else {
+				m.negKayit(rRAX)
+			}
+			return
+		}
+		// "değil x" da unary — Parser.go IkiliDugum{"değil", x, nil} olarak
+		// veriyor (CagriDugum "değil(x)" cagri bicimiyle KARISTIRILMASIN,
+		// o ayri ve zaten CagriDugum kolunda destekli). Ayni nil-Sag tuzagi.
+		if n.Islec == "değil" {
+			e.ifade(n.Sol)
+			m.testKayit(rRAX, rRAX)
+			m.setcc(0x94, rRAX) // sete — sifirsa 1
+			m.movzx(rRAX, rRAX)
+			return
+		}
 		// metin birlestirme
 		if n.Islec == "+" && (e.tipCikar(n.Sol).Cesit == CMetin || e.tipCikar(n.Sag).Cesit == CMetin) {
 			// sayi tarafini otomatik metne cevir (yorumlayiciyla ayni davranis)
@@ -1076,15 +1209,53 @@ func (e *elfUretici) ifade(d Dugum) {
 		}
 		m.popKayit(rRAX)
 
+	case SozlukDugum:
+		// {"a": 1, "b": 2, ...} -- bos sozluk yarat, sirayla koy() cagir.
+		// f_sozluk_koy rax'ta sozluk isaretcisini dondurur, bu yuzden dongu
+		// arasinda ayrica saklamaya gerek yok (bir sonraki push bunu alir).
+		m.call("f_sozluk_yap")
+		for i := range n.Anahtarlar {
+			m.pushKayit(rRAX) // sozluk (bu ana kadarki)
+			e.ifade(n.Degerler[i])
+			m.pushKayit(rRAX) // deger
+			e.ifade(n.Anahtarlar[i])
+			it := e.tipCikar(n.Anahtarlar[i])
+			if it.Cesit != CMetin {
+				m.movKayit(rRDI, rRAX)
+				if it.Cesit == CKesir {
+					m.call("f_kesir_metne")
+				} else {
+					m.call("f_sayi_metne")
+				}
+			}
+			m.movKayit(rRSI, rRAX) // anahtar (metin)
+			m.popKayit(rRDX)       // deger
+			m.popKayit(rRDI)       // sozluk
+			m.call("f_sozluk_koy") // rax = sozluk (degismez, sonraki tura hazir)
+		}
+
 	case IndeksDugum:
 		ht := e.tipCikar(n.Hedef)
 		e.ifade(n.Hedef)
 		m.pushKayit(rRAX)
 		e.ifade(n.Indeks)
+		if ht.Cesit == CSozluk {
+			it := e.tipCikar(n.Indeks)
+			if it.Cesit != CMetin {
+				m.movKayit(rRDI, rRAX)
+				if it.Cesit == CKesir {
+					m.call("f_kesir_metne")
+				} else {
+					m.call("f_sayi_metne")
+				}
+			}
+		}
 		m.movKayit(rRSI, rRAX)
 		m.popKayit(rRDI)
 		if ht.Cesit == CMetin {
 			m.call("f_metin_indeks")
+		} else if ht.Cesit == CSozluk {
+			m.call("f_sozluk_al")
 		} else {
 			m.leaOge(rRAX, rRDI, rRSI)
 			m.movDolayliOku(rRAX, rRAX, 0)
@@ -1139,8 +1310,8 @@ func (e *elfUretici) ifade(d Dugum) {
 				panic(TanHata{Mesaj: "elf: uzunluk() tek argüman ister"})
 			}
 			t := e.tipCikar(n.Argumanlar[0])
-			if t.Cesit != CMetin && t.Cesit != CListe {
-				panic(TanHata{Satir: n.Satir, Mesaj: fmt.Sprintf("elf: uzunluk() metin veya liste ister (satir %d, cesit=%v)", n.Satir, t.Cesit)})
+			if t.Cesit != CMetin && t.Cesit != CListe && t.Cesit != CSozluk {
+				panic(TanHata{Satir: n.Satir, Mesaj: fmt.Sprintf("elf: uzunluk() metin, liste veya sözlük ister (satir %d, cesit=%v)", n.Satir, t.Cesit)})
 			}
 			e.ifade(n.Argumanlar[0])
 			m.movDolayliOku(rRAX, rRAX, 0)
@@ -1217,6 +1388,36 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.call("f_yaz_dosya")
 			return
 		}
+		if n.Ad == "sayı" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: sayı() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_sayi")
+			return
+		}
+		if n.Ad == "dosyaVarMi" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: dosyaVarMi() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_dosya_var_mi")
+			return
+		}
+		if n.Ad == "ekle_dosya" || n.Ad == "ekleDosya" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: ekle_dosya() iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_ekle_dosya")
+			return
+		}
 		if n.Ad == "karakter" {
 			e.ifade(n.Argumanlar[0])
 			m.movKayit(rRDI, rRAX)
@@ -1227,6 +1428,206 @@ func (e *elfUretici) ifade(d Dugum) {
 			e.ifade(n.Argumanlar[0])
 			m.movKayit(rRDI, rRAX)
 			m.call("f_kod")
+			return
+		}
+		if n.Ad == "harfler" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: harfler() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_harfler")
+			return
+		}
+		if n.Ad == "birleştir" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: birleştir() liste ister"})
+			}
+			lt := e.tipCikar(n.Argumanlar[0])
+			if lt.Cesit != CListe {
+				panic(TanHata{Mesaj: "elf: birleştir() liste ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			switch {
+			case lt.Eleman != nil && lt.Eleman.Cesit == CMetin:
+				m.call("f_birlestir_metin")
+			case lt.Eleman != nil && lt.Eleman.Cesit == CKesir:
+				m.call("f_birlestir_kesir")
+			default:
+				m.call("f_birlestir_tam")
+			}
+			return
+		}
+		if n.Ad == "sil" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: sil() iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			it := e.tipCikar(n.Argumanlar[1])
+			if it.Cesit != CMetin {
+				m.movKayit(rRDI, rRAX)
+				if it.Cesit == CKesir {
+					m.call("f_kesir_metne")
+				} else {
+					m.call("f_sayi_metne")
+				}
+			}
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_sozluk_sil")
+			return
+		}
+		if n.Ad == "rastgele" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: rastgele() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_rastgele")
+			return
+		}
+		if n.Ad == "kök" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: kök() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			if e.tipCikar(n.Argumanlar[0]).Cesit != CKesir {
+				m.cvtTamKesir(0, rRAX)
+				m.movqKayitXmm(rRAX, 0)
+			}
+			m.movqXmmKayit(0, rRAX)
+			m.sseIkili(0x51, 0, 0) // sqrtsd xmm0, xmm0 (donanim, tek makine komutu)
+			m.movqKayitXmm(rRAX, 0)
+			return
+		}
+		if n.Ad == "log" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: log() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			if e.tipCikar(n.Argumanlar[0]).Cesit != CKesir {
+				m.cvtTamKesir(0, rRAX)
+				m.movqKayitXmm(rRAX, 0)
+			}
+			m.movKayit(rRDI, rRAX)
+			m.call("f_log")
+			return
+		}
+		if n.Ad == "e_üssü" || n.Ad == "eÜssü" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: e_üssü() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			if e.tipCikar(n.Argumanlar[0]).Cesit != CKesir {
+				m.cvtTamKesir(0, rRAX)
+				m.movqKayitXmm(rRAX, 0)
+			}
+			m.movKayit(rRDI, rRAX)
+			m.call("f_e_ussu")
+			return
+		}
+		if n.Ad == "yuvarla" {
+			if len(n.Argumanlar) < 1 || len(n.Argumanlar) > 2 {
+				panic(TanHata{Mesaj: "elf: yuvarla() bir veya iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			if e.tipCikar(n.Argumanlar[0]).Cesit != CKesir {
+				m.cvtTamKesir(0, rRAX)
+				m.movqKayitXmm(rRAX, 0)
+			}
+			m.pushKayit(rRAX) // sayı (ondalık ham)
+			if len(n.Argumanlar) == 2 {
+				e.ifade(n.Argumanlar[1])
+			} else {
+				m.movImm32(rRAX, 0)
+			}
+			m.movKayit(rRSI, rRAX) // basamak
+			m.popKayit(rRDI)       // sayı
+			m.call("f_yuvarla")
+			return
+		}
+		if n.Ad == "sözlük" {
+			if len(n.Argumanlar) != 0 {
+				panic(TanHata{Mesaj: "elf: sözlük() argüman almaz"})
+			}
+			m.call("f_sozluk_yap")
+			return
+		}
+		if n.Ad == "anahtarlar" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: anahtarlar() tek argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_sozluk_anahtarlar")
+			return
+		}
+		if n.Ad == "varMı" || n.Ad == "var_mı" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: varMı() iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			it := e.tipCikar(n.Argumanlar[1])
+			if it.Cesit != CMetin {
+				m.movKayit(rRDI, rRAX)
+				if it.Cesit == CKesir {
+					m.call("f_kesir_metne")
+				} else {
+					m.call("f_sayi_metne")
+				}
+			}
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_sozluk_varmi")
+			return
+		}
+		if n.Ad == "parçala" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: parçala() iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_parcala")
+			return
+		}
+		if n.Ad == "taban" || n.Ad == "tavan" {
+			// SSE4.1 roundsd YOK (donanim varsayimi yapmiyoruz) — cvttsd2si
+			// (sifira dogru kes) + gerekirse 1 duzelt: taban icin kesim
+			// deger BUYUKSE (negatif ondalik) 1 azalt, tavan icin kesim
+			// deger KUCUKSE 1 arttir.
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: fmt.Sprintf("elf: %s() tek argüman ister", n.Ad)})
+			}
+			e.ifade(n.Argumanlar[0])
+			if e.tipCikar(n.Argumanlar[0]).Cesit != CKesir {
+				m.cvtTamKesir(0, rRAX)
+				m.movqKayitXmm(rRAX, 0)
+			}
+			m.movqXmmKayit(0, rRAX) // xmm0 = x
+			m.cvtKesirTam(rRCX, 0) // rcx = kes(x)
+			m.cvtTamKesir(1, rRCX) // xmm1 = float(rcx)
+			m.comisd(1, 0)         // xmm1(kesilmis) vs xmm0(x)
+			if n.Ad == "taban" {
+				m.setcc(0x97, rRAX) // al=1 kesilmis > x ise (seta)
+			} else {
+				m.setcc(0x92, rRAX) // al=1 kesilmis < x ise (setb)
+			}
+			m.movzx(rRAX, rRAX)
+			if n.Ad == "taban" {
+				m.subKayit(rRCX, rRAX)
+			} else {
+				m.addKayit(rRCX, rRAX)
+			}
+			m.cvtTamKesir(0, rRCX) // xmm0 = float(rcx) sonuc
+			m.movqKayitXmm(rRAX, 0)
 			return
 		}
 		if n.Ad == "metinEsit" {
@@ -1304,7 +1705,17 @@ func (e *elfUretici) deyim(d Dugum) {
 	m := e.m
 	switch n := d.(type) {
 	case AtamaDugum:
-		e.tipler[n.Ad] = e.tipCikar(n.Deger)
+		yeniTip := e.tipCikar(n.Deger)
+		if yeniTip.Cesit == CSozluk && yeniTip.Eleman == nil {
+			// "d = sözlük()" her calistiginda BOS (Eleman=nil) tip uretir —
+			// sozlukElemanlariniCoz()'un govdeyi tarayip onceden cozdugu
+			// deger tipini burada EZMEYELIM (aksi halde bu satirdan hemen
+			// sonraki "yaz(d[k])" gibi kullanimlar yine "tam" a duser).
+			if eski, ok := e.tipler[n.Ad]; ok && eski.Cesit == CSozluk && eski.Eleman != nil {
+				yeniTip = eski
+			}
+		}
+		e.tipler[n.Ad] = yeniTip
 		e.ifade(n.Deger)
 		if off, ok := e.yereller[n.Ad]; ok {
 			m.movYerelYaz(off, rRAX)
@@ -1432,8 +1843,29 @@ func (e *elfUretici) deyim(d Dugum) {
 		// gelistirilmesi sirasinda bulundu — "atama hedefi ==" gorulunce
 		// "bu deyim desteklenmiyor" ile panikliyordu).
 		ht := e.tipCikar(n.Hedef)
+		if ht.Cesit == CSozluk {
+			it := e.tipCikar(n.Indeks)
+			e.ifade(n.Deger)
+			m.pushKayit(rRAX) // deger
+			e.ifade(n.Hedef)
+			m.pushKayit(rRAX) // sozluk isaretcisi
+			e.ifade(n.Indeks)
+			if it.Cesit != CMetin {
+				m.movKayit(rRDI, rRAX)
+				if it.Cesit == CKesir {
+					m.call("f_kesir_metne")
+				} else {
+					m.call("f_sayi_metne")
+				}
+			}
+			m.movKayit(rRSI, rRAX) // rsi = anahtar (metin)
+			m.popKayit(rRDI)       // rdi = sozluk isaretcisi
+			m.popKayit(rRDX)       // rdx = deger
+			m.call("f_sozluk_koy")
+			return
+		}
 		if ht.Cesit != CListe {
-			panic(TanHata{Satir: n.Satir, Mesaj: "elf: yalnız liste[i] = değer destekleniyor"})
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: yalnız liste[i] veya sözlük[anahtar] = değer destekleniyor"})
 		}
 		e.ifade(n.Deger)
 		m.pushKayit(rRAX) // deger
@@ -1552,6 +1984,7 @@ func (e *elfUretici) islevYaz(n IslevDugum) {
 	}
 	e.yereller = yereller
 	e.govdeTipleriniTopla(n.Govde)
+	e.sozlukElemanlariniCoz(n.Govde)
 	for _, s := range n.Govde {
 		e.deyim(s)
 	}
@@ -1917,6 +2350,513 @@ func (e *elfUretici) yardimciMetinEsit() {
 	m.ret()
 }
 
+// harfler(rdi = metin) -> rax = liste (her ogesi f_metin_indeks ile uretilmis
+// tek-baytlik metin). Bayt bazlidir (rune degil) — elf arka ucunun butun metin
+// indeksleme/kod/karakter yardimcilariyla AYNI kural (metinAl, f_metin_indeks).
+func (e *elfUretici) yardimciHarfler() {
+	m := e.m
+	m.etiketKoy("f_harfler")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 40)
+	m.movYerelYaz(-8, rRDI)        // metin
+	m.movDolayliOku(rRAX, rRDI, 0) // n = uzunluk
+	m.movYerelYaz(-16, rRAX)       // n
+	m.movKayit(rRCX, rRAX)
+	m.shlImm(rRCX, 3)
+	m.addImm32(rRCX, 8)
+	m.movKayit(rRDI, rRCX)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX) // liste
+	m.movYerelOku(rRCX, -16)
+	m.movDolayliYaz(rRAX, 0, rRCX) // liste uzunlugu = n
+	m.xorKayit(rRCX, rRCX)         // i = 0
+	m.etiketKoy("Lhf_dongu")
+	m.movYerelOku(rRDX, -16)
+	m.cmpKayit(rRCX, rRDX)
+	m.jcc(0x8D, "Lhf_bitti") // jge
+	m.movYerelYaz(-32, rRCX) // i sakla (cagri rcx'i bozar)
+	m.movYerelOku(rRDI, -8)
+	m.movKayit(rRSI, rRCX)
+	m.call("f_metin_indeks") // rax = tek-baytlik metin
+	m.movYerelOku(rRDX, -24)
+	m.movYerelOku(rRCX, -32)
+	m.leaOge(rRDX, rRDX, rRCX) // liste + i*8 + 8
+	m.movDolayliYaz(rRDX, 0, rRAX)
+	m.movYerelOku(rRCX, -32)
+	m.incKayit(rRCX)
+	m.jmp("Lhf_dongu")
+	m.etiketKoy("Lhf_bitti")
+	m.movYerelOku(rRAX, -24)
+	m.leave()
+	m.ret()
+}
+
+// metin_araligi(rdi = metin, rsi = baslangic, rdx = uzunluk) -> rax = yeni
+// metin (alt dize kopyasi). f_metin_indeks'in genellestirilmisi (uzunluk=1
+// ile sinirli degil) — parçala()'nin hem aday-karsilastirma hem de sonuc
+// parcalarini uretmesi icin kullanilir.
+func (e *elfUretici) yardimciMetinAraligi() {
+	m := e.m
+	m.etiketKoy("f_metin_araligi")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 40)
+	m.movYerelYaz(-8, rRDI)  // metin
+	m.movYerelYaz(-16, rRSI) // baslangic
+	m.movYerelYaz(-24, rRDX) // uzunluk
+	m.movKayit(rRAX, rRDX)
+	m.addImm32(rRAX, 8)
+	m.movKayit(rRDI, rRAX)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-32, rRAX) // yeni metin
+	m.movYerelOku(rRCX, -24)
+	m.movDolayliYaz(rRAX, 0, rRCX) // uzunluk yaz
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8) // kaynak verisi basi
+	m.movYerelOku(rRCX, -16)
+	m.addKayit(rRSI, rRCX) // + baslangic
+	m.movYerelOku(rRDI, -32)
+	m.leaDolayli(rRDI, rRDI, 8) // hedef verisi basi
+	m.movYerelOku(rRDX, -24)    // kopyalanacak bayt sayisi
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRAX, -32)
+	m.leave()
+	m.ret()
+}
+
+// parçala(rdi = metin, rsi = ayraç) -> rax = liste (ayraca gore bolunmus
+// metin parcalari, sol-en-once eslesme — strings.Split ile ayni kural).
+// ayraç boşsa (uzunluk 0) harfler() ile ayni davranisa duser (her bayt ayri
+// oge). f_liste_ekle ile buyur (dogru sonuc parca sayisi az oldugundan
+// O(n^2) maliyeti onemsiz — liste.go'daki listeYap()'in onledigi durum
+// BUYUK n icindir, burada n = parca sayisi, tipik olarak kucuk).
+func (e *elfUretici) yardimciParcala() {
+	m := e.m
+	m.etiketKoy("f_parcala")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 64) // -8.. -56 kullanilir, 64'e yuvarlandi
+	m.movYerelYaz(-8, rRDI)        // metin
+	m.movYerelYaz(-16, rRSI)       // ayrac
+	m.movDolayliOku(rRAX, rRSI, 0) // nAyrac
+	m.movYerelYaz(-24, rRAX)
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x85, "Lpc_normal") // jne — ayrac bos degil, normal yola git
+	m.movYerelOku(rRDI, -8)
+	m.call("f_harfler") // ayrac bos -> harfler() ile ayni
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lpc_normal")
+	m.movYerelOku(rRAX, -8)
+	m.movDolayliOku(rRAX, rRAX, 0) // nMetin
+	m.movYerelYaz(-32, rRAX)
+	m.movImm32(rRDI, 0) // bos liste: n=0
+	m.movImm32(rRSI, 0)
+	m.call("f_liste_yap")
+	m.movYerelYaz(-40, rRAX) // liste (buyuyecek)
+	m.movYerelImm(-48, 0)    // parcaBasi
+	// i, parcaBasi ile ayni baslar; asagidaki dongude ayrica -56'da tutulur
+	m.movYerelImm(-56, 0) // i (arama konumu)
+	m.etiketKoy("Lpc_dongu")
+	// eger i + nAyrac > nMetin ise arama biter
+	m.movYerelOku(rRAX, -56)
+	m.movYerelOku(rRCX, -24)
+	m.addKayit(rRAX, rRCX)
+	m.movYerelOku(rRDX, -32)
+	m.cmpKayit(rRAX, rRDX)
+	m.jcc(0x8F, "Lpc_arama_bitti") // jg — sigmiyor
+	// aday = metin_araligi(metin, i, nAyrac)
+	m.movYerelOku(rRDI, -8)
+	m.movYerelOku(rRSI, -56)
+	m.movYerelOku(rRDX, -24)
+	m.call("f_metin_araligi")
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -16)
+	m.call("f_metin_esit") // rax = 1 eslesirse
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lpc_ilerle") // jz — eslesmedi, i++
+	// eslesti: parca = metin_araligi(metin, parcaBasi, i-parcaBasi); liste'ye ekle
+	m.movYerelOku(rRDI, -8)
+	m.movYerelOku(rRSI, -48)
+	m.movYerelOku(rRDX, -56)
+	m.movYerelOku(rRCX, -48)
+	m.subKayit(rRDX, rRCX) // uzunluk = i - parcaBasi
+	m.call("f_metin_araligi")
+	m.movKayit(rRSI, rRAX)
+	m.movYerelOku(rRDI, -40)
+	m.call("f_liste_ekle")
+	m.movYerelYaz(-40, rRAX)
+	// i += nAyrac; parcaBasi = i
+	m.movYerelOku(rRAX, -56)
+	m.movYerelOku(rRCX, -24)
+	m.addKayit(rRAX, rRCX)
+	m.movYerelYaz(-56, rRAX)
+	m.movYerelYaz(-48, rRAX)
+	m.jmp("Lpc_dongu")
+	m.etiketKoy("Lpc_ilerle")
+	m.movYerelOku(rRAX, -56)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-56, rRAX)
+	m.jmp("Lpc_dongu")
+	m.etiketKoy("Lpc_arama_bitti")
+	// son parca: metin_araligi(metin, parcaBasi, nMetin - parcaBasi)
+	m.movYerelOku(rRDI, -8)
+	m.movYerelOku(rRSI, -48)
+	m.movYerelOku(rRDX, -32)
+	m.movYerelOku(rRCX, -48)
+	m.subKayit(rRDX, rRCX)
+	m.call("f_metin_araligi")
+	m.movKayit(rRSI, rRAX)
+	m.movYerelOku(rRDI, -40)
+	m.call("f_liste_ekle")
+	m.leave()
+	m.ret()
+}
+
+// ============================================================
+// SÖZLÜK (dict) çalışma zamanı — ayrı-zincirleme hashtable, SABİT 256 kova.
+// Ayırıcı asla realloc/free yapmadığından (brk-tabanlı bump), kova dizisi
+// büyümez — çakışmalar zincir (dugum.sonraki) ile çözülür. Bu, çok büyük
+// sözlüklerde O(1) yerine O(zincir uzunluğu) demek ama DOĞRU kalır; bu
+// derleyicinin genel felsefesiyle aynı ("Correct, not fast" — README).
+//
+// Bellek düzeni:
+//   sözlük  [uzunluk:8][kovaDizisiPtr:8]                    16 bayt, sabit
+//   kovalar [kova0:8][kova1:8]...[kova255:8]                 düz dizi, HEADER YOK
+//            (leaOge KULLANILMAZ — o liste/metin'in +8 header'ı içindir)
+//   düğüm   [anahtar:8(metin)][değer:8(ham)][sonraki:8]       24 bayt
+//
+// anahtarlar() sırası kova sırasına göredir — yorumlayıcının EKLEME sırası
+// GARANTİSİ ile aynı DEĞİLDİR (bilinçli basitleştirme, bkz. dict semantiği
+// zaten sıra-bağımsız kullanılan yerlerde — ör. ağırlıklı toplam).
+// ============================================================
+const sozlukKovaSayisi = 256
+
+// sozluk_hash(rdi = metin) -> rax = kova indeksi (0..255)
+func (e *elfUretici) yardimciSozlukHash() {
+	m := e.m
+	m.etiketKoy("f_sozluk_hash")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)         // metin
+	m.movDolayliOku(rRAX, rRDI, 0)  // n
+	m.movYerelYaz(-16, rRAX)        // n
+	m.movYerelImm(-24, 0)           // h = 0
+	m.movYerelImm(-32, 0)           // i = 0
+	m.etiketKoy("Lsh_dongu")
+	m.movYerelOku(rRAX, -32)
+	m.movYerelOku(rRDX, -16)
+	m.cmpKayit(rRAX, rRDX)
+	m.jcc(0x8D, "Lsh_bitti") // jge
+	m.movYerelOku(rRDI, -8)
+	m.leaDolayli(rRDI, rRDI, 8)
+	m.movYerelOku(rRSI, -32)
+	m.movzxBaytDolayli(rRAX, rRDI, rRSI) // rax = bayt[i]
+	m.movYerelOku(rRCX, -24)             // rcx = h (eski)
+	m.movKayit(rRDX, rRCX)
+	m.shlImm(rRDX, 5)    // rdx = h<<5
+	m.subKayit(rRDX, rRCX) // rdx = h*31
+	m.addKayit(rRDX, rRAX) // rdx = h*31 + bayt[i]
+	m.movYerelYaz(-24, rRDX)
+	m.movYerelOku(rRAX, -32)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-32, rRAX)
+	m.jmp("Lsh_dongu")
+	m.etiketKoy("Lsh_bitti")
+	m.movYerelOku(rRAX, -24)
+	m.andImm32(rRAX, sozlukKovaSayisi-1)
+	m.leave()
+	m.ret()
+}
+
+// sozluk_yap() -> rax = yeni boş sözlük
+func (e *elfUretici) yardimciSozlukYap() {
+	m := e.m
+	m.etiketKoy("f_sozluk_yap")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 16)
+	m.movImm32(rRDI, sozlukKovaSayisi*8)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-8, rRAX) // kova dizisi (düz, header yok — brk taze bellek sıfırlanmış gelir)
+	m.movImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-16, rRAX) // sözlük
+	m.movImm32(rRCX, 0)
+	m.movDolayliYaz(rRAX, 0, rRCX) // uzunluk = 0
+	m.movYerelOku(rRCX, -8)
+	m.movDolayliYaz(rRAX, 8, rRCX) // kova dizisi ptr
+	m.movYerelOku(rRAX, -16)
+	m.leave()
+	m.ret()
+}
+
+// sozluk_koy(rdi = sözlük, rsi = anahtar[metin], rdx = değer[ham]) -> rax = sözlük
+func (e *elfUretici) yardimciSozlukKoy() {
+	m := e.m
+	m.etiketKoy("f_sozluk_koy")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)  // sözlük
+	m.movYerelYaz(-16, rRSI) // anahtar
+	m.movYerelYaz(-24, rRDX) // değer
+	m.movYerelOku(rRDI, -16)
+	m.call("f_sozluk_hash") // rax = kova
+	m.movYerelYaz(-32, rRAX)
+	m.movYerelOku(rRDI, -8)
+	m.movDolayliOku(rRDI, rRDI, 8) // kova dizisi ptr
+	m.movYerelOku(rRAX, -32)
+	m.shlImm(rRAX, 3)
+	m.addKayit(rRDI, rRAX)  // rdi = &kovalar[kova]
+	m.movYerelYaz(-40, rRDI) // kova hücresi adresi
+	m.movDolayliOku(rRCX, rRDI, 0) // rcx = zincirin baş düğümü
+	m.etiketKoy("Lkoy_ara")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lkoy_yeni") // jz
+	m.movYerelYaz(-48, rRCX) // düğüm ptr
+	m.movDolayliOku(rRDI, rRCX, 0) // düğüm.anahtar
+	m.movYerelOku(rRSI, -16)
+	m.call("f_metin_esit")
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lkoy_sonraki") // jz
+	// eşleşti: değeri güncelle
+	m.movYerelOku(rRAX, -48)
+	m.movYerelOku(rRCX, -24)
+	m.movDolayliYaz(rRAX, 8, rRCX)
+	m.movYerelOku(rRAX, -8)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lkoy_sonraki")
+	m.movYerelOku(rRCX, -48)
+	m.movDolayliOku(rRCX, rRCX, 16) // düğüm.sonraki
+	m.jmp("Lkoy_ara")
+	m.etiketKoy("Lkoy_yeni")
+	m.movImm32(rRDI, 24)
+	m.call("f_tan_ayir")
+	m.movYerelOku(rRCX, -16)
+	m.movDolayliYaz(rRAX, 0, rRCX) // anahtar
+	m.movYerelOku(rRCX, -24)
+	m.movDolayliYaz(rRAX, 8, rRCX) // değer
+	m.movYerelOku(rRDI, -40)
+	m.movDolayliOku(rRCX, rRDI, 0) // eski baş (0 olabilir)
+	m.movDolayliYaz(rRAX, 16, rRCX) // yeni.sonraki = eski baş
+	m.movDolayliYaz(rRDI, 0, rRAX)  // kova hücresi = yeni düğüm
+	m.movYerelOku(rRAX, -8)
+	m.movDolayliOku(rRCX, rRAX, 0)
+	m.incKayit(rRCX)
+	m.movDolayliYaz(rRAX, 0, rRCX) // uzunluk++
+	m.movYerelOku(rRAX, -8)
+	m.leave()
+	m.ret()
+}
+
+// sozluk_al(rdi = sözlük, rsi = anahtar[metin]) -> rax = değer (yoksa 0)
+func (e *elfUretici) yardimciSozlukAl() {
+	m := e.m
+	m.etiketKoy("f_sozluk_al")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)
+	m.movYerelYaz(-16, rRSI)
+	m.movYerelOku(rRDI, -16)
+	m.call("f_sozluk_hash")
+	m.movYerelYaz(-24, rRAX)
+	m.movYerelOku(rRDI, -8)
+	m.movDolayliOku(rRDI, rRDI, 8)
+	m.movYerelOku(rRAX, -24)
+	m.shlImm(rRAX, 3)
+	m.addKayit(rRDI, rRAX)
+	m.movDolayliOku(rRCX, rRDI, 0)
+	m.etiketKoy("Lal_ara")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lal_yok")
+	m.movYerelYaz(-32, rRCX)
+	m.movDolayliOku(rRDI, rRCX, 0)
+	m.movYerelOku(rRSI, -16)
+	m.call("f_metin_esit")
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lal_sonraki")
+	m.movYerelOku(rRAX, -32)
+	m.movDolayliOku(rRAX, rRAX, 8)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lal_sonraki")
+	m.movYerelOku(rRCX, -32)
+	m.movDolayliOku(rRCX, rRCX, 16)
+	m.jmp("Lal_ara")
+	m.etiketKoy("Lal_yok")
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+// sozluk_varmi(rdi = sözlük, rsi = anahtar[metin]) -> rax = 1/0
+func (e *elfUretici) yardimciSozlukVarmi() {
+	m := e.m
+	m.etiketKoy("f_sozluk_varmi")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)
+	m.movYerelYaz(-16, rRSI)
+	m.movYerelOku(rRDI, -16)
+	m.call("f_sozluk_hash")
+	m.movYerelYaz(-24, rRAX)
+	m.movYerelOku(rRDI, -8)
+	m.movDolayliOku(rRDI, rRDI, 8)
+	m.movYerelOku(rRAX, -24)
+	m.shlImm(rRAX, 3)
+	m.addKayit(rRDI, rRAX)
+	m.movDolayliOku(rRCX, rRDI, 0)
+	m.etiketKoy("Lvm_ara")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lvm_yok")
+	m.movYerelYaz(-32, rRCX)
+	m.movDolayliOku(rRDI, rRCX, 0)
+	m.movYerelOku(rRSI, -16)
+	m.call("f_metin_esit")
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lvm_sonraki")
+	m.movImm32(rRAX, 1)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lvm_sonraki")
+	m.movYerelOku(rRCX, -32)
+	m.movDolayliOku(rRCX, rRCX, 16)
+	m.jmp("Lvm_ara")
+	m.etiketKoy("Lvm_yok")
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+// sozluk_anahtarlar(rdi = sözlük) -> rax = liste (anahtar metinleri, kova sırasında)
+// sozluk_sil(rdi = sözlük, rsi = anahtar[metin]) -> rax = 1 bulunup
+// silindiyse, 0 yoksa. Zincirden UNLINK eder (prev.sonraki = mevcut.sonraki,
+// ya da ilk düğümdeyse kova hücresi güncellenir), uzunluk--. Bu olmadan
+// KVDeposu.tan gibi modüllerde "sil" sadece değeri boşaltabiliyordu — anahtar
+// sözlükte KALMAYA devam ediyordu, varMı() hâlâ 1 dönüyordu (KVDeposu.tan
+// yazılırken bulunan gerçek bug — sözlüğe hiç sil() eklenmemişti).
+func (e *elfUretici) yardimciSozlukSil() {
+	m := e.m
+	m.etiketKoy("f_sozluk_sil")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)  // sözlük
+	m.movYerelYaz(-16, rRSI) // anahtar
+	m.movYerelOku(rRDI, -16)
+	m.call("f_sozluk_hash")
+	m.movYerelYaz(-24, rRAX)
+	m.movYerelOku(rRDI, -8)
+	m.movDolayliOku(rRDI, rRDI, 8)
+	m.movYerelOku(rRAX, -24)
+	m.shlImm(rRAX, 3)
+	m.addKayit(rRDI, rRAX)
+	m.movYerelYaz(-32, rRDI)       // kova hücresi adresi
+	m.movDolayliOku(rRCX, rRDI, 0) // mevcut = baş düğüm
+	m.movYerelImm(-40, 0)          // önceki = yok (0)
+	m.etiketKoy("Lsil_ara")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lsil_yok") // jz
+	m.movYerelYaz(-48, rRCX)
+	m.movDolayliOku(rRDI, rRCX, 0) // mevcut.anahtar
+	m.movYerelOku(rRSI, -16)
+	m.call("f_metin_esit")
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lsil_sonraki") // jz
+	// bulundu — unlink
+	m.movYerelOku(rRCX, -48)
+	m.movDolayliOku(rRDX, rRCX, 16) // mevcut.sonraki
+	m.movYerelOku(rRAX, -40)
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Lsil_ilkti") // jz
+	m.movDolayliYaz(rRAX, 16, rRDX) // önceki.sonraki = mevcut.sonraki
+	m.jmp("Lsil_uzunluk")
+	m.etiketKoy("Lsil_ilkti")
+	m.movYerelOku(rRAX, -32)
+	m.movDolayliYaz(rRAX, 0, rRDX) // kova hücresi = mevcut.sonraki
+	m.etiketKoy("Lsil_uzunluk")
+	m.movYerelOku(rRAX, -8)
+	m.movDolayliOku(rRCX, rRAX, 0)
+	m.decKayit(rRCX)
+	m.movDolayliYaz(rRAX, 0, rRCX)
+	m.movImm32(rRAX, 1)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lsil_sonraki")
+	m.movYerelOku(rRAX, -48)
+	m.movYerelYaz(-40, rRAX) // önceki = mevcut
+	m.movDolayliOku(rRCX, rRAX, 16)
+	m.jmp("Lsil_ara")
+	m.etiketKoy("Lsil_yok")
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+func (e *elfUretici) yardimciSozlukAnahtarlar() {
+	m := e.m
+	m.etiketKoy("f_sozluk_anahtarlar")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 64)
+	m.movYerelYaz(-8, rRDI)        // sözlük
+	m.movDolayliOku(rRAX, rRDI, 0) // n (eleman sayısı)
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRCX, rRAX)
+	m.shlImm(rRCX, 3)
+	m.addImm32(rRCX, 8)
+	m.movKayit(rRDI, rRCX)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX) // liste
+	m.movYerelOku(rRCX, -16)
+	m.movDolayliYaz(rRAX, 0, rRCX) // liste uzunluğu = n
+	m.movYerelOku(rRDI, -8)
+	m.movDolayliOku(rRDI, rRDI, 8) // kova dizisi ptr
+	m.movYerelYaz(-32, rRDI)
+	m.movYerelImm(-40, 0) // kova = 0
+	m.movYerelImm(-48, 0) // yazPos = 0
+	m.etiketKoy("Lak_kova_dongu")
+	m.movYerelOku(rRAX, -40)
+	m.cmpImm32(rRAX, sozlukKovaSayisi)
+	m.jcc(0x8D, "Lak_bitti") // jge
+	m.movYerelOku(rRAX, -40)
+	m.shlImm(rRAX, 3)
+	m.movYerelOku(rRDI, -32)
+	m.addKayit(rRDI, rRAX)         // rdi = &kovalar[kova]
+	m.movDolayliOku(rRCX, rRDI, 0) // rcx = bu kovanin bas dugumu
+	m.etiketKoy("Lak_dugum_dongu")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lak_kova_sonraki") // jz
+	m.movYerelYaz(-56, rRCX)        // düğüm ptr
+	m.movYerelOku(rRAX, -24)        // liste ptr
+	m.movYerelOku(rRDX, -48)        // yazPos
+	m.leaOge(rRAX, rRAX, rRDX)      // liste + yazPos*8 + 8
+	m.movYerelOku(rRCX, -56)
+	m.movDolayliOku(rRCX, rRCX, 0) // düğüm.anahtar
+	m.movDolayliYaz(rRAX, 0, rRCX)
+	m.movYerelOku(rRAX, -48)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-48, rRAX) // yazPos++
+	m.movYerelOku(rRCX, -56)
+	m.movDolayliOku(rRCX, rRCX, 16) // düğüm.sonraki
+	m.jmp("Lak_dugum_dongu")
+	m.etiketKoy("Lak_kova_sonraki")
+	m.movYerelOku(rRAX, -40)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-40, rRAX)
+	m.jmp("Lak_kova_dongu")
+	m.etiketKoy("Lak_bitti")
+	m.movYerelOku(rRAX, -24)
+	m.leave()
+	m.ret()
+}
+
 // karakter(rdi = kod) -> rax = tek harflik metin
 func (e *elfUretici) yardimciKarakter() {
 	m := e.m
@@ -1994,6 +2934,110 @@ func (e *elfUretici) yardimciOku() {
 	m.movImm32(rRAX, 3)
 	m.syscall()
 	m.movYerelOku(rRAX, -40)
+	m.leave()
+	m.ret()
+}
+
+// dosya_var_mi(rdi = yol) -> rax = 1/0 — oku() ONCESI kontrol icin (oku()
+// eksik dosyada hicbir hata denetimi yapmadan cop uzunluk uretir, dene/
+// yakala elf'te yok, bu yuzden CAGRI TARAFI once bunu sormali).
+// sayi(rdi = metin) -> rax = tam sayı (int64).
+// KAPSAM: sadece TAM SAYI ayrıştırır (isteğe bağlı önde '-', sonra rakamlar,
+// ilk rakam-olmayanda durur). Yorumlayıcının sayı()'sı nokta/üs varsa
+// ONDALIK döndürür (dinamik tip) — elf statik tip derlediğinden bir CagriDugum
+// tek bir sabit dönüş tipine sahip olmalı; bu yüzden burada BİLEREK sadece
+// tam sayı yolu var (WAL/log ayrıştırma gibi kullanımların ihtiyacı bu).
+// Ondalık metin ayrıştırma ayrı bir işlev (ör. "kesirSayi") olarak eklenebilir.
+func (e *elfUretici) yardimciSayi() {
+	m := e.m
+	m.etiketKoy("f_sayi")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-16, rRAX) // n
+	m.movYerelImm(-24, 0)    // sonuç
+	m.movYerelImm(-32, 0)    // i
+	m.movYerelImm(-40, 1)    // işaret
+
+	m.movYerelOku(rRAX, -16)
+	m.cmpImm32(rRAX, 0)
+	m.jcc(0x84, "Lsy_dongu") // jz — boş metin, döngü zaten çalışmaz
+	m.movYerelOku(rRDI, -8)
+	m.leaDolayli(rRDI, rRDI, 8)
+	m.xorKayit(rRDX, rRDX)
+	m.movzxBaytDolayli(rRCX, rRDI, rRDX) // ilk bayt
+	m.cmpImm32(rRCX, 45)                 // '-'
+	m.jcc(0x85, "Lsy_dongu")             // jne
+	m.movYerelImm(-40, -1)
+	m.movYerelImm(-32, 1)
+
+	m.etiketKoy("Lsy_dongu")
+	m.movYerelOku(rRAX, -32)
+	m.movYerelOku(rRDX, -16)
+	m.cmpKayit(rRAX, rRDX)
+	m.jcc(0x8D, "Lsy_bitti") // jge
+	m.movYerelOku(rRDI, -8)
+	m.leaDolayli(rRDI, rRDI, 8)
+	m.movYerelOku(rRDX, -32)
+	m.movzxBaytDolayli(rRCX, rRDI, rRDX)
+	m.cmpImm32(rRCX, 48)
+	m.jcc(0x8C, "Lsy_bitti") // jl — '0' altı, rakam değil
+	m.cmpImm32(rRCX, 57)
+	m.jcc(0x8F, "Lsy_bitti") // jg — '9' üstü, rakam değil
+	m.subImm32(rRCX, 48)
+	m.movYerelOku(rRAX, -24)
+	m.movImm32(rRDX, 10)
+	m.imulKayit(rRAX, rRDX)
+	m.addKayit(rRAX, rRCX)
+	m.movYerelYaz(-24, rRAX)
+	m.movYerelOku(rRAX, -32)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-32, rRAX)
+	m.jmp("Lsy_dongu")
+	m.etiketKoy("Lsy_bitti")
+	m.movYerelOku(rRAX, -24)
+	m.movYerelOku(rRCX, -40)
+	m.imulKayit(rRAX, rRCX)
+	m.leave()
+	m.ret()
+}
+
+func (e *elfUretici) yardimciDosyaVarMi() {
+	m := e.m
+	m.etiketKoy("f_dosya_var_mi")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movYerelOku(rRDX, -16)
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRDI, -24)
+	m.xorKayit(rRSI, rRSI)
+	m.xorKayit(rRDX, rRDX)
+	m.movImm32(rRAX, 2) // sys_open (O_RDONLY)
+	m.syscall()
+	m.movYerelYaz(-32, rRAX) // fd (negatifse hata)
+	m.cmpImm32(rRAX, 0)
+	m.jcc(0x8C, "Ldvm_yok") // jl
+	m.movYerelOku(rRDI, -32)
+	m.movImm32(rRAX, 3) // close
+	m.syscall()
+	m.movImm32(rRAX, 1)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Ldvm_yok")
+	m.movImm32(rRAX, 0)
 	m.leave()
 	m.ret()
 }
@@ -2173,6 +3217,488 @@ func (e *elfUretici) yardimciYazDosya() {
 	m.ret()
 }
 
+// ekle_dosya(rdi = yol, rsi = içerik) — dosyanın SONUNA ekler (append),
+// yaz_dosya ile AYNI iskelet, tek fark O_TRUNC yerine O_APPEND. Log/WAL
+// tarzı depolama (B+Tree gibi) icin gerekli — TAN'da rastgele-erisimli
+// dosya seek/pwrite YOK, bu yuzden "gercek" disk motorlari EKLEME-ONCELIKLI
+// (append-only log + baslangicta tam okuma ile bellek-ici indeks yeniden
+// kurma) tasarlanmali.
+func (e *elfUretici) yardimciEkleDosya() {
+	m := e.m
+	m.etiketKoy("f_ekle_dosya")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)
+	m.movYerelYaz(-16, rRSI)
+	// yolu C-metnine cevir
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-24, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-32, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movYerelOku(rRDX, -24)
+	m.call("f_bellek_kopyala")
+	// open
+	m.movYerelOku(rRDI, -32)
+	m.movImm32(rRSI, 1089) // O_WRONLY|O_CREAT|O_APPEND
+	m.movImm32(rRDX, 493)  // 0755
+	m.movImm32(rRAX, 2)
+	m.syscall()
+	m.movYerelYaz(-40, rRAX)
+	// write(fd, icerik+8, uzunluk)
+	m.movYerelOku(rRDI, -40)
+	m.movYerelOku(rRSI, -16)
+	m.movDolayliOku(rRDX, rRSI, 0)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movImm32(rRAX, 1)
+	m.syscall()
+	// close
+	m.movYerelOku(rRDI, -40)
+	m.movImm32(rRAX, 3)
+	m.syscall()
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+// yuvarla(rdi = sayı[ondalık ham], rsi = basamak[int64]) -> rax = ondalık ham
+// SSE4.1 roundsd YOK (taban/tavan ile aynı gerekçe) — carpan=10^basamak ile
+// olcekle, sıfıra-dogru-kes + |kesir|>=0.5 ise 1 duzelt (yarım-noktalar
+// SIFIRDAN UZAGA yuvarlanir — Go'nun math.Round'u ile ayni kural), sonra
+// carpandan geri boll.
+func (e *elfUretici) yardimciYuvarla() {
+	m := e.m
+	m.etiketKoy("f_yuvarla")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 80)
+	m.movYerelYaz(-8, rRDI)  // sayı
+	m.movYerelYaz(-16, rRSI) // basamak
+	m.movImm64(rRAX, int64(math.Float64bits(1.0)))
+	m.movYerelYaz(-24, rRAX) // çarpan = 1.0
+	m.movYerelImm(-32, 0)    // i = 0
+	m.etiketKoy("Lyv_pow_dongu")
+	m.movYerelOku(rRAX, -32)
+	m.movYerelOku(rRDX, -16)
+	m.cmpKayit(rRAX, rRDX)
+	m.jcc(0x8D, "Lyv_pow_bitti") // jge
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRDX, int64(math.Float64bits(10.0)))
+	m.movqXmmKayit(1, rRDX)
+	m.sseIkili(0x59, 0, 1) // mulsd
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-24, rRAX)
+	m.movYerelOku(rRAX, -32)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-32, rRAX)
+	m.jmp("Lyv_pow_dongu")
+	m.etiketKoy("Lyv_pow_bitti")
+
+	// çarpılmış = sayı * çarpan
+	m.movYerelOku(rRAX, -8)
+	m.movqXmmKayit(0, rRAX)
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-40, rRAX) // çarpılmış
+
+	// trunc = kes(çarpılmış); frac = çarpılmış - float(trunc)
+	m.movYerelOku(rRAX, -40)
+	m.movqXmmKayit(0, rRAX)
+	m.cvtKesirTam(rRCX, 0) // rcx = trunc
+	m.movYerelYaz(-48, rRCX)
+	m.cvtTamKesir(1, rRCX) // xmm1 = float(trunc)
+	m.movYerelOku(rRAX, -40)
+	m.movqXmmKayit(0, rRAX) // xmm0 = çarpılmış
+	m.sseIkili(0x5C, 0, 1)  // subsd -> frac
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-56, rRAX) // frac
+
+	// kosul1 = frac >= 0.5
+	m.movYerelOku(rRAX, -56)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRDX, int64(math.Float64bits(0.5)))
+	m.movqXmmKayit(1, rRDX)
+	m.comisd(0, 1)
+	m.setcc(0x93, rRAX) // setae
+	m.movzx(rRAX, rRAX)
+	m.movYerelYaz(-64, rRAX)
+
+	// kosul2 = frac <= -0.5  <=>  -0.5 >= frac
+	m.movYerelOku(rRAX, -56)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRDX, int64(math.Float64bits(-0.5)))
+	m.movqXmmKayit(1, rRDX)
+	m.comisd(1, 0)
+	m.setcc(0x93, rRAX) // setae
+	m.movzx(rRAX, rRAX)
+	m.movYerelYaz(-72, rRAX)
+
+	// trunc += kosul1 - kosul2
+	m.movYerelOku(rRCX, -48)
+	m.movYerelOku(rRAX, -64)
+	m.movYerelOku(rRDX, -72)
+	m.subKayit(rRAX, rRDX)
+	m.addKayit(rRCX, rRAX)
+	m.movYerelYaz(-48, rRCX)
+
+	// sonuç = float(trunc) / çarpan
+	m.cvtTamKesir(0, rRCX)
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x5E, 0, 1) // divsd
+	m.movqKayitXmm(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+// birlestirListesi: birleştir(liste) icin ORTAK dongu — etiket adiyla UC
+// AYRI giris noktasi uretilir (metin/tam/kesir), donusum bos ise oge zaten
+// metin sayilip dogrudan birlestirilir, degilse verilen f_sayi_metne/
+// f_kesir_metne etiketinden gecirilir. Kod tekrari (indirect call yerine)
+// bilincli tercih — bu derleyicide fonksiyon-pointer/indirect-call destegi
+// yok, Go tarafinda tek sablon uc kez ornekleniyor.
+func (e *elfUretici) yardimciBirlestirListesi(etiket string, donusum string) {
+	m := e.m
+	m.etiketKoy(etiket)
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI) // liste
+	m.movImm32(rRDI, 8)
+	m.call("f_tan_ayir")
+	m.movImm32(rRCX, 0)
+	m.movDolayliYaz(rRAX, 0, rRCX)
+	m.movYerelYaz(-16, rRAX) // sonuç = ""
+	m.movYerelOku(rRAX, -8)
+	m.movDolayliOku(rRAX, rRAX, 0)
+	m.movYerelYaz(-24, rRAX) // n
+	m.movYerelImm(-32, 0)    // i
+	m.etiketKoy("L" + etiket + "_dongu")
+	m.movYerelOku(rRAX, -32)
+	m.movYerelOku(rRDX, -24)
+	m.cmpKayit(rRAX, rRDX)
+	m.jcc(0x8D, "L"+etiket+"_bitti") // jge
+	m.movYerelOku(rRAX, -8)
+	m.movYerelOku(rRCX, -32)
+	m.leaOge(rRAX, rRAX, rRCX)
+	m.movDolayliOku(rRAX, rRAX, 0) // oge ham deger
+	if donusum != "" {
+		m.movKayit(rRDI, rRAX)
+		m.call(donusum) // rax = metin
+	}
+	m.movKayit(rRSI, rRAX)   // oge (metin)
+	m.movYerelOku(rRDI, -16) // sonuç (a)
+	m.call("f_metin_birlestir")
+	m.movYerelYaz(-16, rRAX)
+	m.movYerelOku(rRAX, -32)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-32, rRAX)
+	m.jmp("L" + etiket + "_dongu")
+	m.etiketKoy("L" + etiket + "_bitti")
+	m.movYerelOku(rRAX, -16)
+	m.leave()
+	m.ret()
+}
+
+// rastgele(rdi = n) -> rax = [0,n) araliginda tam sayi, n<=0 ise 0.
+// getrandom/dev-urandom YOK (elf backend'de dosya-sistemi baglami minimal) —
+// RDTSC ile BIR KEZ tohumlanan xorshift64* ile uretiliyor. Kriptografik
+// KALITE gerektirmiyor (kullanim: Noral.tan agirlik ilklemesi gibi) — bu
+// yuzden interpreter'in math/rand'iyla BIT-BIT AYNI DIZI beklenmiyor/
+// beklenemez (farkli PRNG, farkli tohum kaynagi).
+func (e *elfUretici) yardimciRastgele() {
+	m := e.m
+	m.etiketKoy("f_rastgele")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	e.genel["__rasgeleIlk"] = true
+	e.genel["__rasgeleDurum"] = true
+
+	m.cmpImm32(rRDI, 0)
+	m.jcc(0x8F, "Lr_pozitif") // jg
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+	m.etiketKoy("Lr_pozitif")
+	m.pushKayit(rRDI) // n'i koru
+
+	m.movGenelOku(rRCX, "v___rasgeleIlk")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x85, "Lr_tohumlanmis") // jnz
+	m.rdtsc()
+	m.shlImm(rRDX, 32)
+	m.orKayit(rRAX, rRDX)
+	m.movImm64(rRCX, 1)
+	m.orKayit(rRAX, rRCX) // asla 0 olmasin (xorshift durumu 0'da takilir kalir)
+	m.movGenelYaz("v___rasgeleDurum", rRAX)
+	m.movImm32(rRCX, 1)
+	m.movGenelYaz("v___rasgeleIlk", rRCX)
+	m.etiketKoy("Lr_tohumlanmis")
+
+	// xorshift64
+	m.movGenelOku(rRAX, "v___rasgeleDurum")
+	m.movKayit(rRCX, rRAX)
+	m.shlImm(rRCX, 13)
+	m.xorKayit(rRAX, rRCX)
+	m.movKayit(rRCX, rRAX)
+	m.shrImm(rRCX, 7)
+	m.xorKayit(rRAX, rRCX)
+	m.movKayit(rRCX, rRAX)
+	m.shlImm(rRCX, 17)
+	m.xorKayit(rRAX, rRCX)
+	m.movGenelYaz("v___rasgeleDurum", rRAX)
+
+	m.movImm64(rRCX, 0x7FFFFFFFFFFFFFFF)
+	m.andKayit(rRAX, rRCX) // isaret bitini temizle -> her zaman >=0
+	m.popKayit(rRCX)       // n
+	m.cqo()
+	m.idivKayit(rRCX)
+	m.movKayit(rRAX, rRDX) // kalan = [0, n)
+	m.leave()
+	m.ret()
+}
+
+const elfLn2 = 0.6931471805599453
+const elfInvLn2 = 1.4426950408889634
+
+// e_ussu(rdi = x[ondalık ham]) -> rax = e^x[ham]
+// Donanimda dogrudan bir "exp" komutu YOK (x87 F2XM1 kullanilmiyor — SSE'ye
+// sadik kaliyoruz). Klasik aralik-indirgeme: x = k*ln2 + r, |r|<=ln2/2,
+// e^x = 2^k * e^r. e^r, Horner iç içe Taylor serisiyle (15 terim, |r|
+// kucuk oldugundan cift kesinlik icin fazlasiyla yeterli). 2^k, IEEE754 bit
+// deseni dogrudan insa edilerek (üs alanina k eklenerek) TEK CARPMAYLA elde
+// edilir — pow2 dongusu YOK.
+func (e *elfUretici) yardimciEUssu() {
+	m := e.m
+	m.etiketKoy("f_e_ussu")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 88)
+	m.movYerelYaz(-8, rRDI) // x
+
+	// y = x * (1/ln2)
+	m.movYerelOku(rRAX, -8)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRDX, int64(math.Float64bits(elfInvLn2)))
+	m.movqXmmKayit(1, rRDX)
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-16, rRAX) // y
+
+	// bias = (y>=0) ? 0.5 : -0.5
+	m.movYerelOku(rRAX, -16)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRDX, 0) // 0.0
+	m.movqXmmKayit(1, rRDX)
+	m.comisd(0, 1)
+	m.setcc(0x93, rRCX) // setae -> y>=0
+	m.movzx(rRCX, rRCX)
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lex_negbias") // jz
+	m.movImm64(rRAX, int64(math.Float64bits(0.5)))
+	m.jmp("Lex_biashazir")
+	m.etiketKoy("Lex_negbias")
+	m.movImm64(rRAX, int64(math.Float64bits(-0.5)))
+	m.etiketKoy("Lex_biashazir")
+	m.movYerelYaz(-24, rRAX) // bias
+
+	// y += bias ; k = kes(y)
+	m.movYerelOku(rRAX, -16)
+	m.movqXmmKayit(0, rRAX)
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x58, 0, 1)
+	m.cvtKesirTam(rRCX, 0) // rcx = k
+	m.movYerelYaz(-32, rRCX)
+
+	// r = x - k*ln2
+	m.cvtTamKesir(1, rRCX) // xmm1 = float(k)
+	m.movImm64(rRAX, int64(math.Float64bits(elfLn2)))
+	m.movqXmmKayit(2, rRAX) // xmm2 = ln2
+	m.sseIkili(0x59, 1, 2)  // xmm1 = k*ln2
+	m.movYerelOku(rRAX, -8)
+	m.movqXmmKayit(0, rRAX) // xmm0 = x
+	m.sseIkili(0x5C, 0, 1)  // xmm0 = x - k*ln2 = r
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-40, rRAX) // r
+
+	// acc = 1.0 ; i = 15 ; while i>=1: acc = 1 + (r/i)*acc
+	m.movImm64(rRAX, int64(math.Float64bits(1.0)))
+	m.movYerelYaz(-48, rRAX) // acc
+	m.movYerelImm(-56, 15)   // i
+	m.etiketKoy("Lex_poly_dongu")
+	m.movYerelOku(rRAX, -56)
+	m.cmpImm32(rRAX, 0)
+	m.jcc(0x8E, "Lex_poly_bitti") // jle
+	m.movYerelOku(rRCX, -56)
+	m.cvtTamKesir(0, rRCX) // xmm0 = float(i)
+	m.movYerelOku(rRAX, -40)
+	m.movqXmmKayit(1, rRAX) // xmm1 = r
+	m.sseIkili(0x5E, 1, 0)  // xmm1 = r/i
+	m.movYerelOku(rRAX, -48)
+	m.movqXmmKayit(0, rRAX) // xmm0 = acc
+	m.sseIkili(0x59, 1, 0)  // xmm1 = (r/i)*acc
+	m.movImm64(rRAX, int64(math.Float64bits(1.0)))
+	m.movqXmmKayit(0, rRAX) // xmm0 = 1.0
+	m.sseIkili(0x58, 0, 1)  // xmm0 = 1 + (r/i)*acc
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-48, rRAX) // acc
+	m.movYerelOku(rRAX, -56)
+	m.decKayit(rRAX)
+	m.movYerelYaz(-56, rRAX)
+	m.jmp("Lex_poly_dongu")
+	m.etiketKoy("Lex_poly_bitti")
+
+	// sonuç = acc * 2^k  (2^k'nin IEEE754 bit deseni dogrudan insa edilir)
+	m.movYerelOku(rRAX, -32)
+	m.addImm32(rRAX, 1023)
+	m.shlImm(rRAX, 52)
+	m.movqXmmKayit(1, rRAX) // xmm1 = 2^k
+	m.movYerelOku(rRAX, -48)
+	m.movqXmmKayit(0, rRAX) // xmm0 = acc
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.leave()
+	m.ret()
+}
+
+// log(rdi = x[ondalık ham, x>0]) -> rax = ln(x)[ham]
+// x = m * 2^e (m in [1,2)) IEEE754 bit alanlarindan DOGRUDAN cikarilir (frexp
+// esdegeri, hesaplama YOK — sadece bit maskeleme). ln(m), f=(m-1)/(m+1)
+// donusumuyle HIZLI yakinsayan seriyle: ln(m) = 2*(f + f^3/3 + f^5/5 + ...).
+// x<=0 icin tanimsiz (NaN/cop bit deseni donebilir) — dene/yakala elf'te
+// zaten yok, calisma-zamani hata kontrolu bu derleyicinin genelinde YOK.
+func (e *elfUretici) yardimciLog() {
+	m := e.m
+	m.etiketKoy("f_log")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 80)
+	m.movYerelYaz(-8, rRDI) // x bit deseni
+
+	// e = ((bits >> 52) & 0x7FF) - 1023
+	m.movYerelOku(rRAX, -8)
+	m.shrImm(rRAX, 52)
+	m.movImm64(rRCX, 0x7FF)
+	m.andKayit(rRAX, rRCX)
+	m.subImm32(rRAX, 1023)
+	m.movYerelYaz(-16, rRAX) // e
+
+	// m bits = (bits & 0x000FFFFFFFFFFFFF) | (1023<<52)
+	m.movYerelOku(rRAX, -8)
+	m.movImm64(rRCX, 0x000FFFFFFFFFFFFF)
+	m.andKayit(rRAX, rRCX)
+	m.movImm64(rRDX, int64(1023)<<52)
+	m.orKayit(rRAX, rRDX)
+	m.movYerelYaz(-24, rRAX) // m
+
+	// pay = m-1, payda = m+1
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRCX, int64(math.Float64bits(1.0)))
+	m.movqXmmKayit(1, rRCX)
+	m.sseIkili(0x5C, 0, 1) // m-1
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-32, rRAX) // pay
+
+	m.movYerelOku(rRAX, -24)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRCX, int64(math.Float64bits(1.0)))
+	m.movqXmmKayit(1, rRCX)
+	m.sseIkili(0x58, 0, 1) // m+1
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-40, rRAX) // payda
+
+	// f = pay/payda
+	m.movYerelOku(rRAX, -32)
+	m.movqXmmKayit(0, rRAX)
+	m.movYerelOku(rRAX, -40)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x5E, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-32, rRAX) // f (pay yerine kalici)
+
+	// f2 = f*f
+	m.movYerelOku(rRAX, -32)
+	m.movqXmmKayit(0, rRAX)
+	m.movYerelOku(rRAX, -32)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-40, rRAX) // f2 (payda yerine kalici)
+
+	// term = f ; sum = f
+	m.movYerelOku(rRAX, -32)
+	m.movYerelYaz(-48, rRAX) // term
+	m.movYerelYaz(-56, rRAX) // sum
+	m.movYerelImm(-64, 3)    // denom
+	m.movYerelImm(-72, 8)    // sayac
+
+	m.etiketKoy("Llog_dongu")
+	m.movYerelOku(rRAX, -72)
+	m.cmpImm32(rRAX, 0)
+	m.jcc(0x8E, "Llog_bitti") // jle
+
+	// term *= f2
+	m.movYerelOku(rRAX, -48)
+	m.movqXmmKayit(0, rRAX)
+	m.movYerelOku(rRAX, -40)
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-48, rRAX)
+
+	// sum += term/denom
+	m.movYerelOku(rRCX, -64)
+	m.cvtTamKesir(1, rRCX) // xmm1 = float(denom)
+	m.movYerelOku(rRAX, -48)
+	m.movqXmmKayit(0, rRAX) // xmm0 = term
+	m.sseIkili(0x5E, 0, 1)  // xmm0 = term/denom
+	m.movYerelOku(rRAX, -56)
+	m.movqXmmKayit(1, rRAX) // xmm1 = sum
+	m.sseIkili(0x58, 0, 1)  // xmm0 = sum + term/denom
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-56, rRAX)
+
+	m.movYerelOku(rRAX, -64)
+	m.addImm32(rRAX, 2)
+	m.movYerelYaz(-64, rRAX) // denom += 2
+	m.movYerelOku(rRAX, -72)
+	m.decKayit(rRAX)
+	m.movYerelYaz(-72, rRAX) // sayac--
+	m.jmp("Llog_dongu")
+	m.etiketKoy("Llog_bitti")
+
+	// ln(m) = 2*sum
+	m.movYerelOku(rRAX, -56)
+	m.movqXmmKayit(0, rRAX)
+	m.movImm64(rRCX, int64(math.Float64bits(2.0)))
+	m.movqXmmKayit(1, rRCX)
+	m.sseIkili(0x59, 0, 1)
+	m.movqKayitXmm(rRAX, 0)
+	m.movYerelYaz(-56, rRAX) // ln(m)
+
+	// sonuç = e*ln2 + ln(m)
+	m.movYerelOku(rRCX, -16)
+	m.cvtTamKesir(0, rRCX) // xmm0 = float(e)
+	m.movImm64(rRAX, int64(math.Float64bits(elfLn2)))
+	m.movqXmmKayit(1, rRAX)
+	m.sseIkili(0x59, 0, 1) // xmm0 = e*ln2
+	m.movYerelOku(rRAX, -56)
+	m.movqXmmKayit(1, rRAX) // xmm1 = ln(m)
+	m.sseIkili(0x58, 0, 1)  // xmm0 = e*ln2 + ln(m)
+	m.movqKayitXmm(rRAX, 0)
+	m.leave()
+	m.ret()
+}
 
 // kesir_metne(rdi = double bit deseni) -> rax = metin
 // 6 ondalik basamak, sondaki sifirlar kirpilir. libc YOK.
@@ -2208,6 +3734,21 @@ func (e *elfUretici) yardimciKesirMetne() {
 	m.sseIkili(0x58, 0, 2) // addsd
 	m.cvtKesirTam(rRDX, 0)
 	m.movYerelYaz(-72, rRDX)
+
+	// --- YUVARLAMA TASMASI ---
+	// kesirli kisim 0.9999995'in UZERINDEYSE (ör. log(e) ~ 0.999999999999998)
+	// yukaridaki "+0.5, kes" 1000000 uretir — 6 basamaga SIGMAZ. Bu
+	// yakalanmadan "sondaki sifirlari kirp" dongusu 1000000'i sifirlara
+	// bolerek "0.0" gibi YANLIS bir sonuca kirpiyordu (tam kisim asla
+	// arttirilmadigi icin). Tasma varsa tam kismi 1 arttir, kesri sifirla.
+	m.cmpImm32(rRDX, 1000000)
+	m.jcc(0x85, "Lkm_tasmayok") // jne
+	m.movYerelOku(rRAX, -64)
+	m.incKayit(rRAX)
+	m.movYerelYaz(-64, rRAX)
+	m.movImm32(rRDX, 0)
+	m.movYerelYaz(-72, rRDX)
+	m.etiketKoy("Lkm_tasmayok")
 
 	// --- sondaki sifirlari kirp ---
 	m.movImm32(rR10, 6)
@@ -2361,6 +3902,136 @@ func (e *elfUretici) yardimciYazSayi() {
 	m.ret()
 }
 
+// elfIceAlGenislet: "içe al" statik derleme zamaninda cozulur — elf tek
+// gecisli/tum-program derleyicisi oldugundan (yorumlayicinin aksine calisma
+// aninda dosya okuyamaz), her IceAlDugum'un yerine cozulmus modulun (rekursif
+// olarak genisletilmis) govdesi yerlestirilir. Yorumlayicinin y.iceAl() ile
+// AYNI kural: modul en fazla bir kez yuklenir (mutlak yol ile), donguculer
+// otomatik engellenir (Yorumlayici.go:134-166 ile karsilastir).
+func elfIceAlGenislet(agac []Dugum, kaynakDizin string, alinanlar map[string]bool) []Dugum {
+	var sonuc []Dugum
+	for _, d := range agac {
+		ia, ok := d.(IceAlDugum)
+		if !ok {
+			sonuc = append(sonuc, d)
+			continue
+		}
+		yol, bulundu := modulAra(ia.Dosya, kaynakDizin)
+		if !bulundu {
+			panic(TanHata{Satir: ia.Satir, Mesaj: fmt.Sprintf("modül bulunamadı: %s\n%s", ia.Dosya, modulAramaYollari(ia.Dosya, kaynakDizin))})
+		}
+		mutlak, err := filepath.Abs(yol)
+		if err != nil {
+			mutlak = yol
+		}
+		if alinanlar[mutlak] {
+			continue // döngüsel/tekrar içe alma — atla (yorumlayıcıyla aynı kural)
+		}
+		alinanlar[mutlak] = true
+		kaynak, err := os.ReadFile(yol)
+		if err != nil {
+			panic(TanHata{Satir: ia.Satir, Mesaj: fmt.Sprintf("modül okunamadı: %v", err)})
+		}
+		lexer := YeniLexer(string(kaynak))
+		parser := YeniParser(lexer.Tokenle())
+		modAgac := parser.Ayristir()
+		sonuc = append(sonuc, elfIceAlGenislet(modAgac, filepath.Dir(mutlak), alinanlar)...)
+	}
+	return sonuc
+}
+
+// elfCagrilanAdlariTopla: bir AST dugumu icinde (rekursif) gecen TUM
+// CagriDugum adlarini hedef kumeye ekler. elfUlasilabilirIslevler'in
+// yapi taslarindan biri.
+func elfCagrilanAdlariTopla(d Dugum, hedef map[string]bool) {
+	switch n := d.(type) {
+	case AtamaDugum:
+		elfCagrilanAdlariTopla(n.Deger, hedef)
+	case IndeksAtamaDugum:
+		elfCagrilanAdlariTopla(n.Hedef, hedef)
+		elfCagrilanAdlariTopla(n.Indeks, hedef)
+		elfCagrilanAdlariTopla(n.Deger, hedef)
+	case YazDugum:
+		elfCagrilanAdlariTopla(n.Deger, hedef)
+	case EgerDugum:
+		elfCagrilanAdlariTopla(n.Kosul, hedef)
+		for _, s := range n.Govde {
+			elfCagrilanAdlariTopla(s, hedef)
+		}
+		for _, s := range n.Degilse {
+			elfCagrilanAdlariTopla(s, hedef)
+		}
+	case IkenDugum:
+		elfCagrilanAdlariTopla(n.Kosul, hedef)
+		for _, s := range n.Govde {
+			elfCagrilanAdlariTopla(s, hedef)
+		}
+	case HerDugum:
+		elfCagrilanAdlariTopla(n.Liste, hedef)
+		for _, s := range n.Govde {
+			elfCagrilanAdlariTopla(s, hedef)
+		}
+	case DondurDugum:
+		if n.Deger != nil {
+			elfCagrilanAdlariTopla(n.Deger, hedef)
+		}
+	case CagriDugum:
+		hedef[n.Ad] = true
+		for _, a := range n.Argumanlar {
+			elfCagrilanAdlariTopla(a, hedef)
+		}
+	case IkiliDugum:
+		elfCagrilanAdlariTopla(n.Sol, hedef)
+		if n.Sag != nil {
+			elfCagrilanAdlariTopla(n.Sag, hedef)
+		}
+	case IndeksDugum:
+		elfCagrilanAdlariTopla(n.Hedef, hedef)
+		elfCagrilanAdlariTopla(n.Indeks, hedef)
+	case ListeDugum:
+		for _, x := range n.Elemanlar {
+			elfCagrilanAdlariTopla(x, hedef)
+		}
+	case SozlukDugum:
+		for _, x := range n.Anahtarlar {
+			elfCagrilanAdlariTopla(x, hedef)
+		}
+		for _, x := range n.Degerler {
+			elfCagrilanAdlariTopla(x, hedef)
+		}
+	}
+}
+
+// elfUlasilabilirIslevler: anaGovde'den (dogrudan/dolayli cagri zinciriyle)
+// erisilebilen islev adlarinin kumesini dondurur (BFS).
+func elfUlasilabilirIslevler(anaGovde []Dugum, islevler []IslevDugum) map[string]bool {
+	govdeler := map[string][]Dugum{}
+	for _, isv := range islevler {
+		govdeler[isv.Ad] = isv.Govde
+	}
+	ulasilan := map[string]bool{}
+	var kuyruk []string
+	topla := func(govde []Dugum) {
+		cagrilan := map[string]bool{}
+		for _, d := range govde {
+			elfCagrilanAdlariTopla(d, cagrilan)
+		}
+		for ad := range cagrilan {
+			if _, varMi := govdeler[ad]; varMi && !ulasilan[ad] {
+				ulasilan[ad] = true
+				kuyruk = append(kuyruk, ad)
+			}
+		}
+	}
+	topla(anaGovde)
+	for len(kuyruk) > 0 {
+		ad := kuyruk[0]
+		kuyruk = kuyruk[1:]
+		topla(govdeler[ad])
+	}
+	return ulasilan
+}
+
 // ============================================================
 // derleElf: uçtan uca — makine kodu + ELF, sıfır dış araç
 // ============================================================
@@ -2384,6 +4055,13 @@ func derleElf(dosya string, cikti string) {
 	parser := YeniParser(lexer.Tokenle())
 	agac := parser.Ayristir()
 
+	// --- ICE AL: modul agaclarini derleme zamaninda ic ice yerlestir ---
+	anaDizinMutlak, err := filepath.Abs(filepath.Dir(dosya))
+	if err != nil {
+		anaDizinMutlak = filepath.Dir(dosya)
+	}
+	agac = elfIceAlGenislet(agac, anaDizinMutlak, map[string]bool{})
+
 	// --- OPTIMIZE GECISI: sabit katlama, cebirsel sadelestirme, olu kod ---
 	opt := YeniOptimizer()
 	agac = opt.Govde(agac)
@@ -2400,6 +4078,24 @@ func derleElf(dosya string, cikti string) {
 			anaGovde = append(anaGovde, d)
 		}
 	}
+
+	// --- KULLANILMAYAN ISLEVLERI AT ---
+	// icealGenislet() ile artik butun modul agaci tek programa katiliyor —
+	// bir kutuphane dosyasindaki HIC CAGRILMAYAN islevler de (ör. bu programda
+	// kullanilmayan yardimci fonksiyonlar) govdeYaz/tip-cikarim asamasindan
+	// gecmek zorunda kalirdi. Boyle bir islev jenerik bir parametre alip
+	// (ornegin uzunluk(liste) gibi) TIP-KATI bir yerlesik cagirirsa, cagri
+	// yeri olmadigindan parametre tipi asla ogrenilemez ve "tam" a duser —
+	// derleme HATASIYLA duruyordu (halbuki program o islevi hic kullanmiyor).
+	// Ana govdeden ULASILABILIR islevleri bul, geri kalanini derleme.
+	ulasilanIslevler := elfUlasilabilirIslevler(anaGovde, islevler)
+	var kullanilanIslevler []IslevDugum
+	for _, isv := range islevler {
+		if ulasilanIslevler[isv.Ad] {
+			kullanilanIslevler = append(kullanilanIslevler, isv)
+		}
+	}
+	islevler = kullanilanIslevler
 
 	e := &elfUretici{m: yeniMakineKodu(), genel: map[string]bool{}, tipler: map[string]Tip{}, islevTipi: map[string]Tip{}, parametreTipi: map[string]Tip{}}
 
@@ -2419,6 +4115,19 @@ func derleElf(dosya string, cikti string) {
 		// yetmiyordu — ilk turda islevTipi bos oldugu icin sessizce "tam"a
 		// duesuyordu (bkz. "tokenler = tokenle(kaynak)" -> "tam" hatasi).
 		e.govdeTipleriniTopla(anaGovde)
+		// GLOBAL sozluklerin deger tipini anaGovde + TUM islev govdeleri
+		// birlikte taranarak coz (bkz. sozlukElemanlariniCoz yorumu) — bu,
+		// per-islev "eski" restore'undan ONCE, e.tipler["kX"] uzerinde
+		// (anaGovde'ye ait, hicbir islevin eski-restore'u tarafindan
+		// SILINMEYEN girdi) calisir.
+		{
+			govdeler := make([][]Dugum, 0, len(islevler)+1)
+			govdeler = append(govdeler, anaGovde)
+			for _, isv := range islevler {
+				govdeler = append(govdeler, isv.Govde)
+			}
+			e.sozlukElemanlariniCoz(govdeler...)
+		}
 		for _, isv := range islevler {
 			// parametre tiplerini cagri yerlerinden tahmin et
 			eski := map[string]Tip{}
@@ -2437,6 +4146,7 @@ func derleElf(dosya string, cikti string) {
 				}
 			}
 			e.govdeTipleriniTopla(isv.Govde) // yerel degisken tipleri
+			e.sozlukElemanlariniCoz(isv.Govde)
 			if t, bulundu := e.dondurTipi(isv.Govde); bulundu {
 				e.islevTipi[isv.Ad] = t
 			}
@@ -2469,17 +4179,45 @@ func derleElf(dosya string, cikti string) {
 	e.yardimciMetinEsit()
 	e.yardimciKarakter()
 	e.yardimciKod()
+	e.yardimciHarfler()
+	e.yardimciMetinAraligi()
+	e.yardimciParcala()
+	e.yardimciSozlukHash()
+	e.yardimciSozlukYap()
+	e.yardimciSozlukKoy()
+	e.yardimciSozlukAl()
+	e.yardimciSozlukVarmi()
+	e.yardimciSozlukAnahtarlar()
+	e.yardimciSozlukSil()
 	e.yardimciOku()
 	e.yardimciYazDosya()
 	e.yardimciYazBaytlar()
 	e.yardimciArgsay()
 	e.yardimciArg()
 	e.yardimciKesirMetne()
+	e.yardimciYuvarla()
+	e.yardimciEUssu()
+	e.yardimciLog()
+	e.yardimciRastgele()
+	e.yardimciBirlestirListesi("f_birlestir_metin", "")
+	e.yardimciBirlestirListesi("f_birlestir_tam", "f_sayi_metne")
+	e.yardimciBirlestirListesi("f_birlestir_kesir", "f_kesir_metne")
+	e.yardimciEkleDosya()
+	e.yardimciDosyaVarMi()
+	e.yardimciSayi()
 	e.yardimciYazKesir()
 	for _, isv := range islevler {
 		e.islevYaz(isv)
 	}
 	e.govdeTipleriniTopla(anaGovde) // ana govde tipleri
+	{
+		govdeler := make([][]Dugum, 0, len(islevler)+1)
+		govdeler = append(govdeler, anaGovde)
+		for _, isv := range islevler {
+			govdeler = append(govdeler, isv.Govde)
+		}
+		e.sozlukElemanlariniCoz(govdeler...)
+	}
 	e.m.etiketKoy("_start")
 	e.argvYakala() // argv tabanini sakla (rsp henuz bozulmadi)
 	e.yiginIlkle() // yigin ayiriciyi hazirla (brk)

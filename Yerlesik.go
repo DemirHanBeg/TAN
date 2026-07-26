@@ -282,6 +282,13 @@ func init() {
 			return string(veri)
 		},
 
+		// dosyaVarMi(yol): dosya var mı (oku() öncesi kontrol için — oku()
+		// eksik dosyada hata fırlatır, dene/yakala elf'te yok)
+		"dosyaVarMi": func(a []Deger, satir int) Deger {
+			_, err := os.Stat(metne(a[0]))
+			return err == nil
+		},
+
 		// yaz_dosya(dosya, metin): metni dosyaya yazar (üzerine)
 		// yazBaytlar(yol, liste): liste ogelerinin DUSUK BAYTINI ham yazar.
 		// UTF-8 kodlamasi YAPILMAZ — ikili dosya uretimi icin.
