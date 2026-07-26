@@ -32,13 +32,13 @@ son
 
 işlev kvKoy(anahtar, deger)
     kKvVeri[anahtar] = deger
-    eğer metinEsit(kKvWalYolu[0], "") == 0 ise
+    eğer değil metinEsit(kKvWalYolu[0], "") ise
         ekle_dosya(kKvWalYolu[0], "K " + anahtar + " " + deger + "\n")
     son
 son
 
 işlev kvAl(anahtar)
-    eğer varMı(kKvVeri, anahtar) == 0 ise
+    eğer değil varMı(kKvVeri, anahtar) ise
         döndür ""
     son
     döndür kKvVeri[anahtar]
@@ -50,7 +50,7 @@ son
 
 işlev kvSil(anahtar)
     bulunduMu = sil(kKvVeri, anahtar)
-    eğer bulunduMu == 1 ve metinEsit(kKvWalYolu[0], "") == 0 ise
+    eğer bulunduMu ve değil metinEsit(kKvWalYolu[0], "") ise
         ekle_dosya(kKvWalYolu[0], "S " + anahtar + "\n")
     son
     döndür bulunduMu
@@ -62,7 +62,7 @@ son
 
 # --- WAL dosyasından deposu yeniden kurar ---
 işlev kvYukle()
-    eğer dosyaVarMi(kKvWalYolu[0]) == 0 ise
+    eğer değil dosyaVarMi(kKvWalYolu[0]) ise
         döndür 0
     son
     icerik = oku(kKvWalYolu[0])

@@ -2644,7 +2644,7 @@ işlev islevDonusTipleriBirGecis(tokenler, islevTipKutu)
             eğer iceIslevVar == 0 ise
                 yeniTip = govdeDonusTipiCikar(tokenler, i, govdeSonu - 1, islevTipKutu)
                 eskiTip = islevTipiAra(islevTipKutu, ad)
-                eğer metinEsit(eskiTip, yeniTip) == 0 ise
+                eğer değil metinEsit(eskiTip, yeniTip) ise
                     degisti = 1
                 son
                 z = islevTipiKaydet(islevTipKutu, ad, yeniTip)

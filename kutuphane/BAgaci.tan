@@ -200,7 +200,7 @@ son
 # --- anahtar=deger ekler/günceller (WAL yolu ayarlıysa günlüğe de yazar) ---
 işlev bagacEkle(anahtar, deger)
     bagacEkleSessiz(anahtar, deger)
-    eğer metinEsit(kWalYoluKutu[0], "") == 0 ise
+    eğer değil metinEsit(kWalYoluKutu[0], "") ise
         ekle_dosya(kWalYoluKutu[0], "S " + metin(anahtar) + " " + metin(deger) + "\n")
     son
 son
@@ -264,7 +264,7 @@ son
 # --- anahtarı yapraktan siler (düğüm birleştirme YOK, üstte açıklandı) ---
 işlev bagacSil(anahtar)
     bulunduMu = bagacSilSessiz(anahtar)
-    eğer bulunduMu == 1 ve metinEsit(kWalYoluKutu[0], "") == 0 ise
+    eğer bulunduMu == 1 ve değil metinEsit(kWalYoluKutu[0], "") ise
         ekle_dosya(kWalYoluKutu[0], "D " + metin(anahtar) + "\n")
     son
     döndür bulunduMu
@@ -301,7 +301,7 @@ son
 
 # --- WAL dosyasından ağacı yeniden kurar (bagacAyarla'dan SONRA çağır) ---
 işlev bagacYukle()
-    eğer dosyaVarMi(kWalYoluKutu[0]) == 0 ise
+    eğer değil dosyaVarMi(kWalYoluKutu[0]) ise
         döndür 0
     son
     icerik = oku(kWalYoluKutu[0])

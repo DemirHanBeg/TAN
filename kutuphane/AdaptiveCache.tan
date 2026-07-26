@@ -1,0 +1,172 @@
+# ============================================================
+# AdaptiveCache.tan — NEXUS Katman 2 (Adaptive Memory Brain) MVP
+# ------------------------------------------------------------
+# NexusCore/FazC_Katman2.md tasarımının kodlanmış hâli. Kapsam (v1):
+#   - Hot Data Detection: LFU (erişim sayacı, kapasite aşılınca en az
+#     erişilen anahtar tahliye edilir).
+#   - Automatic Compression: basit RLE, sadece FAYDALIYSA (sıkıştırılmış
+#     hâl orijinalden kısaysa) kullanılır — okuma tarafında TAMAMEN şeffaf.
+#   - Memory Pressure Handling: /proc/meminfo okunup MemAvailable düşükse
+#     kapasite otomatik yarıya iner (Linux dışı sistemde ya da dosya
+#     yoksa güvenli varsayılan: "baskı yok").
+#   - NUMA Awareness / Predictive Cache (Markov) — v1 KAPSAM DIŞI, bkz.
+#     FazC_Katman2.md bölüm 2.
+#
+# GİRDİ SÖZLEŞMESİ: anahtar VE değer ikisi de METİN olmalı (LsmDeposu.tan/
+# KVDeposu.tan ile aynı kısıt — RLE sıkıştırma metin varsayıyor).
+#
+# Kullanım:
+#   içe al "kutuphane/AdaptiveCache.tan"
+#   ob = onbellekAc(1000)
+#   onbellekKoy(ob, "ad", "Ayşe")
+#   yaz(onbellekAl(ob, "ad"))       # Ayşe
+# ============================================================
+
+kayıt AdaptifOnbellek
+    veri              # sözlük: anahtar -> saklanan deger (sıkıştırılmış OLABİLİR)
+    erisimSayaci      # sözlük: anahtar -> tam (LFU sayacı)
+    sikistirilmisMi   # sözlük: anahtar -> mantıksal
+    kapasite          # tam: şu an geçerli kapasite (bellek baskısında küçülebilir)
+    orijinalKapasite  # tam: onbellekAc'a verilen özgün kapasite
+    kontrolSayaci     # tam: /proc/meminfo kontrolünü HER çağrıda değil, aralıklı yapmak için
+son
+
+kACSikistirmaEsigi = 64
+kACMeminfoKontrolAraligi = 20
+kACBasincEsikKB = 204800
+
+# --- RLE (run-length encoding): basit, kayıpsız sıkıştırma ---
+# Biçim: her tekrar-bloğu "sayı" + SOH(1) + karakter + STX(2) olarak kodlanır.
+işlev rleSikistir(metin)
+    n = uzunluk(metin)
+    eğer n == 0 ise
+        döndür ""
+    son
+    sonuc = ""
+    i = 0
+    iken i < n
+        c = metinAl(metin, i)
+        sayac = 1
+        iken i + sayac < n ve metinEsit(metinAl(metin, i + sayac), c)
+            sayac = sayac + 1
+        son
+        sonuc = sonuc + metin(sayac) + karakter(1) + c + karakter(2)
+        i = i + sayac
+    son
+    döndür sonuc
+son
+
+işlev rleCoz(sikistirilmis)
+    girdiler = parçala(sikistirilmis, karakter(2))
+    sonuc = ""
+    her girdi girdiler içinde
+        eğer uzunluk(girdi) > 0 ise
+            parcalar = parçala(girdi, karakter(1))
+            sayac = sayı(parcalar[0])
+            c = parcalar[1]
+            j = 0
+            iken j < sayac
+                sonuc = sonuc + c
+                j = j + 1
+            son
+        son
+    son
+    döndür sonuc
+son
+
+işlev onbellekAc(kapasite)
+    döndür AdaptifOnbellek(sözlük(), sözlük(), sözlük(), kapasite, kapasite, 0)
+son
+
+# acBellekBasincindaMi: /proc/meminfo'dan "MemAvailable" satırını okur.
+# Dosya yoksa (Linux dışı sistem) GÜVENLİ VARSAYILAN: baskı yok (0).
+işlev acBellekBasincindaMi()
+    eğer değil dosyaVarMi("/proc/meminfo") ise
+        döndür 0
+    son
+    satirlar_ = satırlar(oku("/proc/meminfo"))
+    her satir satirlar_ içinde
+        parcalar = parçala(satir, ":")
+        eğer uzunluk(parcalar) >= 2 ve metinEsit(kırp(parcalar[0]), "MemAvailable") ise
+            kalan = kırp(parcalar[1])
+            sayiParcalari = parçala(kalan, " ")
+            eğer uzunluk(sayiParcalari) >= 1 ise
+                kBDeger = sayı(sayiParcalari[0])
+                döndür kBDeger < kACBasincEsikKB
+            son
+        son
+    son
+    döndür 0
+son
+
+işlev onbellekTahliyeEt(ob)
+    anahtarListesi = anahtarlar(ob.veri)
+    eğer uzunluk(anahtarListesi) == 0 ise
+        döndür 0
+    son
+    enAzAnahtar = anahtarListesi[0]
+    enAzSayac = ob.erisimSayaci[enAzAnahtar]
+    her k anahtarListesi içinde
+        s = ob.erisimSayaci[k]
+        eğer s < enAzSayac ise
+            enAzSayac = s
+            enAzAnahtar = k
+        son
+    son
+    sil(ob.veri, enAzAnahtar)
+    sil(ob.erisimSayaci, enAzAnahtar)
+    sil(ob.sikistirilmisMi, enAzAnahtar)
+    döndür 0
+son
+
+işlev onbellekKoy(ob, anahtar, deger)
+    ob.kontrolSayaci = ob.kontrolSayaci + 1
+    eğer ob.kontrolSayaci >= kACMeminfoKontrolAraligi ise
+        ob.kontrolSayaci = 0
+        eğer acBellekBasincindaMi() ise
+            ob.kapasite = tamBol(ob.orijinalKapasite, 2)
+        son
+    son
+
+    saklanacak = deger
+    sikistirildi = 0
+    eğer uzunluk(deger) > kACSikistirmaEsigi ise
+        aday = rleSikistir(deger)
+        eğer uzunluk(aday) < uzunluk(deger) ise
+            saklanacak = aday
+            sikistirildi = 1
+        son
+    son
+
+    yeniAnahtarMi = değil var_mı(ob.veri, anahtar)
+    ob.veri[anahtar] = saklanacak
+    ob.sikistirilmisMi[anahtar] = sikistirildi
+    ob.erisimSayaci[anahtar] = 1
+
+    eğer yeniAnahtarMi ise
+        iken uzunluk(anahtarlar(ob.veri)) > ob.kapasite
+            onbellekTahliyeEt(ob)
+        son
+    son
+    döndür 0
+son
+
+işlev onbellekAl(ob, anahtar)
+    eğer değil var_mı(ob.veri, anahtar) ise
+        döndür yok
+    son
+    ob.erisimSayaci[anahtar] = ob.erisimSayaci[anahtar] + 1
+    ham = ob.veri[anahtar]
+    eğer ob.sikistirilmisMi[anahtar] ise
+        döndür rleCoz(ham)
+    son
+    döndür ham
+son
+
+işlev onbellekIcindeMi(ob, anahtar)
+    döndür var_mı(ob.veri, anahtar)
+son
+
+işlev onbellekBoyut(ob)
+    döndür uzunluk(anahtarlar(ob.veri))
+son

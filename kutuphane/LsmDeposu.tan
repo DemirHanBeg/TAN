@@ -106,13 +106,13 @@ işlev lsmAc(tabanYolu, esik)
         her satir walSatirlari içinde
             parcalar = parçala(satir, karakter(9))
             eğer uzunluk(parcalar) >= 3 ve metinEsit(parcalar[0], "S") ise
-                eğer var_mı(db.memtable, parcalar[1]) == 0 ise
+                eğer değil var_mı(db.memtable, parcalar[1]) ise
                     db.memtableBoyut = db.memtableBoyut + 1
                 son
                 db.memtable[parcalar[1]] = parcalar[2]
             son
             eğer uzunluk(parcalar) == 2 ve metinEsit(parcalar[0], "D") ise
-                eğer var_mı(db.memtable, parcalar[1]) == 0 ise
+                eğer değil var_mı(db.memtable, parcalar[1]) ise
                     db.memtableBoyut = db.memtableBoyut + 1
                 son
                 db.memtable[parcalar[1]] = kLsmTombstone
@@ -188,7 +188,7 @@ işlev lsmCompactEt(db)
     icerik = ""
     her k anahtarListesi içinde
         deger = birlesik[k]
-        eğer metinEsit(deger, kLsmTombstone) == 0 ise
+        eğer değil metinEsit(deger, kLsmTombstone) ise
             icerik = icerik + k + karakter(9) + deger + karakter(10)
         son
     son
@@ -248,7 +248,7 @@ son
 # memtableBoyut ayrı bir sayaç olarak tutuluyor, O(1) artıyor.
 işlev lsmKoy(db, anahtar, deger)
     ekle_dosya(db.walYolu, "S" + karakter(9) + anahtar + karakter(9) + deger + karakter(10))
-    eğer var_mı(db.memtable, anahtar) == 0 ise
+    eğer değil var_mı(db.memtable, anahtar) ise
         db.memtableBoyut = db.memtableBoyut + 1
     son
     db.memtable[anahtar] = deger
@@ -260,7 +260,7 @@ son
 
 işlev lsmSil(db, anahtar)
     ekle_dosya(db.walYolu, "D" + karakter(9) + anahtar + karakter(10))
-    eğer var_mı(db.memtable, anahtar) == 0 ise
+    eğer değil var_mı(db.memtable, anahtar) ise
         db.memtableBoyut = db.memtableBoyut + 1
     son
     db.memtable[anahtar] = kLsmTombstone

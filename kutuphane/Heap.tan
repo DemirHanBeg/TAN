@@ -60,7 +60,7 @@ işlev heapEkle(satir)
     id = kSatirSayaci[0]
     kSatirlar[id] = satir
     kSatirSayaci[0] = id + 1
-    eğer metinEsit(kHeapWalYolu[0], "") == 0 ise
+    eğer değil metinEsit(kHeapWalYolu[0], "") ise
         ekle_dosya(kHeapWalYolu[0], "R " + metin(id) + " " + satir + "\n")
     son
     döndür id
@@ -68,7 +68,7 @@ son
 
 # --- rowId'nin satırını okur, yoksa "" döndürür ---
 işlev heapOku(rowId)
-    eğer varMı(kSatirlar, rowId) == 0 ise
+    eğer değil varMı(kSatirlar, rowId) ise
         döndür ""
     son
     döndür kSatirlar[rowId]
@@ -77,7 +77,7 @@ son
 # --- rowId'yi siler (WAL'a "S rowId" yazar) ---
 işlev heapSil(rowId)
     bulunduMu = sil(kSatirlar, rowId)
-    eğer bulunduMu == 1 ve metinEsit(kHeapWalYolu[0], "") == 0 ise
+    eğer bulunduMu ve değil metinEsit(kHeapWalYolu[0], "") ise
         ekle_dosya(kHeapWalYolu[0], "S " + metin(rowId) + "\n")
     son
     döndür bulunduMu
@@ -85,7 +85,7 @@ son
 
 # --- WAL dosyasından heap'i yeniden kurar ---
 işlev heapYukle()
-    eğer dosyaVarMi(kHeapWalYolu[0]) == 0 ise
+    eğer değil dosyaVarMi(kHeapWalYolu[0]) ise
         döndür 0
     son
     icerik = oku(kHeapWalYolu[0])

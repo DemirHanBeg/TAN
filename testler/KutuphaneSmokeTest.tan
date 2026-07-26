@@ -1,0 +1,49 @@
+# KutuphaneSmokeTest: KVDeposu.tan/BAgaci.tan/Heap.tan için ilk gerçek test —
+# önceden HİÇBİRİNİN testi yoktu, bu yüzden bir bool-sonucu-tam-sayıyla-
+# karşılaştırma bug'ı ("değişkenA == 1"/"== 0" deseni, metinEsit/var_mı/
+# varMı/dosyaVarMi'nin GERÇEK dönüş tipiyle — mantıksal ya da tam sayı,
+# ikisi de olabiliyor — UYUŞMADIĞI için HER ZAMAN yanlış çıkıyordu) WAL
+# yazma/kontrol mantıklarının HİÇBİRİNDE hiç fark edilmemişti. Bu test
+# özellikle WAL dosyasının GERÇEKTEN yazıldığını doğruluyor (bug'dan
+# önce üçü de sessizce WAL YAZMIYORDU, dosyaVarMi() hep yanlış dönerdi).
+
+içe al "kutuphane/KVDeposu.tan"
+içe al "kutuphane/BAgaci.tan"
+içe al "kutuphane/Heap.tan"
+
+taban = "testler/_kutuphane_gecici"
+dosyaSil(taban + "_kv.wal")
+dosyaSil(taban + "_bagaci.wal")
+dosyaSil(taban + "_heap.wal")
+
+# --- KVDeposu ---
+kvAyarla(taban + "_kv.wal")
+kvKoy("ad", "Ayşe")
+kvKoy("yas", "30")
+yaz("KV1:" + kvAl("ad"))                          # KV1:Ayşe
+kvSil("yas")
+yaz("KV2:" + kvAl("yas"))                         # KV2: (boş metin)
+yaz("KV3:" + metin(dosyaVarMi(taban + "_kv.wal"))) # KV3:doğru — WAL GERÇEKTEN yazıldı
+
+# --- BAgaci (tam sayı anahtarlı B-ağacı) ---
+bagacAyarla(4, taban + "_bagaci.wal")
+bagacEkle(10, "on")
+bagacEkle(20, "yirmi")
+yaz("BA1:" + bagacAra(10))                        # BA1:on
+bagacSil(10)
+yaz("BA2:" + metin(bagacAra(10)))                 # BA2:-1 (bulunamadı)
+yaz("BA3:" + metin(dosyaVarMi(taban + "_bagaci.wal"))) # BA3:doğru
+
+# --- Heap ---
+heapAyarla(taban + "_heap.wal")
+id1 = heapEkle("birinci satir")
+id2 = heapEkle("ikinci satir")
+yaz("H1:" + heapOku(id1))                         # H1:birinci satir
+heapSil(id1)
+yaz("H2:" + heapOku(id1))                         # H2: (boş metin)
+yaz("H3:" + metin(dosyaVarMi(taban + "_heap.wal"))) # H3:doğru
+
+dosyaSil(taban + "_kv.wal")
+dosyaSil(taban + "_bagaci.wal")
+dosyaSil(taban + "_heap.wal")
+yaz("KUTUPHANE_SMOKE_TEST_TAMAM")

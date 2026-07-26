@@ -1,0 +1,44 @@
+# AdaptiveCacheTest: NEXUS Katman 2 (Adaptive Memory Brain) MVP sınaması —
+# LFU tahliye, RLE sıkıştırma şeffaflığı (faydalı/faydasız iki durum),
+# bellek baskısı kontrolünün çökmediğini doğrular.
+
+içe al "kutuphane/AdaptiveCache.tan"
+
+# --- 1) Temel koy/al ---
+ob = onbellekAc(3)
+onbellekKoy(ob, "a", "1")
+onbellekKoy(ob, "b", "2")
+yaz("T1a:" + onbellekAl(ob, "a"))                 # T1a:1
+yaz("T1b:" + metin(onbellekAl(ob, "yok-boyle-anahtar")))  # T1b:yok
+
+# --- 2) LFU tahliye ---
+onbellekAl(ob, "a")
+onbellekAl(ob, "a")
+onbellekKoy(ob, "c", "3")
+onbellekKoy(ob, "d", "4")
+yaz("T2a:" + metin(onbellekIcindeMi(ob, "a")))  # T2a:doğru
+yaz("T2b:" + metin(onbellekIcindeMi(ob, "b")))  # T2b:yanlış
+yaz("T2c:" + metin(onbellekBoyut(ob)))          # T2c:3
+
+# --- 3) Sıkıştırma şeffaflığı + FAYDALI durumda uygulanması ---
+uzunTekrarli = ""
+i = 0
+iken i < 100
+    uzunTekrarli = uzunTekrarli + "x"
+    i = i + 1
+son
+onbellekKoy(ob, "buyuk", uzunTekrarli)
+yaz("T3a:" + metin(metinEsit(onbellekAl(ob, "buyuk"), uzunTekrarli)))  # T3a:1 (metinEsit int64 1/0 döndürür, mantıksal DEĞİL)
+yaz("T3b:" + metin(ob.sikistirilmisMi["buyuk"]))                        # T3b:1
+
+# --- 4) Sıkıştırmanın FAYDASIZ durumda atlanması ---
+karisik = "ab3f7k9zpqx1m5w8vn2rj6ty4ue0hgab3f7k9zpqx1m5w8vn2rj6ty4ue0hgextra"
+onbellekKoy(ob, "karisik", karisik)
+yaz("T4a:" + metin(metinEsit(onbellekAl(ob, "karisik"), karisik)))     # T4a:1
+yaz("T4b:" + metin(ob.sikistirilmisMi["karisik"]))                      # T4b:0
+
+# --- 5) Bellek baskısı kontrolü çökmemeli (mantıksal DOĞRU/YANLIŞ döner) ---
+basinc = acBellekBasincindaMi()
+yaz("T5:" + metin(basinc))  # T5:yanlış beklenir (normal geliştirme makinesinde bellek baskısı olmaz)
+
+yaz("ADAPTIVE_CACHE_TEST_TAMAM")
