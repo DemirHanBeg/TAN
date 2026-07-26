@@ -1,0 +1,75 @@
+# TemporalEngineTest: NEXUS Katman 3 (Temporal Engine) MVP sınaması —
+# sürüm zinciri, immutable history, zaman-yolculuğu sorgusu, tam geçmiş.
+# Gerçek zaman farkı için çalıştır("sleep","2") kullanılıyor (epoch-saniye
+# çözünürlüklü zaman() ile anlamlı bir "farklı an" testi için gerekli).
+
+içe al "kutuphane/TemporalEngine.tan"
+
+taban = "testler/_temporal_gecici"
+i = 0
+iken i < 10
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")
+
+td = temporalAc(taban, 500)
+
+# --- 1) Sürüm numaraları doğru artıyor mu ---
+s1 = temporalKoy(td, "fiyat", "100")
+yaz("V1:" + metin(s1))   # V1:1
+
+çalıştır("sleep", "2")
+
+s2 = temporalKoy(td, "fiyat", "120")
+yaz("V2:" + metin(s2))   # V2:2
+
+çalıştır("sleep", "2")
+
+s3 = temporalKoy(td, "fiyat", "150")
+yaz("V3:" + metin(s3))   # V3:3
+
+# --- 2) Güncel değer her zaman EN SON sürüm ---
+yaz("GUNCEL:" + temporalAl(td, "fiyat"))               # GUNCEL:150
+
+# --- 3) Immutable history: eski sürümler DEĞİŞMEMİŞ ---
+yaz("SURUM1:" + temporalSurumOku(td, "fiyat", 1))      # SURUM1:100
+yaz("SURUM2:" + temporalSurumOku(td, "fiyat", 2))      # SURUM2:120
+yaz("SURUM3:" + temporalSurumOku(td, "fiyat", 3))      # SURUM3:150
+yaz("SURUM_YOK:" + metin(temporalSurumOku(td, "fiyat", 99)))  # SURUM_YOK:yok
+
+# --- 4) Zaman yolculuğu ---
+t1 = temporalZamanDamgasiAl(td, "fiyat", 1)
+t2 = temporalZamanDamgasiAl(td, "fiyat", 2)
+t3 = temporalZamanDamgasiAl(td, "fiyat", 3)
+
+yaz("ZY_T1:" + temporalZamandaAl(td, "fiyat", t1))          # ZY_T1:100 (tam o anda surum1 gecerli)
+yaz("ZY_T2:" + temporalZamandaAl(td, "fiyat", t2))          # ZY_T2:120
+yaz("ZY_T3:" + temporalZamandaAl(td, "fiyat", t3))          # ZY_T3:150
+yaz("ZY_ONCESI:" + metin(temporalZamandaAl(td, "fiyat", t1 - 1000)))  # ZY_ONCESI:yok (henuz hicbir surum yoktu)
+yaz("ZY_SONRASI:" + temporalZamandaAl(td, "fiyat", t3 + 1000))        # ZY_SONRASI:150 (en son surum gecerli kalir)
+yaz("ZY_ARADA:" + temporalZamandaAl(td, "fiyat", t2))                  # ZY_ARADA:120 (t2 anindaki gecerli surum)
+
+# --- 5) Tam geçmiş ---
+gecmis = temporalGecmis(td, "fiyat")
+yaz("GECMIS_UZUNLUK:" + metin(uzunluk(gecmis)))   # GECMIS_UZUNLUK:3
+yaz("GECMIS_0_SURUM:" + metin(gecmis[0][0]))       # GECMIS_0_SURUM:1
+yaz("GECMIS_0_DEGER:" + gecmis[0][2])              # GECMIS_0_DEGER:100
+yaz("GECMIS_2_SURUM:" + metin(gecmis[2][0]))       # GECMIS_2_SURUM:3
+yaz("GECMIS_2_DEGER:" + gecmis[2][2])              # GECMIS_2_DEGER:150
+
+# --- 6) Var olmayan anahtar ---
+yaz("YOK_ANAHTAR:" + metin(temporalAl(td, "hic-boyle-bir-anahtar")))   # YOK_ANAHTAR:yok
+
+temporalKapat(td)
+
+i = 0
+iken i < 10
+    dosyaSil(taban + "_sstable_" + metin(i) + ".dat")
+    i = i + 1
+son
+dosyaSil(taban + ".wal")
+dosyaSil(taban + ".meta")
+
+yaz("TEMPORAL_TEST_TAMAM")

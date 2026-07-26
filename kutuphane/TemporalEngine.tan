@@ -1,0 +1,150 @@
+# ============================================================
+# TemporalEngine.tan — NEXUS Katman 3 (Temporal Engine) MVP
+# ------------------------------------------------------------
+# NexusCore/FazC_Katman3.md tasarımının kodlanmış hâli. kutuphane/
+# LsmDeposu.tan'ın ÜSTÜNE kurulu (LSM'in kendisi DEĞİŞTİRİLMEDİ) — her
+# mantıksal anahtar, LSM'de BİRDEN FAZLA fiziksel anahtar (her sürüm için
+# bir tane + bir "SON sürüm" işaretçisi) olarak saklanır. "Asla silme"
+# ilkesi: eski sürümler HİÇBİR ZAMAN üzerine yazılmaz.
+#
+# Kapsam (v1): Versioned Records, Immutable History, Time Travel Queries
+# (sürüm no VEYA zaman damgası ile), Historical Snapshots.
+# KAPSAM DIŞI: Branching Data, Crypto-shredding (v2 — bkz. FazC_Katman3.md).
+#
+# Fiziksel anahtar biçimi:
+#   <anahtar>\x01<sürümNo, 10 hane sıfır dolgulu>  -> "<epochSaniye>\x02<değer>"
+#   <anahtar>\x01SON                                -> "<sonSürümNo>"
+# (Sıfır dolgu ŞART — LSM'in SSTable'ı LEKSİKOGRAFİK sıralama/arama
+# kullanıyor, dolgusuz "9" > "10" yanlış sıralanırdı.)
+#
+# Kullanım:
+#   içe al "kutuphane/TemporalEngine.tan"
+#   td = temporalAc("veri/gecmis", 500)
+#   temporalKoy(td, "fiyat", "100")
+#   temporalKoy(td, "fiyat", "120")
+#   yaz(temporalAl(td, "fiyat"))              # 120 (güncel)
+#   yaz(temporalSurumOku(td, "fiyat", 1))     # 100 (ilk sürüm, HÂLÂ değişmemiş)
+# ============================================================
+
+içe al "kutuphane/LsmDeposu.tan"
+
+kayıt TemporalDepo
+    lsm              # LsmDb — alttaki depolama
+    surumSayaclari   # sözlük: anahtar -> son sürüm no (bellek-içi ayna)
+son
+
+kTemporalSurumHane = 10
+
+işlev temporalAc(tabanYolu, esik)
+    döndür TemporalDepo(lsmAc(tabanYolu, esik), sözlük())
+son
+
+# temporalSurumDoldur: sürüm numarasını 10 haneye sıfır dolgular.
+işlev temporalSurumDoldur(surumNo)
+    metni = metin(surumNo)
+    dolgu = kTemporalSurumHane - uzunluk(metni)
+    i = 0
+    iken i < dolgu
+        metni = "0" + metni
+        i = i + 1
+    son
+    döndür metni
+son
+
+işlev temporalSurumAnahtari(anahtar, surumNo)
+    döndür anahtar + karakter(1) + temporalSurumDoldur(surumNo)
+son
+
+işlev temporalSonAnahtari(anahtar)
+    döndür anahtar + karakter(1) + "SON"
+son
+
+işlev temporalMevcutSurum(td, anahtar)
+    eğer var_mı(td.surumSayaclari, anahtar) ise
+        döndür td.surumSayaclari[anahtar]
+    son
+    # bellek-içi aynada yoksa (ör. yeni açılan bir depo) LSM'in kendi
+    # "SON" işaretçisine bak — programlar arası kalıcılık için.
+    sonMetni = lsmAl(td.lsm, temporalSonAnahtari(anahtar))
+    eğer sonMetni == yok ise
+        döndür 0
+    son
+    döndür sayı(sonMetni)
+son
+
+işlev temporalKoy(td, anahtar, deger)
+    mevcut = temporalMevcutSurum(td, anahtar)
+    yeniSurum = mevcut + 1
+    kayitDegeri = metin(zaman()) + karakter(2) + deger
+    lsmKoy(td.lsm, temporalSurumAnahtari(anahtar, yeniSurum), kayitDegeri)
+    lsmKoy(td.lsm, temporalSonAnahtari(anahtar), metin(yeniSurum))
+    td.surumSayaclari[anahtar] = yeniSurum
+    döndür yeniSurum
+son
+
+# temporalSurumOku: belirli bir sürümü (var olduğu GİBİ, değişmemiş) okur.
+işlev temporalSurumOku(td, anahtar, surumNo)
+    kayitDegeri = lsmAl(td.lsm, temporalSurumAnahtari(anahtar, surumNo))
+    eğer kayitDegeri == yok ise
+        döndür yok
+    son
+    parcalar = parçala(kayitDegeri, karakter(2))
+    döndür parcalar[1]
+son
+
+işlev temporalZamanDamgasiAl(td, anahtar, surumNo)
+    kayitDegeri = lsmAl(td.lsm, temporalSurumAnahtari(anahtar, surumNo))
+    eğer kayitDegeri == yok ise
+        döndür yok
+    son
+    parcalar = parçala(kayitDegeri, karakter(2))
+    döndür sayı(parcalar[0])
+son
+
+# temporalAl: GÜNCEL (en son) sürümü okur.
+işlev temporalAl(td, anahtar)
+    sonSurum = temporalMevcutSurum(td, anahtar)
+    eğer sonSurum == 0 ise
+        döndür yok
+    son
+    döndür temporalSurumOku(td, anahtar, sonSurum)
+son
+
+# temporalZamandaAl: hedefZaman ANINDA geçerli olan değeri döndürür — yani
+# zaman damgası <= hedefZaman olan EN SON (en yüksek numaralı) sürüm.
+# v1: doğrusal tarama (O(sürüm sayısı)) — bkz. FazC_Katman3.md §5 (v2: ikili arama).
+işlev temporalZamandaAl(td, anahtar, hedefZaman)
+    sonSurum = temporalMevcutSurum(td, anahtar)
+    eğer sonSurum == 0 ise
+        döndür yok
+    son
+    enIyiDeger = yok
+    surum = 1
+    iken surum <= sonSurum
+        ts = temporalZamanDamgasiAl(td, anahtar, surum)
+        eğer ts != yok ve ts <= hedefZaman ise
+            enIyiDeger = temporalSurumOku(td, anahtar, surum)
+        son
+        surum = surum + 1
+    son
+    döndür enIyiDeger
+son
+
+# temporalGecmis: bir anahtarın TÜM sürüm geçmişini [[surumNo, zaman, deger], ...] olarak döndürür.
+işlev temporalGecmis(td, anahtar)
+    sonuc = []
+    sonSurum = temporalMevcutSurum(td, anahtar)
+    surum = 1
+    iken surum <= sonSurum
+        ts = temporalZamanDamgasiAl(td, anahtar, surum)
+        deger = temporalSurumOku(td, anahtar, surum)
+        sonuc = ekle(sonuc, [surum, ts, deger])
+        surum = surum + 1
+    son
+    döndür sonuc
+son
+
+işlev temporalKapat(td)
+    lsmKapat(td.lsm)
+    döndür 0
+son
