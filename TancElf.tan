@@ -2716,8 +2716,18 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
             tipYigin = ekle(tipYigin, "tam")
 
         değilse eğer op == "SAYITAM" ise
+            # movImm32 (REX.W C7/0, "mov r/m64, imm32") sadece 32-bit
+            # İŞARETLİ ALANI kodlayabilir — 2^31'i aşan literaller (ör.
+            # 9999999999) SESSİZCE 32-bit'e KESİLİYORDU (bilinen bug,
+            # bkz. SabitNokta_... teşhis notları). movImm64 (movabs,
+            # B8+r imm64) ZATEN vardı ama SAYITAM hiç kullanmıyordu —
+            # aralık dışına çıkınca ona geç.
             v = metneTamSayi(a1)
-            z = tamponEkleTumu(kodKutu, nKutu, movImm32(0, v))
+            eğer v >= 0 - 2147483648 ve v <= 2147483647 ise
+                z = tamponEkleTumu(kodKutu, nKutu, movImm32(0, v))
+            değilse
+                z = tamponEkleTumu(kodKutu, nKutu, movImm64(0, v))
+            son
             z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
             tipYigin = ekle(tipYigin, "tam")
 

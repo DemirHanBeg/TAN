@@ -1,0 +1,36 @@
+# AtomikTest: Faz A #6 (atomik) sınaması — kilitsiz (lock-free) paylaşımlı
+# sayaç. 4 iş parçacığı, her biri 5000 kez atomikEkle çağırıyor; kilit
+# OLMADAN bile sonuç TAM (4*5000=20000) olmalı çünkü atomikEkle donanım
+# seviyesinde bölünemez (atomic).
+
+sayac = atomikOlustur()
+
+işlev artir(sayac, kacKere)
+    i = 0
+    iken i < kacKere
+        atomikEkle(sayac, 1)
+        i = i + 1
+    son
+    döndür 0
+son
+
+ip1 = içParcaLat(artir, sayac, 5000)
+ip2 = içParcaLat(artir, sayac, 5000)
+ip3 = içParcaLat(artir, sayac, 5000)
+ip4 = içParcaLat(artir, sayac, 5000)
+iplikBekle(ip1)
+iplikBekle(ip2)
+iplikBekle(ip3)
+iplikBekle(ip4)
+yaz(atomikOku(sayac))
+
+# atomikAyarla: eski değeri döndürmeli
+eski = atomikAyarla(sayac, 999)
+yaz(eski)
+yaz(atomikOku(sayac))
+
+# atomikKarsilastirDegistir: doğru beklenen değerle başarılı, yanlışla başarısız
+yaz(atomikKarsilastirDegistir(sayac, 999, 111))
+yaz(atomikOku(sayac))
+yaz(atomikKarsilastirDegistir(sayac, 999, 222))
+yaz(atomikOku(sayac))

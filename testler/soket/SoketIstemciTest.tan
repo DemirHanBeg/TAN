@@ -1,0 +1,8 @@
+# SoketIstemciTest: Faz A #2 (soket) sınaması — istemci tarafı. Sunucuya
+# bağlanır, mesaj gönderir, yankıyı okuyup basar (dogrulama: testi çalıştıran
+# script çıktının "yanki: merhaba dunya" olduğunu kontrol eder).
+baglanti = soketBaglan("127.0.0.1", 9876)
+soketYaz(baglanti, "merhaba dunya")
+cevap = soketOku(baglanti)
+yaz(cevap)
+soketKapat(baglanti)

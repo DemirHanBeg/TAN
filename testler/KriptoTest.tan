@@ -1,0 +1,26 @@
+# KriptoTest: Faz A #1 (kripto) yerleşiklerini sınar — sha256Ozet/aesSifrele/
+# aesCoz. Sadece yorumlayıcı yolunda (elf'te yok — Faz A maddeleri genel
+# olarak Go runtime'a dayanıyor, bkz. NexusCore/FazA_Kapsam.md).
+
+yaz(sha256Ozet("merhaba dünya"))
+yaz(sha256Ozet(""))
+
+anahtar = "gizli-parola-123"
+acikMetin = "Bu çok gizli bir mesajdır! Türkçe karakterler: çğıöşü"
+sifreli = aesSifrele(anahtar, acikMetin)
+cozulen = aesCoz(anahtar, sifreli)
+yaz(metinEsit(cozulen, acikMetin))
+
+# yanlış anahtarla çözmeye çalışınca hata vermeli (dene/yakala ile yakalanır)
+dene
+    yanlisCozum = aesCoz("yanlis-anahtar", sifreli)
+    yaz("HATA: yanlış anahtarla çözüldü!")
+yakala hata
+    yaz("dogru: yanlis anahtar reddedildi")
+son
+
+# aynı açık metin, iki ayrı şifreleme -- nonce rastgele olduğu için ÇIKTI
+# farklı olmalı (ama ikisi de doğru çözülmeli)
+sifreli2 = aesSifrele(anahtar, acikMetin)
+yaz(metinEsit(sifreli, sifreli2))
+yaz(metinEsit(aesCoz(anahtar, sifreli2), acikMetin))

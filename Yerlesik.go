@@ -1,11 +1,17 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	cryptoRand "crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -638,6 +644,407 @@ func init() {
 		kuresel_yorumlayici.hamBellek[p] = byte(v)
 		return nil
 	}
+
+	// ---- Kripto (Faz A #1 — bkz. NexusCore/FazA_Kapsam.md) ----
+	// Kendi kripto yazma tuzağına düşülmedi: Go'nun crypto/sha256 ve
+	// crypto/aes+cipher (AES-256-GCM, NIST standardı, kimlik doğrulamalı
+	// şifreleme) stdlib'i sarılıyor — diğer TÜM yerleşiklerin (oku/yaz_dosya
+	// os.* sarması, kök/log math.* sarması gibi) izlediği AYNI desen.
+
+	// sha256Ozet(metin): SHA-256 özetini hex metin olarak döndürür.
+	yerlesikler["sha256Ozet"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "sha256Ozet() bir argüman ister")
+		}
+		toplam := sha256.Sum256([]byte(metne(a[0])))
+		return hex.EncodeToString(toplam[:])
+	}
+
+	// aesSifrele(anahtar, açıkMetin): AES-256-GCM ile şifreler, hex metin
+	// döndürür (rastgele nonce + şifreli metin + kimlik doğrulama etiketi
+	// birlikte, tek parça). Anahtar dizesi SHA-256 ile 32 bayta türetilir —
+	// BASİT türetme, gerçek parola-tabanlı KDF (tuzlu PBKDF2/Argon2) DEĞİL,
+	// bilinen v1 sınırı (bkz. FazA_Kapsam.md).
+	yerlesikler["aesSifrele"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "aesSifrele(anahtar, açıkMetin) iki argüman ister")
+		}
+		anahtarHam := sha256.Sum256([]byte(metne(a[0])))
+		blok, err := aes.NewCipher(anahtarHam[:])
+		if err != nil {
+			firlat(satir, "aesSifrele(): %v", err)
+		}
+		gcm, err := cipher.NewGCM(blok)
+		if err != nil {
+			firlat(satir, "aesSifrele(): %v", err)
+		}
+		nonce := make([]byte, gcm.NonceSize())
+		if _, err := io.ReadFull(cryptoRand.Reader, nonce); err != nil {
+			firlat(satir, "aesSifrele(): rastgele nonce üretilemedi: %v", err)
+		}
+		sifreli := gcm.Seal(nonce, nonce, []byte(metne(a[1])), nil)
+		return hex.EncodeToString(sifreli)
+	}
+
+	// aesCoz(anahtar, şifreliHex): aesSifrele()'nin tersi. Yanlış anahtar ya
+	// da bozulmuş/değiştirilmiş veri kimlik doğrulamayı (GCM tag) başarısız
+	// kılar, firlat() ile hata verir (dene/yakala ile yakalanabilir).
+	yerlesikler["aesCoz"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "aesCoz(anahtar, şifreliMetin) iki argüman ister")
+		}
+		anahtarHam := sha256.Sum256([]byte(metne(a[0])))
+		ham, err := hex.DecodeString(metne(a[1]))
+		if err != nil {
+			firlat(satir, "aesCoz(): geçersiz hex metin")
+		}
+		blok, err := aes.NewCipher(anahtarHam[:])
+		if err != nil {
+			firlat(satir, "aesCoz(): %v", err)
+		}
+		gcm, err := cipher.NewGCM(blok)
+		if err != nil {
+			firlat(satir, "aesCoz(): %v", err)
+		}
+		boyut := gcm.NonceSize()
+		if len(ham) < boyut {
+			firlat(satir, "aesCoz(): şifreli metin çok kısa")
+		}
+		nonce, govde := ham[:boyut], ham[boyut:]
+		acik, err := gcm.Open(nil, nonce, govde, nil)
+		if err != nil {
+			firlat(satir, "aesCoz(): kimlik doğrulama başarısız (yanlış anahtar ya da bozulmuş veri)")
+		}
+		return string(acik)
+	}
+
+	// ---- Soket / TCP (Faz A #2 — bkz. NexusCore/FazA_Kapsam.md) ----
+	// Go'nun net paketi sarılıyor (elf yolunda YOK — OS ağ yığınına erişim
+	// için gerçek syscall arayüzü gerekir, kapsam dışı, bkz. TanSoket notu).
+
+	// soketDinle(port): TCP dinleyici açar (sunucu tarafı), tutamaç döndürür.
+	yerlesikler["soketDinle"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "soketDinle(port) bir argüman ister")
+		}
+		port, ok := tamAl(a[0])
+		if !ok {
+			firlat(satir, "soketDinle() port tam sayı olmalı")
+		}
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			firlat(satir, "soketDinle(): %v", err)
+		}
+		return &TanSoket{Dinleyici: l}
+	}
+
+	// soketKabulEt(dinleyici): bir istemci bağlanana kadar BLOKLAR, bağlantı
+	// tutamacı döndürür.
+	yerlesikler["soketKabulEt"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "soketKabulEt() bir argüman ister")
+		}
+		s, ok := a[0].(*TanSoket)
+		if !ok || s.Dinleyici == nil {
+			firlat(satir, "soketKabulEt() bir dinleyici soketi (soketDinle) bekliyor")
+		}
+		baglanti, err := s.Dinleyici.Accept()
+		if err != nil {
+			firlat(satir, "soketKabulEt(): %v", err)
+		}
+		return &TanSoket{Baglanti: baglanti}
+	}
+
+	// soketBaglan(adres, port): istemci tarafı — uzak sunucuya bağlanır.
+	yerlesikler["soketBaglan"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "soketBaglan(adres, port) iki argüman ister")
+		}
+		adres := metne(a[0])
+		port, ok := tamAl(a[1])
+		if !ok {
+			firlat(satir, "soketBaglan() port tam sayı olmalı")
+		}
+		baglanti, err := net.Dial("tcp", fmt.Sprintf("%s:%d", adres, port))
+		if err != nil {
+			firlat(satir, "soketBaglan(): %v", err)
+		}
+		return &TanSoket{Baglanti: baglanti}
+	}
+
+	// soketYaz(baglanti, metin): metni bağlantıya yazar, yazılan bayt sayısını döndürür.
+	yerlesikler["soketYaz"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "soketYaz(baglanti, metin) iki argüman ister")
+		}
+		s, ok := a[0].(*TanSoket)
+		if !ok || s.Baglanti == nil {
+			firlat(satir, "soketYaz() bir bağlantı soketi bekliyor")
+		}
+		n, err := s.Baglanti.Write([]byte(metne(a[1])))
+		if err != nil {
+			firlat(satir, "soketYaz(): %v", err)
+		}
+		return int64(n)
+	}
+
+	// soketOku(baglanti, [maxBayt]): TEK bir okuma çağrısı yapar (en fazla
+	// maxBayt, varsayılan 4096), okunan metni döndürür. Karşı taraf bağlantıyı
+	// kapattıysa boş metin döner (EOF sessizce, hata değil).
+	yerlesikler["soketOku"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "soketOku(baglanti, [maxBayt]) en az bir argüman ister")
+		}
+		s, ok := a[0].(*TanSoket)
+		if !ok || s.Baglanti == nil {
+			firlat(satir, "soketOku() bir bağlantı soketi bekliyor")
+		}
+		boyut := 4096
+		if len(a) > 1 {
+			b, ok2 := tamAl(a[1])
+			if ok2 {
+				boyut = int(b)
+			}
+		}
+		tampon := make([]byte, boyut)
+		n, err := s.Baglanti.Read(tampon)
+		if err != nil && err != io.EOF {
+			firlat(satir, "soketOku(): %v", err)
+		}
+		return string(tampon[:n])
+	}
+
+	// soketKapat(soket): dinleyici ya da bağlantı — hangisiyse onu kapatır.
+	yerlesikler["soketKapat"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "soketKapat() bir argüman ister")
+		}
+		s, ok := a[0].(*TanSoket)
+		if !ok {
+			firlat(satir, "soketKapat() bir soket bekliyor")
+		}
+		if s.Baglanti != nil {
+			s.Baglanti.Close()
+		}
+		if s.Dinleyici != nil {
+			s.Dinleyici.Close()
+		}
+		return int64(0)
+	}
+
+	// ---- Thread / mutex / kanal (Faz A #4 — bkz. NexusCore/FazA_Kapsam.md) ----
+	// Go'nun goroutine/sync.Mutex/channel'ı sarılıyor. TanIplik/TanKilit/
+	// TanKanal tipleri (Yorumlayici.go) + Kapsam'ın kilitlenmesi bkz. o
+	// dosyadaki tasarım notu.
+
+	// içParcaLat(islev, ...args): islev'i YENİ bir goroutine'de çalıştırır,
+	// hemen bir iplik tutamacı döndürür (BLOKLAMAZ). Sonucu almak için
+	// iplikBekle() kullan.
+	yerlesikler["içParcaLat"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "içParcaLat(islev, ...args) en az bir argüman ister")
+		}
+		islev, ok := a[0].(IslevDeger)
+		if !ok {
+			firlat(satir, "içParcaLat() ilk argüman bir işlev olmalı")
+		}
+		args := append([]Deger{}, a[1:]...)
+		sonucKanali := make(chan Deger, 1)
+		y := kuresel_yorumlayici
+		go func() {
+			sonucKanali <- y.islevCagir(islev, args)
+		}()
+		return &TanIplik{Bitti: sonucKanali}
+	}
+
+	// iplikBekle(iplik): iş parçacığı bitene kadar bloklar, döndürdüğü
+	// değeri verir (döndür yoksa yok).
+	yerlesikler["iplikBekle"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "iplikBekle() bir argüman ister")
+		}
+		s, ok := a[0].(*TanIplik)
+		if !ok {
+			firlat(satir, "iplikBekle() bir iplik tutamacı (içParcaLat sonucu) bekliyor")
+		}
+		return <-s.Bitti
+	}
+
+	// kilitOlustur(): yeni bir mutex (kilit) döndürür.
+	yerlesikler["kilitOlustur"] = func(a []Deger, satir int) Deger {
+		return &TanKilit{}
+	}
+
+	// kilitle(kilit): kilidi al — başka bir iş parçacığı zaten tutuyorsa
+	// serbest kalana kadar BLOKLAR.
+	yerlesikler["kilitle"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "kilitle() bir argüman ister")
+		}
+		k, ok := a[0].(*TanKilit)
+		if !ok {
+			firlat(satir, "kilitle() bir kilit (kilitOlustur sonucu) bekliyor")
+		}
+		k.Mu.Lock()
+		return int64(0)
+	}
+
+	// kilidiAc(kilit): daha önce kilitle() ile alınmış kilidi serbest bırakır.
+	yerlesikler["kilidiAc"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "kilidiAc() bir argüman ister")
+		}
+		k, ok := a[0].(*TanKilit)
+		if !ok {
+			firlat(satir, "kilidiAc() bir kilit bekliyor")
+		}
+		k.Mu.Unlock()
+		return int64(0)
+	}
+
+	// kanalOlustur([tamponBoyu]): iş parçacıkları arası mesajlaşma kanalı.
+	// tamponBoyu verilmezse (ya da 0) SENKRON kanal (gönderen, alan hazır
+	// olana kadar bloklanır).
+	yerlesikler["kanalOlustur"] = func(a []Deger, satir int) Deger {
+		tampon := 0
+		if len(a) > 0 {
+			b, ok := tamAl(a[0])
+			if ok {
+				tampon = int(b)
+			}
+		}
+		return &TanKanal{Ch: make(chan Deger, tampon)}
+	}
+
+	// kanalGonder(kanal, deger): kanala değer gönderir (tampon doluysa/
+	// senkron kanalda BLOKLAR).
+	yerlesikler["kanalGonder"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "kanalGonder(kanal, deger) iki argüman ister")
+		}
+		k, ok := a[0].(*TanKanal)
+		if !ok {
+			firlat(satir, "kanalGonder() bir kanal (kanalOlustur sonucu) bekliyor")
+		}
+		k.Ch <- a[1]
+		return int64(0)
+	}
+
+	// kanalAl(kanal): kanaldan bir değer okur (hazır olana kadar BLOKLAR).
+	// Kanal kanalKapat() ile kapatılmışsa ve boşsa yok döner.
+	yerlesikler["kanalAl"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "kanalAl() bir argüman ister")
+		}
+		k, ok := a[0].(*TanKanal)
+		if !ok {
+			firlat(satir, "kanalAl() bir kanal bekliyor")
+		}
+		v, acikMi := <-k.Ch
+		if !acikMi {
+			return nil
+		}
+		return v
+	}
+
+	// kanalKapat(kanal): kanalı kapatır — bekleyen kanalAl() çağrıları yok
+	// döner, kapalı kanala kanalGonder() ise panikler (Go'nun kendi kuralı).
+	yerlesikler["kanalKapat"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "kanalKapat() bir argüman ister")
+		}
+		k, ok := a[0].(*TanKanal)
+		if !ok {
+			firlat(satir, "kanalKapat() bir kanal bekliyor")
+		}
+		close(k.Ch)
+		return int64(0)
+	}
+
+	// ---- Atomik (Faz A #6 — bkz. NexusCore/FazA_Kapsam.md) ----
+	// Go'nun sync/atomic'i (atomic.Int64) sarılıyor — kilit'e göre daha
+	// ucuz, TEK bir sayı için lock-free paylaşımlı durum.
+
+	// atomikOlustur([baslangic]): yeni atomik sayaç (varsayılan 0).
+	yerlesikler["atomikOlustur"] = func(a []Deger, satir int) Deger {
+		at := &TanAtomik{}
+		if len(a) > 0 {
+			v, ok := tamAl(a[0])
+			if ok {
+				at.Deger.Store(v)
+			}
+		}
+		return at
+	}
+
+	// atomikEkle(atomik, miktar): miktarı atomik olarak ekler, YENİ değeri döndürür.
+	yerlesikler["atomikEkle"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "atomikEkle(atomik, miktar) iki argüman ister")
+		}
+		at, ok := a[0].(*TanAtomik)
+		if !ok {
+			firlat(satir, "atomikEkle() bir atomik sayaç (atomikOlustur sonucu) bekliyor")
+		}
+		miktar, ok := tamAl(a[1])
+		if !ok {
+			firlat(satir, "atomikEkle() miktar tam sayı olmalı")
+		}
+		return at.Deger.Add(miktar)
+	}
+
+	// atomikOku(atomik): mevcut değeri okur.
+	yerlesikler["atomikOku"] = func(a []Deger, satir int) Deger {
+		if len(a) < 1 {
+			firlat(satir, "atomikOku() bir argüman ister")
+		}
+		at, ok := a[0].(*TanAtomik)
+		if !ok {
+			firlat(satir, "atomikOku() bir atomik sayaç bekliyor")
+		}
+		return at.Deger.Load()
+	}
+
+	// atomikAyarla(atomik, deger): değeri atomik olarak yazar, ESKİ değeri döndürür.
+	yerlesikler["atomikAyarla"] = func(a []Deger, satir int) Deger {
+		if len(a) < 2 {
+			firlat(satir, "atomikAyarla(atomik, deger) iki argüman ister")
+		}
+		at, ok := a[0].(*TanAtomik)
+		if !ok {
+			firlat(satir, "atomikAyarla() bir atomik sayaç bekliyor")
+		}
+		deger, ok := tamAl(a[1])
+		if !ok {
+			firlat(satir, "atomikAyarla() değer tam sayı olmalı")
+		}
+		return at.Deger.Swap(deger)
+	}
+
+	// atomikKarsilastirDegistir(atomik, beklenen, yeni): mevcut değer
+	// beklenen İSE yeni değere değiştirir (compare-and-swap). Başarılıysa
+	// doğru, değilse (başka bir iş parçacığı araya girmişse) yanlış döner.
+	yerlesikler["atomikKarsilastirDegistir"] = func(a []Deger, satir int) Deger {
+		if len(a) < 3 {
+			firlat(satir, "atomikKarsilastirDegistir(atomik, beklenen, yeni) üç argüman ister")
+		}
+		at, ok := a[0].(*TanAtomik)
+		if !ok {
+			firlat(satir, "atomikKarsilastirDegistir() bir atomik sayaç bekliyor")
+		}
+		beklenen, ok1 := tamAl(a[1])
+		yeni, ok2 := tamAl(a[2])
+		if !ok1 || !ok2 {
+			firlat(satir, "atomikKarsilastirDegistir() beklenen/yeni tam sayı olmalı")
+		}
+		return at.Deger.CompareAndSwap(beklenen, yeni)
+	}
+
+	// FFI / dış kütüphane yerleşikleri (disKutuphaneAc/disIslevBul/
+	// disIslevCagir/disKutuphaneKapat) — bkz. YerlesikFFI_linux.go /
+	// YerlesikFFI_diger.go. Platforma göre AYRI dosyada (purego'nun
+	// dlopen/dlsym API'si SADECE unix benzeri sistemlerde var, Windows'ta
+	// derleme hatası veriyordu — bkz. o dosyalardaki not).
 }
 
 // goDegeriTana: json_çöz'ün ürettiği Go değerini Tan değerine çevirir

@@ -1,0 +1,23 @@
+# FFITest: Faz A #3 (FFI/dış kütüphane) sınaması — sistemin libc'sinden
+# gerçek C fonksiyonları çağırır. SADECE Linux derlemesinde çalışır (bkz.
+# YerlesikFFI_linux.go) — bu yüzden "testler/elf_ozel/" altında, genel
+# yorumlayıcı taramasından (GercekProgramlar.sh) bilerek hariç tutuldu
+# (Windows native tan.exe'de "desteklenmiyor" hatasıyla durur).
+# Çalıştırma: ./tan testler/elf_ozel/FFITest.tan  (WSL/Linux üzerinde)
+
+libc = disKutuphaneAc("libc.so.6")
+
+strlenFn = disIslevBul(libc, "strlen")
+yaz(disIslevCagir(strlenFn, "merhaba"))          # 7 (ASCII, bayt=karakter)
+yaz(disIslevCagir(strlenFn, "çğıöşü"))           # 12 (6 Türkçe karakter, UTF-8'de karakter başı 2 bayt)
+yaz(disIslevCagir(strlenFn, ""))                 # 0
+
+getpidFn = disIslevBul(libc, "getpid")
+pid = disIslevCagir(getpidFn)
+yaz(pid > 0)                                     # doğru
+
+absFn = disIslevBul(libc, "abs")
+yaz(disIslevCagir(absFn, 0 - 42))                # 42
+
+disKutuphaneKapat(libc)
+yaz("FFI_TEST_TAMAM")

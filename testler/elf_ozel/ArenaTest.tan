@@ -1,0 +1,38 @@
+# ArenaTest: Faz A #5 (elf yolunda arena+serbest) sınaması. arenaAyir/
+# arenaSerbest'in gerçek belleği doğrudan okuyup-yazma yerleşiği elf'te
+# yok (hamOku/hamYaz sadece yorumlayıcıda) — bu yüzden doğruluk, YENİDEN
+# KULLANIMIN (aynı boyut sınıfı -> aynı adres geri gelir) doğru
+# çalıştığını göstererek sınanıyor.
+#
+# ÖNEMLİ: bu dosya "testler/elf_ozel/" alt dizininde — GercekProgramlar.sh'nin
+# "testler/*.tan" taraması BİLEREK bunu KAÇIRIYOR. arenaAyir/arenaSerbest
+# SADECE elf backend'inde var (yorumlayıcının kendi GC'si olduğu için arena
+# gerekmiyor) — yorumlayıcıyla (`./tan bu_dosya.tan`) çalıştırılırsa
+# "arenaAyir tanımsız" hatası ile durur, bu BEKLENEN/doğru. Çalıştırma:
+#   ./tan elf testler/elf_ozel/ArenaTest.tan /tmp/arenatest && /tmp/arenatest
+
+p1 = arenaAyir(64)
+arenaSerbest(p1, 64)
+p2 = arenaAyir(64)
+yaz(p1 == p2)          # doğru — serbest bırakılan blok yeniden kullanıldı
+
+p3 = arenaAyir(64)
+yaz(p2 == p3)          # yanlış — p2 hâlâ "kullanımda", p3 yeni/farklı bir blok
+
+arenaSerbest(p2, 64)
+arenaSerbest(p3, 64)
+p4 = arenaAyir(64)
+p5 = arenaAyir(64)
+yaz(p4 == p5)          # yanlış — p4/p5 farklı (LIFO ile p3 sonra p2 geri geldi)
+
+# büyük boyut (>512): asla yeniden kullanılmaz, her zaman taze bump-alloc.
+b1 = arenaAyir(1000)
+arenaSerbest(b1, 1000)
+b2 = arenaAyir(1000)
+yaz(b1 == b2)          # yanlış
+
+# farklı boyut sınıfı: aynı adres OLMAMALI (farklı serbest liste).
+p6 = arenaAyir(128)
+yaz(p4 == p6)          # yanlış (farklı boyut sınıfı, ayrı liste)
+
+yaz("ARENA_TEST_TAMAM")

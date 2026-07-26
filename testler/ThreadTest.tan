@@ -1,0 +1,61 @@
+# ThreadTest: Faz A #4 (thread/mutex/kanal) sınaması.
+
+kayıt Sayac
+    deger
+son
+
+# --- 1) Mutex ile korunan paylaşılan sayaç: 3 iş parçacığı, her biri
+#     10000 kez artırıyor. Kilit doğru çalışıyorsa sonuç TAM 30000 olmalı
+#     (kilitsiz olsaydı yarış durumu yüzünden GENELDE daha az çıkardı). ---
+s = Sayac(0)
+kilit = kilitOlustur()
+
+işlev artir(s, kilit, kacKere)
+    i = 0
+    iken i < kacKere
+        kilitle(kilit)
+        s.deger = s.deger + 1
+        kilidiAc(kilit)
+        i = i + 1
+    son
+    döndür 0
+son
+
+ip1 = içParcaLat(artir, s, kilit, 10000)
+ip2 = içParcaLat(artir, s, kilit, 10000)
+ip3 = içParcaLat(artir, s, kilit, 10000)
+iplikBekle(ip1)
+iplikBekle(ip2)
+iplikBekle(ip3)
+yaz(s.deger)
+
+# --- 2) Kanal ile üretici/tüketici: ayrı bir iş parçacığı 1..5 gönderiyor,
+#     ana iş parçası toplayıp topluyor. ---
+kanal = kanalOlustur(5)
+
+işlev uretici(kanal)
+    i = 1
+    iken i <= 5
+        kanalGonder(kanal, i)
+        i = i + 1
+    son
+    kanalKapat(kanal)
+    döndür 0
+son
+
+ip4 = içParcaLat(uretici, kanal)
+toplam = 0
+deger = kanalAl(kanal)
+iken deger != yok
+    toplam = toplam + deger
+    deger = kanalAl(kanal)
+son
+iplikBekle(ip4)
+yaz(toplam)
+
+# --- 3) içParcaLat'ın döndür değerini iplikBekle ile almak ---
+işlev hesapla(x)
+    döndür x * x
+son
+ip5 = içParcaLat(hesapla, 7)
+yaz(iplikBekle(ip5))

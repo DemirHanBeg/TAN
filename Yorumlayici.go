@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // ---- Değer türleri ----
@@ -46,6 +49,59 @@ type TanSozluk struct {
 	Sira []string // ekleme sırasını korumak için
 }
 
+// TanSoket: bir TCP dinleyici (soketDinle) ya da bağlantı (soketBaglan/
+// soketKabulEt) — Tan kodu için OPAK bir tutamaç, TanListe/TanSozluk gibi
+// diğer yerleşik tiplerle AYNI desen (Go struct'ı Deger olarak taşınıyor).
+// Faz A #2 (soket) — bkz. NexusCore/FazA_Kapsam.md, sadece yorumlayıcı
+// yolunda (elf'te OS ağ yığınına erişim yok).
+type TanSoket struct {
+	Dinleyici net.Listener
+	Baglanti  net.Conn
+}
+
+// ---- Faz A #4 (thread/mutex/kanal) — bkz. NexusCore/FazA_Kapsam.md ----
+// TASARIM NOTU: içParcaLat() ile başlatılan bir "iş parçacığı" AYRI bir
+// yorumlayıcı DÜNYASI değil — AYNI global Kapsam'ı (ve dolayısıyla üst
+// düzey değişkenleri/closure'ları) paylaşan gerçek bir Go goroutine'idir.
+// Bu yüzden Kapsam artık kilitli (yukarıda). Ama bunun ÖTESİNDE — bir
+// TanListe/TanSozluk/TanKayit'in kendi İÇ Go map/slice'ı HÂLÂ kilitsizdir;
+// iki iş parçacığı AYNI listeyi/sözlüğü kilitsiz eşzamanlı değiştirirse
+// bu, herhangi bir gerçek dilde (Go'nun kendi map'i dahil) olduğu gibi
+// YARIŞ DURUMU olur. kilitOlustur/kilitle/kilidiAc TAM BU YÜZDEN var —
+// paylaşılan bir yapıyı kullanıcı kendi kilidiyle korumalı.
+type TanIplik struct {
+	Bitti chan Deger
+}
+type TanKilit struct {
+	Mu sync.Mutex
+}
+type TanKanal struct {
+	Ch chan Deger
+}
+
+// TanAtomik: kilitsiz (lock-free) paylaşımlı sayaç — Faz A #6, bkz.
+// NexusCore/FazA_Kapsam.md ("Katman 10, 8 (lock-free sayaç)"). kilitOlustur
+// ile AYNI amaca (paylaşılan durum koruma) hizmet eder ama daha ucuzdur
+// (CPU'nun kendi atomik komutları, kilitleme/bloklama yok) — sadece TEK bir
+// tam sayıyı korumak yeterliyse (ör. istek sayacı, ölçüm) tercih edilmeli.
+type TanAtomik struct {
+	Deger atomic.Int64
+}
+
+// TanDisKutuphane/TanDisIslev: FFI (Faz A #3 — bkz. NexusCore/FazA_Kapsam.md)
+// için dinamik kütüphane tutamaçları. Gerçek uygulama Yerlesik.go'da
+// (github.com/ebitengine/purego sarılıyor — cgo GEREKMEDEN dlopen/dlsym/
+// çağrı; bu ortamda Linux'a çapraz-derleme için çalışan bir cgo C
+// derleyicisi YOK, purego bu yüzden tek pratik yol, kendi kriptonu yazma
+// tuzağının FFI karşılığına düşülmedi — kanıtlanmış, gerçek dünyada
+// kullanılan bir kütüphane sarıldı).
+type TanDisKutuphane struct {
+	Tutamac uintptr
+}
+type TanDisIslev struct {
+	Gosterici uintptr
+}
+
 func YeniSozluk() *TanSozluk {
 	return &TanSozluk{Cift: map[string]Deger{}, Sira: []string{}}
 }
@@ -73,10 +129,17 @@ func (s *TanSozluk) koy(anahtar string, deger Deger) {
 }
 
 // ---- Kapsam (değişken ortamı) ----
+// mu: Faz A #4 (thread desteği) ile eklendi — içParcaLat() birden fazla
+// goroutine'i AYNI global Kapsam'a (kapatılan closure'lar üzerinden) erişir
+// hale getiriyor; Go map'leri eşzamanlı okuma/yazmada GÜVENLİ DEĞİL, RWMutex
+// olmadan "concurrent map read and map write" ile çöküyordu (Go runtime'ın
+// kendi yakaladığı bir hata). Blok kapsamları (eğer/iken/her) genelde tek
+// goroutine'e özel olduğundan kilit onlarda rekabetsiz/ucuz.
 type Kapsam struct {
 	degiskenler map[string]Deger
 	ust         *Kapsam
 	islevSiniri bool // bkz. YeniIslevKapsami + ata() notu
+	mu          sync.RWMutex
 }
 
 func YeniKapsam(ust *Kapsam) *Kapsam {
@@ -96,7 +159,10 @@ func YeniIslevKapsami(ust *Kapsam) *Kapsam {
 }
 
 func (k *Kapsam) al(ad string) (Deger, bool) {
-	if d, ok := k.degiskenler[ad]; ok {
+	k.mu.RLock()
+	d, ok := k.degiskenler[ad]
+	k.mu.RUnlock()
+	if ok {
 		return d, true
 	}
 	if k.ust != nil {
@@ -104,7 +170,11 @@ func (k *Kapsam) al(ad string) (Deger, bool) {
 	}
 	return nil, false
 }
-func (k *Kapsam) koy(ad string, d Deger) { k.degiskenler[ad] = d }
+func (k *Kapsam) koy(ad string, d Deger) {
+	k.mu.Lock()
+	k.degiskenler[ad] = d
+	k.mu.Unlock()
+}
 
 // ata: değişken zincirde daha önce tanımlıysa orada günceller, değilse
 // MEVCUT İŞLEV AKTİVASYONU içinde (islevSiniri'ye kadar) oluşturur.
@@ -137,15 +207,22 @@ func (k *Kapsam) koy(ad string, d Deger) { k.degiskenler[ad] = d }
 // sadece OKUYOR, atamıyor) — bu yüzden bu kısıtlama regresyon YARATMIYOR.
 func (k *Kapsam) ata(ad string, d Deger) {
 	for k2 := k; k2 != nil; k2 = k2.ust {
-		if _, ok := k2.degiskenler[ad]; ok {
+		k2.mu.Lock()
+		_, ok := k2.degiskenler[ad]
+		if ok {
 			k2.degiskenler[ad] = d
+		}
+		k2.mu.Unlock()
+		if ok {
 			return
 		}
 		if k2.islevSiniri {
 			break
 		}
 	}
+	k.mu.Lock()
 	k.degiskenler[ad] = d
+	k.mu.Unlock()
 }
 
 // ---- Yorumlayıcı ----

@@ -1,0 +1,7 @@
+# BuyukLiteralTest: 2^32'yi aşan tam sayı literallerinin native (elf) yolda
+# doğru derlendiğini sınar — önceden self-hosting derleyicide (TancElf.tan)
+# movImm32 (sadece 32-bit) kullanıldığı için sessizce kesiliyordu.
+yaz(9999999999)
+yaz(10000000000 + 1)
+x = 123456789012345
+yaz(x)

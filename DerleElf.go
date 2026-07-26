@@ -1961,6 +1961,27 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.call("f_metin_birlestir")
 			return
 		}
+		if n.Ad == "arenaAyir" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: arenaAyir(boyut) bir argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_arena_ayir")
+			return
+		}
+		if n.Ad == "arenaSerbest" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: arenaSerbest(isaretci, boyut) iki argüman ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_arena_serbest")
+			return
+		}
 		if len(n.Argumanlar) > 6 {
 			panic(TanHata{Mesaj: "elf: en fazla 6 argüman"})
 		}
@@ -2401,6 +2422,109 @@ func (e *elfUretici) yardimciAyir() {
 }
 
 // bellek_kopyala(rdi=hedef, rsi=kaynak, rdx=adet)
+// arenaAyir(rdi=boyut) -> rax=ptr — Faz A #5 (arena+serbest — bkz.
+// NexusCore/FazA_Kapsam.md) için EKLENEN, f_tan_ayir'in (yukarıdaki bump
+// allocator) ÜSTÜNE ek bir katman. Var olan liste/sözlük/kayıt codegen'i
+// bunu KULLANMIYOR/DEĞİŞMEDİ — sıfır regresyon riski, tamamen yeni/katmanlı.
+//
+// TASARIM: boyut<=512 ise 64 "sınıf" (8,16,...,512 bayt) için ayrı bir
+// serbest-liste tutuluyor (v___arenaTablo, ilk kullanımda f_tan_ayir ile
+// TEK SEFER 520 bayt ayrılan bir tablo — leaOge'nin sabit +8 payını
+// karşılamak için 8 bayt fazladan). arenaSerbest() ile bırakılan bir blok
+// varsa O(1) yeniden kullanılır; yoksa f_tan_ayir'a düşülür (asla
+// başarısız olmaz, sadece yeniden kullanamaz). boyut>512 HER ZAMAN
+// doğrudan bump allocator'a gider (büyük nesneler için yeniden kullanım
+// yok — basit/güvenli varsayılan, "gerçek GC" değil ama dokümanın kendi
+// izin verdiği "arena" alternatifi).
+//
+// ÖNEMLİ SINIR: boyut BAŞLIĞI TUTULMUYOR — arenaSerbest() boyutu
+// KULLANICIDAN açıkça alır (hamAyir/hamOku/hamYaz ile AYNI "ham, kullanıcı
+// sorumlu" felsefesi). Yanlış boyut vermek serbest listeyi bozar,
+// doğrulama YAPILMIYOR (bilinçli, düşük seviye bir araç).
+func (e *elfUretici) yardimciArenaAyir() {
+	m := e.m
+	m.etiketKoy("f_arena_ayir")
+	e.genel["__arenaTablo"] = true
+
+	m.addImm32(rRDI, 7)
+	m.andImm32(rRDI, -8) // rdi = 8'e hizalanmış boyut
+
+	m.cmpImm32(rRDI, 512)
+	m.jcc(0x87, "Larena_buyuk") // ja -> 512'den büyük, yeniden kullanım yok
+
+	m.pushKayit(rRDI) // boyutu (bump-fallback ihtimali için) sakla
+	m.movKayit(rRAX, rRDI)
+	m.shrImm(rRAX, 3)
+	m.decKayit(rRAX) // rax = sınıfIndeksi (0..63)
+	m.pushKayit(rRAX)
+
+	m.movGenelOku(rRCX, "v___arenaTablo")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x85, "Larena_tabloHazir") // jnz -> tablo zaten var
+
+	m.movImm32(rRDI, 520) // 64*8 sınıf + leaOge'nin +8 payı
+	m.call("f_tan_ayir")
+	m.movGenelYaz("v___arenaTablo", rRAX)
+	m.movKayit(rRCX, rRAX)
+
+	m.etiketKoy("Larena_tabloHazir")
+	m.popKayit(rRAX) // sınıfIndeksi
+	m.pushKayit(rRAX)
+	m.leaOge(rRDX, rRCX, rRAX)       // rdx = &tablo[sınıfIndeksi]
+	m.movDolayliOku32(rRAX, rRDX, 0) // rax = bu sınıfın serbest-liste başı
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x84, "Larena_gerideDon") // jz -> serbest blok yok, bump'a düş
+
+	m.movDolayliOku32(rRCX, rRAX, 0) // rcx = [rax] (bir sonraki serbest blok)
+	m.movDolayliYaz32(rRDX, 0, rRCX) // tablo[sınıfIndeksi] = rcx
+	m.popKayit(rRCX)                 // sınıfIndeksi temizle
+	m.popKayit(rRDI)                 // boyutu temizle
+	m.ret()                          // rax zaten geri dönen işaretçi (yeniden kullanılan blok)
+
+	m.etiketKoy("Larena_gerideDon")
+	m.popKayit(rRCX) // sınıfIndeksi temizle
+	m.popKayit(rRDI) // boyutu geri al
+	m.call("f_tan_ayir")
+	m.ret()
+
+	m.etiketKoy("Larena_buyuk")
+	m.call("f_tan_ayir")
+	m.ret()
+}
+
+// arenaSerbest(rdi=ptr, rsi=boyut): ptr'yi (boyut arenaAyir()'a verilenle
+// AYNI olmalı) serbest listeye ekler. boyut>512 ise ya da tablo hiç
+// oluşmadıysa (arenaAyir hiç çağrılmamış) sessizce YOKSAYAR — güvenli
+// varsayılan, asla çökmez.
+func (e *elfUretici) yardimciArenaSerbest() {
+	m := e.m
+	m.etiketKoy("f_arena_serbest")
+	e.genel["__arenaTablo"] = true
+
+	m.addImm32(rRSI, 7)
+	m.andImm32(rRSI, -8) // rsi = 8'e hizalanmış boyut
+
+	m.cmpImm32(rRSI, 512)
+	m.jcc(0x87, "Lserbest_yoksay") // ja -> çok büyük, yeniden kullanılmıyor
+
+	m.movKayit(rRAX, rRSI)
+	m.shrImm(rRAX, 3)
+	m.decKayit(rRAX) // rax = sınıfIndeksi
+
+	m.movGenelOku(rRCX, "v___arenaTablo")
+	m.testKayit(rRCX, rRCX)
+	m.jcc(0x84, "Lserbest_yoksay") // jz -> tablo hiç oluşmadı, güvenli yoksay
+
+	m.leaOge(rRDX, rRCX, rRAX)       // rdx = &tablo[sınıfIndeksi]
+	m.movDolayliOku32(rRCX, rRDX, 0) // rcx = mevcut sınıf başı (eski head)
+	m.movDolayliYaz32(rRDI, 0, rRCX) // [ptr] = eski head (bırakılan bloğun İÇİNE yazılıyor)
+	m.movDolayliYaz32(rRDX, 0, rRDI) // tablo[sınıfIndeksi] = ptr (yeni head)
+
+	m.etiketKoy("Lserbest_yoksay")
+	m.movImm32(rRAX, 0)
+	m.ret()
+}
+
 func (e *elfUretici) yardimciKopyala() {
 	m := e.m
 	m.etiketKoy("f_bellek_kopyala")
@@ -4563,6 +4687,8 @@ func derleElf(dosya string, cikti string) {
 	e.yardimciYazMetin()
 	e.yardimciYazSayi()
 	e.yardimciAyir()
+	e.yardimciArenaAyir()
+	e.yardimciArenaSerbest()
 	e.yardimciKopyala()
 	e.yardimciYazMetinDeger()
 	e.yardimciBirlestir()

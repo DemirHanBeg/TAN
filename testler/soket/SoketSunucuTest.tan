@@ -1,0 +1,16 @@
+# SoketSunucuTest: Faz A #2 (soket) sınaması — sunucu tarafı. Tek bir
+# istemciyi kabul eder, gelen metni "yanki: " öneki ile geri gönderir.
+#
+# ÖNEMLİ: bu dosya "testler/soket/" alt dizininde — GercekProgramlar.sh'nin
+# "testler/*.tan" taraması BİLEREK bunu KAÇIRIYOR (soketKabulEt() karşı
+# taraf bağlanmadan SONSUZA KADAR bloklar, tek başına çalıştırılırsa
+# regresyon script'ini asar). Elle çalıştırma (iki ayrı süreç gerekir):
+#   ./tan testler/soket/SoketSunucuTest.tan &
+#   sleep 1 && ./tan testler/soket/SoketIstemciTest.tan
+# Beklenen istemci çıktısı: "yanki: merhaba dunya"
+dinleyici = soketDinle(9876)
+baglanti = soketKabulEt(dinleyici)
+gelen = soketOku(baglanti)
+soketYaz(baglanti, "yanki: " + gelen)
+soketKapat(baglanti)
+soketKapat(dinleyici)
