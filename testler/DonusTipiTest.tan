@@ -1,0 +1,24 @@
+# DonusTipiTest: TancElf.tan'ın (self-hosted derleyici) kullanıcı
+# işlevlerinin dönüş tipini (SINIRLI: direkt-literal/direkt-çağrı) doğru
+# çıkarıp çıkarmadığını sınar. Önceden gen2 (self-hosted) bu tür bir metin
+# döndüren işlevi "tam" sanıp yaz()/+ ile kullanınca ham pointer sayısı
+# basıyordu (bkz. NexusCore/TanDurum.md madde 9).
+işlev harfDon(h)
+    eğer h == 1 ise
+        döndür "bir"
+    son
+    eğer h == 2 ise
+        döndür "iki"
+    son
+    döndür "bilinmeyen"
+son
+
+işlev dolayliDon(x)
+    döndür harfDon(x)
+son
+
+yaz(harfDon(1))
+yaz(harfDon(2))
+yaz(harfDon(9))
+yaz(dolayliDon(1))
+yaz("sonuc: " + harfDon(2))

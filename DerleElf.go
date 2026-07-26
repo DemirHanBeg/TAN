@@ -426,6 +426,22 @@ func (m *makineKodu) movDolayliYaz32(taban byte, disp int32, kaynak byte) {
 	m.i32(disp)
 }
 
+// mov r64, [taban+disp32] -- movDolayliOku'nun disp8 (±127) sınırı olmayan
+// hâli. Kayıt alan OFSETİ (8*alanIndeks) 15 alanı aşan kayıt tiplerinde
+// disp8'i taşar (movDolayliYaz32 zaten disp32 kullanıyor, YAZMA tarafında
+// bu sınır yoktu — OKUMA tarafında da aynı sınırsızlığı sağlamak için eklendi).
+func (m *makineKodu) movDolayliOku32(hedef, taban byte, disp int32) {
+	rex := byte(0x48)
+	if hedef >= 8 {
+		rex |= 4
+	}
+	if taban >= 8 {
+		rex |= 1
+	}
+	m.bayt(rex, 0x8B, modrm(2, hedef, taban))
+	m.i32(disp)
+}
+
 // lea r64, [taban + indeks*8 + 8]   (SIB kodlamasi)
 func (m *makineKodu) leaOge(hedef, taban, indeks byte) {
 	rex := byte(0x48)
@@ -597,11 +613,13 @@ const (
 	CListe              // yigin isaretcisi: [uzunluk:8][oge0:8][oge1:8]...
 	CKesir              // float64, kayitta HAM BIT DESENI olarak tasinir
 	CSozluk             // yigin isaretcisi: [uzunluk:8][kovaDizisiPtr:8], bkz f_sozluk_*
+	CKayit              // yigin isaretcisi: [alan0:8][alan1:8]...[alanN-1:8], SABIT boy (uzunluk basligi YOK, sema kayitSemalari'nda derleme-zamaninda bilinir)
 )
 
 type Tip struct {
-	Cesit  Cesit
-	Eleman *Tip // liste ise oge tipi
+	Cesit    Cesit
+	Eleman   *Tip   // liste/sozluk ise oge/deger tipi
+	KayitAdi string // CKayit ise: hangi "kayıt Ad" semasina ait
 }
 
 var TipTam = Tip{Cesit: CTam}
@@ -610,6 +628,7 @@ var TipKesir = Tip{Cesit: CKesir}
 var TipSozluk = Tip{Cesit: CSozluk}
 
 func TipListe(e Tip) Tip { return Tip{Cesit: CListe, Eleman: &e} }
+func TipKayit(ad string) Tip { return Tip{Cesit: CKayit, KayitAdi: ad} }
 
 func (t Tip) String() string {
 	switch t.Cesit {
@@ -624,11 +643,32 @@ func (t Tip) String() string {
 			return "liste<" + t.Eleman.String() + ">"
 		}
 		return "liste"
+	case CKayit:
+		return "kayıt<" + t.KayitAdi + ">"
 	}
 	return "bilinmeyen"
 }
 
-func (t Tip) esitMi(o Tip) bool { return t.Cesit == o.Cesit }
+func (t Tip) esitMi(o Tip) bool {
+	if t.Cesit != o.Cesit {
+		return false
+	}
+	if t.Cesit == CKayit {
+		return t.KayitAdi == o.KayitAdi
+	}
+	return true
+}
+
+// KayitSemasi: "kayıt Ad ... son" tanımının derleme-zamanı şeması — alan
+// sırası (=bellek ofseti, alanIndeks[ad]*8) + metot govdeleri. Yorumlayıcının
+// TanKayitTipi'yle AYNI amaç, statik/native tarafta.
+type KayitSemasi struct {
+	Ad          string
+	Alanlar     []string
+	AlanIndeks  map[string]int
+	AlanTipleri map[string]Tip
+	Metotlar    map[string]IslevDugum
+}
 
 type elfUretici struct {
 	m         *makineKodu
@@ -643,6 +683,7 @@ type elfUretici struct {
 	parametreTipi map[string]Tip // "islev/param" -> tip
 	suanIslev string
 	yiginVar  bool           // yigin ayirici koda eklendi mi
+	kayitSemalari map[string]*KayitSemasi // kayit adi -> sema
 }
 
 // tipCikar: bir ifadenin tipini derleme aninda belirler.
@@ -704,7 +745,33 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			return *ht.Eleman
 		}
 		return TipTam
+	case KayitOlusturDugum:
+		return Tip{Cesit: CKayit, KayitAdi: n.Ad}
+	case AlanErisimDugum:
+		ht := e.tipCikar(n.Hedef)
+		if ht.Cesit == CKayit {
+			if sema, ok := e.kayitSemalari[ht.KayitAdi]; ok {
+				if t, ok2 := sema.AlanTipleri[n.Alan]; ok2 {
+					return t
+				}
+			}
+		}
+		return TipTam
+	case MetotCagriDugum:
+		ht := e.tipCikar(n.Hedef)
+		if ht.Cesit == CKayit {
+			if t, ok := e.islevTipi["kayit_"+ht.KayitAdi+"_"+n.Metot]; ok {
+				return t
+			}
+		}
+		return TipTam
 	case CagriDugum:
+		if _, ok := e.kayitSemalari[n.Ad]; ok {
+			// pozisyonel kayıt oluşturma: Ad(v1,v2) — parser bunu sıradan bir
+			// CagriDugum olarak üretiyor (T_PARANTEZ_AC), kayıt adı olup
+			// olmadığını yalnız SEMANTIK (kayitSemalari kaydı) ayırt edebilir.
+			return Tip{Cesit: CKayit, KayitAdi: n.Ad}
+		}
 		switch n.Ad {
 		case "uzunluk", "kod", "tamBol", "metinEsit", "sayı":
 			return TipTam
@@ -825,6 +892,124 @@ func (e *elfUretici) sozlukElemanlariniCoz(govdeler ...[]Dugum) {
 	}
 }
 
+// kayitOlusturSiteleriTopla: bir ifade agacinin ICINDE (herhangi bir
+// derinlikte) bulunan TUM "Ad(...)" (pozisyonel, CagriDugum'a parser
+// tarafindan ayni sekilde ayristirilir — kayit adi olup olmadigi yalniz
+// kayitSemalari kaydiyla ayirt edilir) ve "Ad{alan:v}" (KayitOlusturDugum,
+// adlandirilmis) kayit olusturma sitelerini toplar. sozlukElemanTipiBul'un
+// aksine GENEL bir agac gezisi gerekiyor cunku kayit olusturma herhangi bir
+// ifadenin icinde nested olabilir (ör. yaz(Nokta(1,2).x)).
+func (e *elfUretici) kayitOlusturSiteleriTopla(d Dugum, sonuc *[]KayitOlusturDugum) {
+	if d == nil {
+		return
+	}
+	switch n := d.(type) {
+	case KayitOlusturDugum:
+		*sonuc = append(*sonuc, n)
+		for _, v := range n.Degerler {
+			e.kayitOlusturSiteleriTopla(v, sonuc)
+		}
+	case CagriDugum:
+		if sema, ok := e.kayitSemalari[n.Ad]; ok {
+			adlar := append([]string{}, sema.Alanlar...)
+			if len(adlar) > len(n.Argumanlar) {
+				adlar = adlar[:len(n.Argumanlar)]
+			}
+			*sonuc = append(*sonuc, KayitOlusturDugum{Ad: n.Ad, AlanAdlari: adlar, Degerler: n.Argumanlar})
+		}
+		for _, a := range n.Argumanlar {
+			e.kayitOlusturSiteleriTopla(a, sonuc)
+		}
+	case IkiliDugum:
+		e.kayitOlusturSiteleriTopla(n.Sol, sonuc)
+		e.kayitOlusturSiteleriTopla(n.Sag, sonuc)
+	case ListeDugum:
+		for _, el := range n.Elemanlar {
+			e.kayitOlusturSiteleriTopla(el, sonuc)
+		}
+	case SozlukDugum:
+		for _, v := range n.Degerler {
+			e.kayitOlusturSiteleriTopla(v, sonuc)
+		}
+		for _, k := range n.Anahtarlar {
+			e.kayitOlusturSiteleriTopla(k, sonuc)
+		}
+	case IndeksDugum:
+		e.kayitOlusturSiteleriTopla(n.Hedef, sonuc)
+		e.kayitOlusturSiteleriTopla(n.Indeks, sonuc)
+	case AlanErisimDugum:
+		e.kayitOlusturSiteleriTopla(n.Hedef, sonuc)
+	case MetotCagriDugum:
+		e.kayitOlusturSiteleriTopla(n.Hedef, sonuc)
+		for _, a := range n.Argumanlar {
+			e.kayitOlusturSiteleriTopla(a, sonuc)
+		}
+	}
+}
+
+// kayitOlusturSiteleriToplaDeyim: govdedeki (ic ice bloklar dahil) HER
+// deyimin icindeki ifadeleri kayitOlusturSiteleriTopla ile tarar.
+func (e *elfUretici) kayitOlusturSiteleriToplaDeyim(govde []Dugum, sonuc *[]KayitOlusturDugum) {
+	for _, d := range govde {
+		switch n := d.(type) {
+		case AtamaDugum:
+			e.kayitOlusturSiteleriTopla(n.Deger, sonuc)
+		case YazDugum:
+			e.kayitOlusturSiteleriTopla(n.Deger, sonuc)
+		case DondurDugum:
+			e.kayitOlusturSiteleriTopla(n.Deger, sonuc)
+		case IndeksAtamaDugum:
+			e.kayitOlusturSiteleriTopla(n.Hedef, sonuc)
+			e.kayitOlusturSiteleriTopla(n.Indeks, sonuc)
+			e.kayitOlusturSiteleriTopla(n.Deger, sonuc)
+		case AlanAtamaDugum:
+			e.kayitOlusturSiteleriTopla(n.Hedef, sonuc)
+			e.kayitOlusturSiteleriTopla(n.Deger, sonuc)
+		case CagriDugum:
+			e.kayitOlusturSiteleriTopla(n, sonuc)
+		case MetotCagriDugum:
+			e.kayitOlusturSiteleriTopla(n, sonuc)
+		case EgerDugum:
+			e.kayitOlusturSiteleriTopla(n.Kosul, sonuc)
+			e.kayitOlusturSiteleriToplaDeyim(n.Govde, sonuc)
+			e.kayitOlusturSiteleriToplaDeyim(n.Degilse, sonuc)
+		case IkenDugum:
+			e.kayitOlusturSiteleriTopla(n.Kosul, sonuc)
+			e.kayitOlusturSiteleriToplaDeyim(n.Govde, sonuc)
+		case HerDugum:
+			e.kayitOlusturSiteleriTopla(n.Liste, sonuc)
+			e.kayitOlusturSiteleriToplaDeyim(n.Govde, sonuc)
+		}
+	}
+}
+
+// kayitAlanTipleriniCoz: her kayit semasindaki her alanin tipini, o kayit
+// tipinin (govdeler icindeki HERHANGI bir yerdeki) olusturma sitelerinden
+// cikarir. sozlukElemanlariniCoz ile AYNI on-gecis stratejisi (sabit
+// noktaya kadar her turda yeniden cagrilir cunku deger ifadesinin kendi
+// tipi de asamali ogreniliyor olabilir). Bir alan icin HICBIR olusturma
+// sitesi bulunamazsa TipTam (guvenli varsayilan) kalir.
+func (e *elfUretici) kayitAlanTipleriniCoz(govdeler ...[]Dugum) {
+	for kayitAdi, sema := range e.kayitSemalari {
+		var siteler []KayitOlusturDugum
+		for _, govde := range govdeler {
+			e.kayitOlusturSiteleriToplaDeyim(govde, &siteler)
+		}
+		for _, alan := range sema.Alanlar {
+			for _, site := range siteler {
+				if site.Ad != kayitAdi {
+					continue
+				}
+				for i, aad := range site.AlanAdlari {
+					if aad == alan && i < len(site.Degerler) {
+						sema.AlanTipleri[alan] = e.tipCikar(site.Degerler[i])
+					}
+				}
+			}
+		}
+	}
+}
+
 // dondurTipi: govdedeki dondur deyimlerinden donus tipini cikarir.
 func (e *elfUretici) dondurTipi(govde []Dugum) (Tip, bool) {
 	for _, d := range govde {
@@ -936,6 +1121,39 @@ func (e *elfUretici) parametreTipleriniOgren(agac []Dugum, islevler []IslevDugum
 		case IndeksDugum:
 			gez(n.Hedef)
 			gez(n.Indeks)
+		case KayitOlusturDugum:
+			for _, x := range n.Degerler {
+				gez(x)
+			}
+		case AlanErisimDugum:
+			gez(n.Hedef)
+		case AlanAtamaDugum:
+			gez(n.Hedef)
+			gez(n.Deger)
+		case MetotCagriDugum:
+			// bu.metot(args) — "bu" (n.Argumanlar[i]'nin bir kayması) ile
+			// AYNI mantik: cagri yerindeki argumanlarin tipinden metodun
+			// (sentetik ad ile islevler listesine eklenmis) parametre
+			// tiplerini ogren. Argumanlar[0] gercek "bu" DEGIL (bu, Hedef
+			// uzerinden baglanir) — bu yuzden Parametreler[i+1] kaydirmasi.
+			ht := e.tipCikar(n.Hedef)
+			if ht.Cesit == CKayit {
+				if isv, ok := adlar[kayitMetotAdi(ht.KayitAdi, n.Metot)]; ok {
+					for i, a := range n.Argumanlar {
+						pIdx := i + 1
+						if pIdx < len(isv.Parametreler) {
+							at := e.tipCikar(a)
+							if at.Cesit != CTam {
+								e.parametreTipi[isv.Ad+"/"+isv.Parametreler[pIdx]] = at
+							}
+						}
+					}
+				}
+			}
+			gez(n.Hedef)
+			for _, a := range n.Argumanlar {
+				gez(a)
+			}
 		}
 	}
 	for _, d := range agac {
@@ -1234,6 +1452,55 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.call("f_sozluk_koy") // rax = sozluk (degismez, sonraki tura hazir)
 		}
 
+	case KayitOlusturDugum:
+		// Ad{alan1: v1, alan2: v2} -- adlandirilmis kayit olusturma.
+		sema, ok := e.kayitSemalari[n.Ad]
+		if !ok {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: bilinmeyen kayıt tipi: " + n.Ad})
+		}
+		e.kayitOlusturYaz(sema, n.AlanAdlari, n.Degerler, n.Satir)
+
+	case AlanErisimDugum:
+		// hedef.alan -- sabit ofsetten okuma (struct layout, uzunluk basligi yok).
+		ht := e.tipCikar(n.Hedef)
+		sema, ok := e.kayitSemalari[ht.KayitAdi]
+		if !ok {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '." + n.Alan + "' erişimi — hedef bir kayıt değil"})
+		}
+		idx, ok2 := sema.AlanIndeks[n.Alan]
+		if !ok2 {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '" + sema.Ad + "' kaydında böyle bir alan yok: " + n.Alan})
+		}
+		e.ifade(n.Hedef)
+		m.movDolayliOku32(rRAX, rRAX, int32(8*idx))
+
+	case MetotCagriDugum:
+		// hedef.metot(args) -- "bu" ilk argüman olarak bağlanır, statik
+		// (derleme-zamanı) çözümlenen DOĞRUDAN CALL (bkz. kayitMetotAdi notu).
+		ht := e.tipCikar(n.Hedef)
+		sema, ok := e.kayitSemalari[ht.KayitAdi]
+		if !ok {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '." + n.Metot + "(...)' çağrısı — hedef bir kayıt değil"})
+		}
+		if _, ok2 := sema.Metotlar[n.Metot]; !ok2 {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '" + sema.Ad + "' kaydında böyle bir metot yok: " + n.Metot})
+		}
+		if len(n.Argumanlar) > 5 {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: metot çağrısında en fazla 5 argüman (+bu)"})
+		}
+		e.ifade(n.Hedef)
+		m.pushKayit(rRAX) // bu
+		for _, a := range n.Argumanlar {
+			e.ifade(a)
+			m.pushKayit(rRAX)
+		}
+		metotKayitlari := []byte{rRDI, rRSI, rRDX, rRCX, rR8, rR9}
+		toplam := len(n.Argumanlar) + 1
+		for i := toplam - 1; i >= 0; i-- {
+			m.popKayit(metotKayitlari[i])
+		}
+		m.call("f_" + elfAd(kayitMetotAdi(sema.Ad, n.Metot)))
+
 	case IndeksDugum:
 		ht := e.tipCikar(n.Hedef)
 		e.ifade(n.Hedef)
@@ -1267,6 +1534,17 @@ func (e *elfUretici) ifade(d Dugum) {
 		m.leaVeri(rRAX, ad)
 
 	case CagriDugum:
+		if sema, ok := e.kayitSemalari[n.Ad]; ok {
+			// Ad(v1,v2) -- pozisyonel kayit olusturma (parser bunu sıradan
+			// bir CagriDugum olarak ayristirir, kayit adi olup olmadigi
+			// yalniz kayitSemalari kaydiyla ayirt edilir, bkz. tipCikar notu).
+			alanAdlari := append([]string{}, sema.Alanlar...)
+			if len(alanAdlari) > len(n.Argumanlar) {
+				alanAdlari = alanAdlari[:len(n.Argumanlar)]
+			}
+			e.kayitOlusturYaz(sema, alanAdlari, n.Argumanlar, n.Satir)
+			return
+		}
 		if n.Ad == "değil" {
 			if len(n.Argumanlar) != 1 {
 				panic(TanHata{Mesaj: "elf: değil() tek argüman ister"})
@@ -1837,6 +2115,27 @@ func (e *elfUretici) deyim(d Dugum) {
 	case CagriDugum:
 		e.ifade(n)
 
+	case MetotCagriDugum:
+		// hedef.metot(args) — sonucu kullanmadan (yan etki için) çağrı.
+		e.ifade(n)
+
+	case AlanAtamaDugum:
+		// hedef.alan = deger — sabit ofsete yazma (struct layout).
+		ht := e.tipCikar(n.Hedef)
+		sema, ok := e.kayitSemalari[ht.KayitAdi]
+		if !ok {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '." + n.Alan + " = ...' ataması — hedef bir kayıt değil"})
+		}
+		idx, ok2 := sema.AlanIndeks[n.Alan]
+		if !ok2 {
+			panic(TanHata{Satir: n.Satir, Mesaj: "elf: '" + sema.Ad + "' kaydında böyle bir alan yok: " + n.Alan})
+		}
+		e.ifade(n.Deger)
+		m.pushKayit(rRAX) // deger
+		e.ifade(n.Hedef)
+		m.popKayit(rRCX) // deger
+		m.movDolayliYaz32(rRAX, int32(8*idx), rRCX)
+
 	case IndeksAtamaDugum:
 		// liste[i] = deger — yerinde degistirme (DOKUMANTASYON.md'de var,
 		// elf arka ucunda hic implemente edilmemisti; TancElf.tan'in
@@ -1928,6 +2227,43 @@ func asmDegiskenleriTopla(govde []Dugum, kume map[string]bool) {
 			asmDegiskenleriTopla(n.Govde, kume)
 		}
 	}
+}
+
+// kayitMetotAdi: bir kayıt metodunun SENTETİK işlev adı — "bu.metot(...)"
+// çağrısı hedefin STATİK tipinden (KayitAdi) hangi metot govdesinin
+// çağrılacağını DERLEME ZAMANINDA kesin bilir (Tan'da arayüz/polimorfizm
+// yok — aynı kayıt-adı+metot-adı HER ZAMAN aynı govdeye karşılık gelir),
+// bu yüzden metot çağrısı DOĞRUDAN CALL ile çözülür — DerleElf.go:3366'daki
+// "fonksiyon pointer/indirect call yok" sınırı BURAYA uygulanmıyor (o sınır
+// bir DEĞİŞKENE atanmış/dinamik çözümlenen fonksiyon değerleri içindi).
+func kayitMetotAdi(kayitAdi, metotAdi string) string {
+	return "kayit_" + kayitAdi + "_" + metotAdi
+}
+
+// kayitOlusturYaz: sema.Alanlar sırasına göre (8*alanSayısı) bayt ayırıp
+// alanAdlari/degerler eşleşmesine göre her alanı yazar. KayitOlusturDugum
+// (adlandırılmış {alan:v}) VE pozisyonel CagriDugum (Ad(v1,v2)) İKİSİ DE
+// bu tek yardımcıyı kullanır — tek fark çağıran tarafın alanAdlari'yi nasıl
+// ürettiği (sırasıyla: doğrudan token'dan / sema.Alanlar'dan pozisyonel).
+func (e *elfUretici) kayitOlusturYaz(sema *KayitSemasi, alanAdlari []string, degerler []Dugum, satir int) {
+	m := e.m
+	m.movImm32(rRDI, int32(8*len(sema.Alanlar)))
+	m.call("f_tan_ayir")
+	m.pushKayit(rRAX) // kayıt işaretçisi
+	for i, alan := range alanAdlari {
+		if i >= len(degerler) {
+			break
+		}
+		e.ifade(degerler[i])
+		m.popKayit(rRCX) // kayıt işaretçisi (bu ana kadarki)
+		m.pushKayit(rRCX)
+		idx, ok := sema.AlanIndeks[alan]
+		if !ok {
+			panic(TanHata{Satir: satir, Mesaj: "elf: '" + sema.Ad + "' kaydında böyle bir alan yok: " + alan})
+		}
+		m.movDolayliYaz32(rRCX, int32(8*idx), rRAX)
+	}
+	m.popKayit(rRAX)
 }
 
 func (e *elfUretici) islevYaz(n IslevDugum) {
@@ -3999,6 +4335,20 @@ func elfCagrilanAdlariTopla(d Dugum, hedef map[string]bool) {
 		for _, x := range n.Degerler {
 			elfCagrilanAdlariTopla(x, hedef)
 		}
+	case KayitOlusturDugum:
+		for _, x := range n.Degerler {
+			elfCagrilanAdlariTopla(x, hedef)
+		}
+	case AlanErisimDugum:
+		elfCagrilanAdlariTopla(n.Hedef, hedef)
+	case AlanAtamaDugum:
+		elfCagrilanAdlariTopla(n.Hedef, hedef)
+		elfCagrilanAdlariTopla(n.Deger, hedef)
+	case MetotCagriDugum:
+		elfCagrilanAdlariTopla(n.Hedef, hedef)
+		for _, a := range n.Argumanlar {
+			elfCagrilanAdlariTopla(a, hedef)
+		}
 	}
 }
 
@@ -4071,10 +4421,14 @@ func derleElf(dosya string, cikti string) {
 
 	var islevler []IslevDugum
 	var anaGovde []Dugum
+	var kayitTanimlari []KayitTanimDugum
 	for _, d := range agac {
-		if isv, ok := d.(IslevDugum); ok {
-			islevler = append(islevler, isv)
-		} else {
+		switch dd := d.(type) {
+		case IslevDugum:
+			islevler = append(islevler, dd)
+		case KayitTanimDugum:
+			kayitTanimlari = append(kayitTanimlari, dd)
+		default:
 			anaGovde = append(anaGovde, d)
 		}
 	}
@@ -4088,7 +4442,18 @@ func derleElf(dosya string, cikti string) {
 	// yeri olmadigindan parametre tipi asla ogrenilemez ve "tam" a duser —
 	// derleme HATASIYLA duruyordu (halbuki program o islevi hic kullanmiyor).
 	// Ana govdeden ULASILABILIR islevleri bul, geri kalanini derleme.
-	ulasilanIslevler := elfUlasilabilirIslevler(anaGovde, islevler)
+	// NOT: kayit metotlarinin govdeleri de KOK olarak eklenir (additif,
+	// budama YAPMAZ) — bir metot govdesi baska bir kutuphane islevini
+	// cagiriyorsa o islev de reachability grafiginde "kullanilan" sayilmali,
+	// aksi halde metot pruning'den SONRA eklendigi icin (asagida) o islev
+	// yanlislikla atilmis olabilirdi.
+	kokGovde := append([]Dugum{}, anaGovde...)
+	for _, kt := range kayitTanimlari {
+		for _, mt := range kt.Metotlar {
+			kokGovde = append(kokGovde, mt.Govde...)
+		}
+	}
+	ulasilanIslevler := elfUlasilabilirIslevler(kokGovde, islevler)
 	var kullanilanIslevler []IslevDugum
 	for _, isv := range islevler {
 		if ulasilanIslevler[isv.Ad] {
@@ -4097,7 +4462,35 @@ func derleElf(dosya string, cikti string) {
 	}
 	islevler = kullanilanIslevler
 
-	e := &elfUretici{m: yeniMakineKodu(), genel: map[string]bool{}, tipler: map[string]Tip{}, islevTipi: map[string]Tip{}, parametreTipi: map[string]Tip{}}
+	e := &elfUretici{m: yeniMakineKodu(), genel: map[string]bool{}, tipler: map[string]Tip{}, islevTipi: map[string]Tip{}, parametreTipi: map[string]Tip{}, kayitSemalari: map[string]*KayitSemasi{}}
+
+	// --- KAYIT SEMALARI: alan sirasi/ofset + metotlar ---
+	// Metotlar HER ZAMAN derlenir (yukaridaki "kullanilmayan islevleri at"
+	// budamasindan MUAFTIR) — kayit tanimlari genelde kullanicinin kendi
+	// programinda dogrudan yazilir (buyuk, cogunlukla kullanilmayan bir
+	// kutuphaneden ice aktarilan onlarca yardimci fonksiyon gibi degil),
+	// bu yuzden "kullanilmiyor olabilir" riski dusuk — buna karsin
+	// reachability grafigini (yukarida) metot govdeleriyle KOK olarak
+	// genisletmek, metodun cagirdigi BASKA islevlerin yanlislikla
+	// atilmasini onluyor.
+	for _, kt := range kayitTanimlari {
+		sema := &KayitSemasi{Ad: kt.Ad, Alanlar: kt.Alanlar, AlanIndeks: map[string]int{}, AlanTipleri: map[string]Tip{}, Metotlar: map[string]IslevDugum{}}
+		for i, alan := range kt.Alanlar {
+			sema.AlanIndeks[alan] = i
+			sema.AlanTipleri[alan] = TipTam
+		}
+		for _, mt := range kt.Metotlar {
+			sema.Metotlar[mt.Ad] = mt
+			sentetikAd := kayitMetotAdi(kt.Ad, mt.Ad)
+			metotKopya := mt
+			metotKopya.Ad = sentetikAd
+			islevler = append(islevler, metotKopya)
+			if len(mt.Parametreler) > 0 {
+				e.parametreTipi[sentetikAd+"/"+mt.Parametreler[0]] = Tip{Cesit: CKayit, KayitAdi: kt.Ad}
+			}
+		}
+		e.kayitSemalari[kt.Ad] = sema
+	}
 
 	// --- islev donus tiplerini cikar (sabit noktaya kadar yinele) ---
 	// Cagri yerlerinden parametre tiplerini, dondur deyimlerinden donus tipini bul.
@@ -4127,6 +4520,7 @@ func derleElf(dosya string, cikti string) {
 				govdeler = append(govdeler, isv.Govde)
 			}
 			e.sozlukElemanlariniCoz(govdeler...)
+			e.kayitAlanTipleriniCoz(govdeler...)
 		}
 		for _, isv := range islevler {
 			// parametre tiplerini cagri yerlerinden tahmin et
@@ -4217,6 +4611,7 @@ func derleElf(dosya string, cikti string) {
 			govdeler = append(govdeler, isv.Govde)
 		}
 		e.sozlukElemanlariniCoz(govdeler...)
+		e.kayitAlanTipleriniCoz(govdeler...)
 	}
 	e.m.etiketKoy("_start")
 	e.argvYakala() // argv tabanini sakla (rsp henuz bozulmadi)

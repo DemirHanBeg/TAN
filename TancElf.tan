@@ -732,9 +732,9 @@ son
 # ("tam"/"metin") tipKutu[0]'a yazar. Çağıran ilgilenmiyorsa tek kullanımlık
 # [""] geçip yok sayabilir (yaz/eğer/iken/döndür), ilgileniyorsa (atama)
 # adTipiAyarla ile değişken tablosuna kaydeder.
-işlev ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu)
+işlev ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
     rpn = ifadeAyristir(tokenler, pozKutu, sayacKutu)
-    kod = ifadeBantYaz(rpn, adlarKutu, sayacKutu, tipKutu)
+    kod = ifadeBantYaz(rpn, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
     döndür listeBirlestir(kod, popKayit(0))
 son
 
@@ -745,7 +745,12 @@ son
 # mutable yığın olmadığından bu ikili STACK yerine ÖZYİNELİ ÇAĞRI
 # PARAMETRESİ olarak taşınıyor — iç içe döngülerde her çağrı kendi
 # seviyesini doğal olarak taşır, ayrı push/pop mekanizması gerekmez.
-işlev blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
+# dEtiketler: [dBas, dSon] tek listede — parametre sayısı 6 (System V AMD64
+# kayıt sınırı: rdi/rsi/rdx/rcx/r8/r9) sınırını AŞMAMAK için dBas+dSon TEK
+# parametreye ("dEtiketler") sıkıştırıldı (islevTipKutu eklenince 8 parametre
+# olurdu — Go referans derleyicisi bunu 7. argümanda "index out of range
+# [6] with length 6" ile YAKALADI, sessizce yanlış kod üretmedi, iyi haber).
+işlev blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu)
     # TAMPON KULLANIYOR (bkz. "TAMPON" başlığı) — bu döngü TancElf.tan'ın
     # KENDİ kaynağı (~2400 satır, yüzlerce deyim) için en büyük O(n²)
     # kaynağıydı: her deyim "kod = listeBirlestir(kod, ...)" ile MEVCUT
@@ -762,12 +767,12 @@ işlev blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         eğer t == "ANAHTAR" ve (d == "son" veya d == "değilse") ise
             döndür tamponSonuc(kodKutu, nKutu)
         son
-        z = tamponEkleTumu(kodKutu, nKutu, deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon))
+        z = tamponEkleTumu(kodKutu, nKutu, deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu))
     son
     döndür tamponSonuc(kodKutu, nKutu)
 son
 
-işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
+işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu)
     t = pTur(tokenler, pozKutu)
     d = pDeger(tokenler, pozKutu)
 
@@ -777,7 +782,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         tipKutu = [""]
         kodKutu = tamponOlustur()
         nKutu = [0]
-        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu))
+        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu, islevTipKutu))
         z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 0))      # mov rdi, rax
         eğer tipKutu[0] == "metin" ise
             z = tamponEkleTumu(kodKutu, nKutu, callBant("f_yaz_metin"))
@@ -809,14 +814,14 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         nKutu = [0]
         iken doğru
             etDegilse = yeniEtiket(sayacKutu, "Ldegilse")
-            z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""]))
+            z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""], islevTipKutu))
             # "ise" anahtarını yut
             eğer pTur(tokenler, pozKutu) == "ANAHTAR" ve pDeger(tokenler, pozKutu) == "ise" ise
                 x = pIlerle(tokenler, pozKutu)
             son
             z = tamponEkleTumu(kodKutu, nKutu, cmpImm32(0, 0))
             z = tamponEkleTumu(kodKutu, nKutu, jccBant(132, etDegilse))   # jz
-            z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon))
+            z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu))
             z = tamponEkleTumu(kodKutu, nKutu, jmpBant(etSon))
             z = tamponEkleTumu(kodKutu, nKutu, [bcEtiket(etDegilse)])
             eğer pTur(tokenler, pozKutu) == "ANAHTAR" ve pDeger(tokenler, pozKutu) == "değilse" ise
@@ -827,7 +832,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
                     x = pIlerle(tokenler, pozKutu)
                 değilse
                     # son (koşulsuz) "değilse" gövdesi — zincir burada biter
-                    z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon))
+                    z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu))
                     dur
                 son
             değilse
@@ -851,10 +856,10 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         kodKutu = tamponOlustur()
         nKutu = [0]
         z = tamponEkle(kodKutu, nKutu, bcEtiket(etBas))
-        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""]))
+        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""], islevTipKutu))
         z = tamponEkleTumu(kodKutu, nKutu, cmpImm32(0, 0))
         z = tamponEkleTumu(kodKutu, nKutu, jccBant(132, etSon))       # jz
-        z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, etBas, etSon))
+        z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, [etBas, etSon], islevTipKutu))
         z = tamponEkleTumu(kodKutu, nKutu, jmpBant(etBas))
         eğer pTur(tokenler, pozKutu) == "ANAHTAR" ve pDeger(tokenler, pozKutu) == "son" ise
             x = pIlerle(tokenler, pozKutu)
@@ -887,7 +892,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         # [rsp+8]=liste (ifadeBantYaz'ın zaten push ettiği değer).
         kodKutu = tamponOlustur()
         nKutu = [0]
-        z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(listeBant, adlarKutu, sayacKutu, [""]))
+        z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(listeBant, adlarKutu, sayacKutu, [""], islevTipKutu))
         z = tamponEkleTumu(kodKutu, nKutu, pushImm32(0))     # [rsp] = sayaç, liste artık [rsp+8]
         z = tamponEkle(kodKutu, nKutu, bcEtiket(etBas))
         z = tamponEkleTumu(kodKutu, nKutu, movRspOku(1, 0))  # rcx = sayaç
@@ -899,7 +904,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         z = tamponEkleTumu(kodKutu, nKutu, movPtrOku(0, 0))        # rax = eleman değeri
         yuva = adEkle(adlarKutu, degisken)
         z = tamponEkleTumu(kodKutu, nKutu, movYerelYaz(yuvaDisp(yuva), 0))
-        z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, etDevam, etTemiz))
+        z = tamponEkleTumu(kodKutu, nKutu, blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, [etDevam, etTemiz], islevTipKutu))
         z = tamponEkle(kodKutu, nKutu, bcEtiket(etDevam))
         z = tamponEkleTumu(kodKutu, nKutu, incRspSifir())    # sayaç++
         z = tamponEkleTumu(kodKutu, nKutu, jmpBant(etBas))
@@ -914,11 +919,11 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
     # --- dur / devam ---
     eğer t == "ANAHTAR" ve d == "dur" ise
         x = pIlerle(tokenler, pozKutu)
-        döndür jmpBant(dSon)
+        döndür jmpBant(dEtiketler[1])
     son
     eğer t == "ANAHTAR" ve d == "devam" ise
         x = pIlerle(tokenler, pozKutu)
-        döndür jmpBant(dBas)
+        döndür jmpBant(dEtiketler[0])
     son
 
     # --- işlev <ad>(<param, ...>) ... son ---
@@ -948,7 +953,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         kodKutu = tamponOlustur()
         nKutu = [0]
         z = tamponEkleTumu(kodKutu, nKutu, jmpBant(etAtla))
-        z = tamponEkleTumu(kodKutu, nKutu, islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu))
+        z = tamponEkleTumu(kodKutu, nKutu, islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu, islevTipKutu))
         z = tamponEkle(kodKutu, nKutu, bcEtiket(etAtla))
         döndür tamponSonuc(kodKutu, nKutu)
     son
@@ -958,7 +963,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
         x = pIlerle(tokenler, pozKutu)
         kodKutu = tamponOlustur()
         nKutu = [0]
-        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""]))
+        z = tamponEkleTumu(kodKutu, nKutu, ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""], islevTipKutu))
         z = tamponEkleTumu(kodKutu, nKutu, leaveBant())
         z = tamponEkleTumu(kodKutu, nKutu, retBant())
         döndür tamponSonuc(kodKutu, nKutu)
@@ -995,7 +1000,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
                 i = 0
                 iken i < adet - 1
                     z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
-                    z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(indeksBantlari[i], adlarKutu, sayacKutu, [""]))
+                    z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(indeksBantlari[i], adlarKutu, sayacKutu, [""], islevTipKutu))
                     z = tamponEkleTumu(kodKutu, nKutu, popKayit(2))     # rdx = indeks
                     z = tamponEkleTumu(kodKutu, nKutu, popKayit(1))     # rcx = bir üst liste
                     z = tamponEkleTumu(kodKutu, nKutu, leaOge(0, 1, 2)) # rax = &liste[indeks]
@@ -1004,8 +1009,8 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
                 son
                 # rax = yazılacak son-seviye liste işaretçisi
                 z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
-                z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(indeksBantlari[adet - 1], adlarKutu, sayacKutu, [""]))
-                z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(degerBant, adlarKutu, sayacKutu, [""]))
+                z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(indeksBantlari[adet - 1], adlarKutu, sayacKutu, [""], islevTipKutu))
+                z = tamponEkleTumu(kodKutu, nKutu, ifadeBantYaz(degerBant, adlarKutu, sayacKutu, [""], islevTipKutu))
                 z = tamponEkleTumu(kodKutu, nKutu, popKayit(2))        # rdx = değer
                 z = tamponEkleTumu(kodKutu, nKutu, popKayit(1))        # rcx = son indeks
                 z = tamponEkleTumu(kodKutu, nKutu, popKayit(0))        # rax = son-seviye liste
@@ -1020,7 +1025,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
             x = pIlerle(tokenler, pozKutu)
             yuva = adEkle(adlarKutu, ad)
             tipKutu = [""]
-            kod = ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu)
+            kod = ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
             adTipiAyarla(adlarKutu, ad, tipKutu[0])
             döndür listeBirlestir(kod, movYerelYaz(yuvaDisp(yuva), 0))
         son
@@ -1034,7 +1039,7 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dBas, dSon)
             # AD'a geri alıp tüm ifadeyi normal yoldan derliyoruz; sonuç
             # rax'a pop edilir ama kullanılmaz.
             pozKutu[0] = pozKutu[0] - 1
-            döndür ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""])
+            döndür ifadeSonuc(tokenler, pozKutu, adlarKutu, sayacKutu, [""], islevTipKutu)
         son
 
         # atama/çağrı değilse: satırı atla (henüz desteklenmiyor)
@@ -2451,10 +2456,15 @@ işlev argBant()
     döndür listeBirlestir(b, retBant())
 son
 
-# cagriSonucTipi: CAGRI'nin sonuç tipi (tip yığını için). Kullanıcı
-# işlevleri için dönüş tipi izlenmiyor (bkz. islevDerle notu) — varsayılan
-# "tam".
-işlev cagriSonucTipi(ad)
+# cagriSonucTipi: CAGRI'nin sonuç tipi (tip yığını için). Yerleşikler için
+# sabit liste; kullanıcı işlevleri için islevTipKutu'ya (bkz. aşağıdaki
+# "DÖNÜŞ TİPİ ÇIKARIMI" bölümü) bakar — SINIRLI çıkarım: sadece "döndür
+# <metin literali>" veya "döndür <bilinen-metin-döndüren-işlev>(...)"
+# biçimindeki döndür'leri tanır, değişken üzerinden dönüşleri (ör. bir
+# döngüde parça parça biriktirilen sonuç) İZLEMEZ — o durumda güvenli
+# varsayılan "tam" kalır (bkz. TanDurum.md "Basit hal" vs "Gerçek kullanım"
+# ayrımı, kullanıcı kararıyla kapsam bilinçli olarak burada sınırlandı).
+işlev cagriSonucTipi(ad, islevTipKutu)
     # ÖNCEDEN düz "==" kullanıyordu. "ad" PARAMETRE olduğundan tipi hep
     # "tam" sanılıyordu — bu fonksiyonun KENDİSİ, tam olarak listelediği
     # işlevleri (pTur/pDeger/alan dahil) DOĞRU tanıması gerekirken HER
@@ -2465,7 +2475,201 @@ işlev cagriSonucTipi(ad)
     eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") ise
         döndür "metin"
     son
+    döndür islevTipiAra(islevTipKutu, ad)
+son
+
+# ---------------- DÖNÜŞ TİPİ ÇIKARIMI (SINIRLI, ÖN-GEÇİŞ) ----------------
+# TancElf.tan'ın kendi tip çıkarımı sadece DEĞİŞKEN ATAMALARINI izler,
+# parametre/dönüş tipini izlemez (bkz. yukarıdaki not + TanDurum.md madde 9).
+# Bu bölüm, blokDerle/deyimDerle/ifadeBantYaz'a HİÇ DOKUNMADAN (en kırılgan
+# kod, "içe al" ile aynı strateji), ana derleme başlamadan ÖNCE tüm kaynağı
+# tarayıp kullanıcı işlevlerinin dönüş tipini SINIRLI bir kalıpla çıkarır:
+# sadece doğrudan "döndür <metin literali>" ya da "döndür <ad>(...)" (ad
+# bilinen bir metin-döndüren yerleşik ya da BAŞKA bir kullanıcı işlevi ise)
+# tanınır. Döngü/değişken üzerinden biriken sonuçlar (ör. tBüyüt gibi)
+# KASITLI OLARAK tanınmaz — varsayılan "tam" ile güvenli tarafta kalınır,
+# hiçbir zaman ÇALIŞAN bir programı YANLIŞ metin-tipi ile bozmaz (yanlış
+# negatif olur en kötü ihtimalle, yanlış pozitif olmaz).
+
+# islevTipiAra/islevTipiKaydet: adlarKutu ile AYNI [adlar, tipler] deseni,
+# ama ÖMRÜ bir işlev gövdesiyle sınırlı değil — sürücüde BİR KEZ oluşturulup
+# sayacKutu gibi tüm derleme boyunca AYNI kutu olarak taşınıyor.
+işlev islevTipiAra(islevTipKutu, ad)
+    adlar = islevTipKutu[0]
+    tipler = islevTipKutu[1]
+    n = uzunluk(adlar)
+    i = 0
+    iken i < n
+        eğer metinEsit(adlar[i], ad) ise
+            döndür tipler[i]
+        son
+        i = i + 1
+    son
     döndür "tam"
+son
+
+işlev islevTipiKaydet(islevTipKutu, ad, tip)
+    adlar = islevTipKutu[0]
+    n = uzunluk(adlar)
+    yuva = 0 - 1
+    i = 0
+    iken i < n
+        eğer metinEsit(adlar[i], ad) ise
+            yuva = i
+        son
+        i = i + 1
+    son
+    eğer yuva >= 0 ise
+        islevTipKutu[1][yuva] = tip
+    değilse
+        islevTipKutu[0] = ekle(islevTipKutu[0], ad)
+        islevTipKutu[1] = ekle(islevTipKutu[1], tip)
+    son
+    döndür 0
+son
+
+işlev yerlesikMetinDonerMi(ad)
+    eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") ise
+        döndür 1
+    son
+    döndür 0
+son
+
+# islevGovdeSonBul: "işlev ad(...)" parantezi kapandıktan SONRAKİ token
+# pozisyonundan başlayıp bu işlevin gövdesini kapatan "son"u bulur.
+# derinlik: işlev/eğer/iken/her +1, son -1 ("değilse" derinliği etkilemez,
+# aynı "son"u paylaşır — deyimDerle'nin kendi kuralıyla aynı). İçeride
+# BAŞKA bir "işlev" (iç içe tanım) görülürse iceIslevVar=1 işaretlenir —
+# çağıran bu durumda dönüş tipi ÇIKARIMINI ATLAR (güvenli varsayılan "tam"),
+# çünkü döndür'lerin hangi işleve ait olduğunu ayırt etmek bu basit
+# tarayıcının kapsamı dışında.
+işlev islevGovdeSonBul(tokenler, baslangic)
+    n = uzunluk(tokenler)
+    derinlik = 1
+    i = baslangic
+    iceIslevVar = 0
+    iken derinlik > 0 ve i < n
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "ANAHTAR" ve (d == "işlev" veya d == "eğer" veya d == "iken" veya d == "her") ise
+            eğer d == "işlev" ise
+                iceIslevVar = 1
+            son
+            derinlik = derinlik + 1
+        değilse eğer t == "ANAHTAR" ve d == "son" ise
+            derinlik = derinlik - 1
+        son
+        i = i + 1
+    son
+    döndür [i, iceIslevVar]
+son
+
+# govdeDonusTipiCikar: [bas,bitis) aralığındaki TÜM "döndür" deyimlerini
+# tara. Hepsi metin-literali ya da bilinen-metin-döndüren-çağrı ise
+# "metin", en az bir döndür varsa VE hepsi öyleyse. Aksi HER durumda
+# (döndür yok, karışık, tanınmayan desen) "tam" — güvenli varsayılan.
+işlev govdeDonusTipiCikar(tokenler, bas, bitis, islevTipKutu)
+    n = uzunluk(tokenler)
+    i = bas
+    doluMu = 0
+    hepsiMetinMi = 1
+    iken i < bitis ve i < n
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "ANAHTAR" ve d == "döndür" ise
+            doluMu = 1
+            j = i + 1
+            eğer j < bitis ve j < n ise
+                jt = alan(tokenler[j], 0)
+                jd = alan(tokenler[j], 1)
+                eğer jt == "METIN" ise
+                    # metin literali — hepsiMetinMi zaten 1, dokunma
+                    x = 0
+                değilse eğer jt == "AD" ise
+                    k = j + 1
+                    kt = ""
+                    eğer k < bitis ve k < n ise
+                        kt = alan(tokenler[k], 0)
+                    son
+                    eğer kt == "PARAC" ise
+                        eğer yerlesikMetinDonerMi(jd) == 1 ise
+                            x = 0
+                        değilse eğer islevTipiAra(islevTipKutu, jd) == "metin" ise
+                            x = 0
+                        değilse
+                            hepsiMetinMi = 0
+                        son
+                    değilse
+                        hepsiMetinMi = 0
+                    son
+                değilse
+                    hepsiMetinMi = 0
+                son
+            son
+        son
+        i = i + 1
+    son
+    eğer doluMu == 1 ve hepsiMetinMi == 1 ise
+        döndür "metin"
+    son
+    döndür "tam"
+son
+
+# islevDonusTipleriBirGecis: kaynak token akışındaki TÜM üst-düzey "işlev"
+# tanımlarını tarar, her biri için govdeDonusTipiCikar ile tip çıkarır ve
+# islevTipKutu'ya yazar. Bir işlevin dönüş tipi BAŞKA bir işlevin (henüz
+# taranmamış, dosyada daha sonra tanımlı) çağrısına bağlı olabileceğinden
+# TEK GEÇİŞ yetmeyebilir — döndür 1 (değişti) ise çağıran tekrar çağırır.
+işlev islevDonusTipleriBirGecis(tokenler, islevTipKutu)
+    n = uzunluk(tokenler)
+    i = 0
+    degisti = 0
+    iken i < n
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "ANAHTAR" ve d == "işlev" ise
+            i = i + 1
+            eğer i >= n ise
+                döndür degisti
+            son
+            ad = alan(tokenler[i], 1)
+            i = i + 1
+            iken i < n ve alan(tokenler[i], 0) != "PARKAPA"
+                i = i + 1
+            son
+            i = i + 1
+            sonuclar = islevGovdeSonBul(tokenler, i)
+            govdeSonu = sonuclar[0]
+            iceIslevVar = sonuclar[1]
+            eğer iceIslevVar == 0 ise
+                yeniTip = govdeDonusTipiCikar(tokenler, i, govdeSonu - 1, islevTipKutu)
+                eskiTip = islevTipiAra(islevTipKutu, ad)
+                eğer metinEsit(eskiTip, yeniTip) == 0 ise
+                    degisti = 1
+                son
+                z = islevTipiKaydet(islevTipKutu, ad, yeniTip)
+            son
+            i = govdeSonu
+        değilse
+            i = i + 1
+        son
+    son
+    döndür degisti
+son
+
+# islevDonusTipleriTara: sabit noktaya kadar (bir geçiş hiçbir şey
+# değiştirmeyene kadar) tekrar tekrar tara — işlev sayısı sonlu olduğundan
+# ve tipler sadece "tam"->"metin" yönünde değişebildiğinden (asla geri
+# dönmez) bu doğal olarak yakınsar; guvenlikSayaci sonsuz döngüye karşı
+# saf bir güvenlik ağı (beklenen yakınsama çok daha erken olur).
+işlev islevDonusTipleriTara(tokenler, islevTipKutu)
+    tekrar = 1
+    guvenlikSayaci = 0
+    iken tekrar == 1 ve guvenlikSayaci < 200
+        tekrar = islevDonusTipleriBirGecis(tokenler, islevTipKutu)
+        guvenlikSayaci = guvenlikSayaci + 1
+    son
+    döndür 0
 son
 
 # ifadeBantYaz: Bölüm 2'nin RPN bandını yığın-makinesi mantığıyla makine
@@ -2475,7 +2679,7 @@ son
 # indeksleme hangi kod yolunun üretileceğine bununla karar verir.
 # tipKutu (tek elemanlı çıkış kutusu): bant bitince en üstteki (son
 # sonucun) tipini tipKutu[0]'a yazar — çağıran (ör. atama, yaz) okur.
-işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu)
+işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
     # TAMPON KULLANIYOR (bkz. "TAMPON" başlığı) — her RPN girişi için birden
     # çok listeBirlestir çağrısı yapılıyordu, karmaşık ifadelerde O(n²).
     kodKutu = tamponOlustur()
@@ -2777,7 +2981,7 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu)
                 son
                 z = tamponEkleTumu(kodKutu, nKutu, callBant(metinBirlestir("f_", ad)))
                 z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
-                tipYigin = ekle(tipYigin, cagriSonucTipi(ad))
+                tipYigin = ekle(tipYigin, cagriSonucTipi(ad, islevTipKutu))
             son
 
         değilse eğer op == "IKILI" ise
@@ -2919,9 +3123,9 @@ son
 # yok) — tüm parametreler "tam" varsayılır. Bir işleve metin argüman
 # geçip gövde içinde "+" ile kullanmak bu yüzden YANLIŞ kod üretir. Bilinen
 # sınır, Metin1/Metin2 örnekleri bunun dışında kalacak şekilde yazıldı.
-işlev islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu)
+işlev islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu, islevTipKutu)
     yerelAdlarKutu = [parametreler, tamTipListesi(uzunluk(parametreler))]
-    govde = blokDerle(tokenler, pozKutu, yerelAdlarKutu, sayacKutu, "", "")
+    govde = blokDerle(tokenler, pozKutu, yerelAdlarKutu, sayacKutu, ["", ""], islevTipKutu)
     eğer pTur(tokenler, pozKutu) == "ANAHTAR" ve pDeger(tokenler, pozKutu) == "son" ise
         x = pIlerle(tokenler, pozKutu)
     son
@@ -3077,8 +3281,10 @@ tokenler = tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
 pozKutu = [0]
 adlarKutu = [[], []]
 sayacKutu = [0]
+islevTipKutu = [[], []]
+z = islevDonusTipleriTara(tokenler, islevTipKutu)
 
-govde = blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, "", "")
+govde = blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, ["", ""], islevTipKutu)
 # --- cerceve: degisken sayisi ancak govde derlenince belli olur ---
 degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16

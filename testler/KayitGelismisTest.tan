@@ -1,0 +1,25 @@
+# KayitGelismisTest: elf native backend'e YENİ eklenen kayıt tipi için
+# genişletilmiş sınama — metot parametresi (bu dışında, metin tipli),
+# metot dönüş tipi (metin), ve alan tipi çıkarımının metin alanlarda
+# doğru çalıştığını sınar (bkz. NexusCore/project_nexus_tan_blok0.md
+# "elf native port" maddesi).
+kayıt Kisi
+    ad
+    yas
+
+    işlev selamla(bu, onEk)
+        döndür onEk + bu.ad
+    son
+
+    işlev yaslandir(bu, kacYil)
+        bu.yas = bu.yas + kacYil
+    son
+son
+
+k = Kisi{ad: "Ayşe", yas: 30}
+yaz(k.selamla("Merhaba "))
+k.yaslandir(5)
+yaz(k.yas)
+
+k2 = Kisi("Mehmet", 40)
+yaz(k2.selamla("Selam "))
