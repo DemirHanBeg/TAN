@@ -26,6 +26,11 @@ import (
 const (
 	elfTaban  = 0x400000 // segmentin sanal taban adresi
 	basliklar = 64 + 56  // ELF başlığı + 1 program header
+	// icParcaBlokBoyut: içParcaLat'ın her çağrısında ayırdığı iplik-bloğu
+	// (mmap). Düşük 64 bayt: [0]=bitti-bayrağı [8]=sonuç [16..64]=argüman
+	// aktarım alanı (en fazla 6*8 bayt). Kalanı ÇOCUK YIĞINI (tepeden aşağı
+	// büyür) — 1 MB, makul programlar için bol pay.
+	icParcaBlokBoyut = 1 << 20
 )
 
 // ---------- kayıt numaraları ----------
@@ -42,6 +47,10 @@ const (
 	rR9  = 9
 	rR10 = 10
 	rR11 = 11
+	rR13 = 13 // içParcaLat: iplik-blok adresini f_<ad>'ın çağırdığı HER işlev boyunca
+	// korumak için ayrılmış — mevcut codegen r12-r15'e HİÇ dokunmuyor (yalnız
+	// rax/rcx/rdx/rbx/rsp/rbp/rsi/rdi/r8-r11 kullanılıyor), bu yüzden r13
+	// çağrı zinciri boyunca güvenle hayatta kalır.
 )
 
 type duzeltme struct {
@@ -288,6 +297,49 @@ func (m *makineKodu) leaVeri(hedef byte, ad string) {
 	}
 	m.bayt(rex, 0x8D, modrm(0, hedef, 5))
 	m.veriRef(ad)
+}
+
+// lea r64, [rip+disp32] -> KOD etiketine (duzeltmeler ile, jmp/call ile AYNI
+// mekanizma — rel32 alanı HER ZAMAN komutun SONUNU baz alır, opcode fark
+// etmez). leaVeri'den farkı: o VERİ (data segment, veriler/veriRef) adı
+// çözer, bu KOD etiketi (etiketler/duzeltmeler) çözer — içParcaLat'ın iplik
+// çıkış trambolininin ADRESİNİ (jump DEĞİL, bir DEĞER olarak) çocuk yığınına
+// yazmak için gerekli.
+func (m *makineKodu) leaEtiket(hedef byte, etiket string) {
+	rex := byte(0x48)
+	if hedef >= 8 {
+		rex |= 4
+	}
+	m.bayt(rex, 0x8D, modrm(0, hedef, 5)) // rm=101 => RIP-göreli
+	m.rel32(etiket)
+}
+
+// lock cmpxchg [taban], kaynak — RAX ile [taban] karşılaştırılır: eşitse
+// [taban]=kaynak ve ZF=1; değilse RAX=[taban] (GÜNCEL değer) ve ZF=0.
+// Atomik CAS (compare-and-swap) — kilit/futex'in temel taşı.
+func (m *makineKodu) lockCmpxchgBellek(taban byte, kaynak byte) {
+	rex := byte(0x48)
+	if kaynak >= 8 {
+		rex |= 4
+	}
+	if taban >= 8 {
+		rex |= 1
+	}
+	m.bayt(0xF0, rex, 0x0F, 0xB1, modrm(0, kaynak, taban))
+}
+
+// lock xadd [taban], kaynakHedef — [taban] += kaynakHedef (atomik);
+// kaynakHedef = [taban]'ın ESKİ değeri. Atomik fetch-and-add — atomikEkleHam'ın
+// temel taşı.
+func (m *makineKodu) lockXaddBellek(taban byte, kaynakHedef byte) {
+	rex := byte(0x48)
+	if kaynakHedef >= 8 {
+		rex |= 4
+	}
+	if taban >= 8 {
+		rex |= 1
+	}
+	m.bayt(0xF0, rex, 0x0F, 0xC1, modrm(0, kaynakHedef, taban))
 }
 
 // lea r64, [rbp+disp8]
@@ -723,6 +775,7 @@ type elfUretici struct {
 	suanIslev string
 	yiginVar  bool           // yigin ayirici koda eklendi mi
 	kayitSemalari map[string]*KayitSemasi // kayit adi -> sema
+	islevParamSayisi map[string]int // islev adi -> parametre sayisi (içParcaLat icin)
 }
 
 // tipCikar: bir ifadenin tipini derleme aninda belirler.
@@ -819,7 +872,9 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			"hamOku8", "hamYaz8", "bellekEsle", "bellekCoz",
 			"hamOku4", "hamYaz4", "hamOkuBayt", "hamYazBayt",
 			"bellekKopyala", "bellekDoldur",
-			"dosyaOkuBlokHam", "dosyaYazBlokHam":
+			"dosyaOkuBlokHam", "dosyaYazBlokHam",
+			"içParcaLat", "iplikBekle", "kilitOlustur", "kilitle", "kilidiAc",
+			"atomikEkleHam":
 			return TipTam
 		case "taban", "tavan", "yuvarla", "kök", "log", "e_üssü", "eÜssü":
 			return TipKesir
@@ -1965,6 +2020,122 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.popKayit(rRSI)
 			m.popKayit(rRDI)
 			m.call("f_dosya_yaz_blok_ham")
+			return
+		}
+		if n.Ad == "kilitOlustur" {
+			if len(n.Argumanlar) != 0 {
+				panic(TanHata{Mesaj: "elf: kilitOlustur() argüman almaz"})
+			}
+			// kilit = 8 baytlık mmap'lı sözcük (mmap sıfır-doldurur -> başlangıç
+			// 0 = kilitli-değil), bellekEsle(8) ile BİREBİR aynı çağrı.
+			m.movImm32(rRDI, 8)
+			m.call("f_bellek_esle")
+			return
+		}
+		if n.Ad == "kilitle" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: kilitle() bir argüman (kilit) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_kilit_al")
+			return
+		}
+		if n.Ad == "kilidiAc" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: kilidiAc() bir argüman (kilit) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_kilit_birak")
+			return
+		}
+		if n.Ad == "atomikEkleHam" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: atomikEkleHam() iki argüman (adres, miktar) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_atomik_ekle_ham")
+			return
+		}
+		if n.Ad == "iplikBekle" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: iplikBekle() bir argüman (iplik) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_iplik_bekle")
+			return
+		}
+		if n.Ad == "içParcaLat" {
+			if len(n.Argumanlar) < 1 {
+				panic(TanHata{Mesaj: "elf: içParcaLat(islevAdi, ...args) en az bir argüman ister"})
+			}
+			dv, ok := n.Argumanlar[0].(DegiskenDugum)
+			if !ok {
+				panic(TanHata{Mesaj: "elf: içParcaLat() ilk argüman DERLEME-ZAMANI bilinen bir işlev adı olmalı (çalışma-zamanı fonksiyon DEĞERİ native ELF'te desteklenmiyor)"})
+			}
+			hedefAd := dv.Ad
+			paramSayisi, biliniyor := e.islevParamSayisi[hedefAd]
+			if !biliniyor {
+				panic(TanHata{Mesaj: "elf: içParcaLat(): bilinmeyen işlev: " + hedefAd})
+			}
+			verilenArgSayisi := len(n.Argumanlar) - 1
+			if verilenArgSayisi != paramSayisi {
+				panic(TanHata{Mesaj: fmt.Sprintf("elf: içParcaLat(%s): %d argüman bekleniyor, %d verildi", hedefAd, paramSayisi, verilenArgSayisi)})
+			}
+			if paramSayisi > 6 {
+				panic(TanHata{Mesaj: "elf: içParcaLat(): en fazla 6 parametreli işlev desteklenir"})
+			}
+			etNo := e.yeniEtiket("icprl")
+			etParent := "Lparent_" + etNo
+			// 1) iplik-blok ayır (BLOK_BOYUT — düşük 64 bayt başlık/argüman
+			// aktarımı için ayrılmış, kalanı ÇOCUK YIĞINI): bellekEsle ile AYNI
+			// f_bellek_esle rutini.
+			m.movImm32(rRDI, icParcaBlokBoyut)
+			m.call("f_bellek_esle")
+			m.pushKayit(rRAX) // blok adresini YIĞINDA sakla (register basıncı yok)
+			// 2) argümanları değerlendirip blok+16+i*8'e yaz — clone syscall'ın
+			// KENDİSİ rdi/rsi/rdx/r8'i kullanacağından argümanlar REGISTER'DA
+			// TAŞINAMAZ, bu yüzden ÖNCE belleğe, ÇOCUK tarafında GERİ okunuyor.
+			for i, argNode := range n.Argumanlar[1:] {
+				e.ifade(argNode) // rax = argüman değeri
+				m.movRspOku(rRCX, 0)
+				m.movDolayliYaz(rRCX, int8(16+i*8), rRAX)
+			}
+			m.popKayit(rRBX) // rbx = blok adresi (bu dizinin geri kalanında sabit)
+			// 3) çocuk yığın tepesi = blok+BLOK_BOYUT-8; dönüş adresi olarak
+			// trambolin ETİKETİNİN ADRESİ yazılır (jmp DEĞİL — [rsp]'te bir
+			// DEĞER olarak, f_<ad>'ın kendi 'ret'i oraya düşecek).
+			m.movKayit(rRAX, rRBX)
+			m.addImm32(rRAX, icParcaBlokBoyut-8)
+			m.leaEtiket(rRCX, "f_iplik_cikis")
+			m.movDolayliYaz(rRAX, 0, rRCX)
+			// 4) clone(flags, child_sp, ptid=NULL, ctid=NULL, tls=NULL)
+			// CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD = 0x10F00
+			m.movImm32(rRDI, 0x10F00)
+			m.movKayit(rRSI, rRAX) // çocuk yığın işaretçisi
+			m.xorKayit(rRDX, rRDX)
+			m.xorKayit(rR10, rR10)
+			m.xorKayit(rR8, rR8)
+			m.movImm32(rRAX, 56) // sys_clone
+			m.syscall()
+			m.testKayit(rRAX, rRAX)
+			m.jcc(0x85, etParent) // jnz -> ebeveyn (rax = çocuk tid, 0 DEĞİL)
+			// --- ÇOCUK YOLU (rax == 0) ---
+			m.movKayit(rR13, rRBX) // r13 = blok adresi, f_<ad> BOYUNCA korunur
+			kayitlar := []byte{rRDI, rRSI, rRDX, rRCX, rR8, rR9}
+			for i := 0; i < paramSayisi; i++ {
+				m.movDolayliOku(kayitlar[i], rRBX, int8(16+i*8))
+			}
+			m.jmp("f_" + hedefAd) // call DEĞİL — dönüş adresi zaten yığında (adım 3)
+			// --- EBEVEYN YOLU ---
+			m.etiketKoy(etParent)
+			m.movKayit(rRAX, rRBX) // dönüş = iplik tutamacı (blok adresi)
 			return
 		}
 		if n.Ad == "karakter" {
@@ -4281,6 +4452,112 @@ func (e *elfUretici) yardimciPositionalIO() {
 	m.ret()
 }
 
+// yardimciEszamanlilik — ADIM 4: native iş parçacığı (clone) + kilit/futex +
+// atomik. içParcaLat'ın KENDİ (inline) codegen'i ifade()'de; burada SADECE
+// paylaşılan, sabit rutinler var (trambolin + futex sarmalayıcıları + kilit
+// + atomik). Fonksiyon-DEĞERİ native ELF'te yok (bilinen ayrı boşluk) —
+// içParcaLat bu yüzden DERLEME-ZAMANI bilinen bir işlev ADI alır, çalışma-
+// zamanı kapatma/closure DEĞİL.
+func (e *elfUretici) yardimciEszamanlilik() {
+	m := e.m
+
+	// f_futex_wait(rdi=adres, rsi=beklenenDeger) -> rax=syscall sonucu.
+	// [adres] HÂLÂ beklenenDeger İSE uyur (kernel atomik kontrol eder —
+	// kaçırılan uyandırma YOK); değilse hemen döner (EAGAIN, çağıran
+	// tekrar kontrol eder).
+	m.etiketKoy("f_futex_wait")
+	m.movKayit(rRDX, rRSI) // rdx = val (beklenen değer)
+	m.movImm32(rRSI, 0)    // rsi = FUTEX_WAIT
+	m.xorKayit(rR10, rR10) // timeout = NULL
+	m.movImm32(rRAX, 202)  // sys_futex
+	m.syscall()
+	m.ret()
+
+	// f_futex_wake(rdi=adres, rsi=uyandırılacakSayı) -> rax=syscall sonucu.
+	m.etiketKoy("f_futex_wake")
+	m.movKayit(rRDX, rRSI) // rdx = sayı
+	m.movImm32(rRSI, 1)    // rsi = FUTEX_WAKE
+	m.movImm32(rRAX, 202)
+	m.syscall()
+	m.ret()
+
+	// f_iplik_cikis: içParcaLat'ın çocuk yığınına elle yerleştirdiği "dönüş
+	// adresi" — f_<ad>'ın kendi leave/ret'i BURAYA düşer (call DEĞİL jmp ile
+	// girildiği için, ret normalde çağıranın adresine dönerdi; biz o
+	// adresi elle bu etikete ayarladık). r13 = iplik-blok adresi (İÇPARCALAT
+	// tarafından f_<ad>'a atlanmadan HEMEN ÖNCE ayarlandı, aradaki HİÇBİR
+	// kod r12-r15'e dokunmuyor).
+	m.etiketKoy("f_iplik_cikis")
+	m.movDolayliYaz(rR13, 8, rRAX) // [blok+8] = sonuç (f_<ad>'ın rax'ı)
+	m.movImm32(rRCX, 1)
+	m.movDolayliYaz(rR13, 0, rRCX) // [blok+0] = 1 (bitti bayrağı)
+	m.movKayit(rRDI, rR13)         // futex_wake(blok+0, 1) — blok+0 = bitti bayrağının KENDİSİ
+	m.movImm32(rRSI, 1)
+	m.call("f_futex_wake")
+	m.movImm32(rRAX, 60) // sys_exit (exit_group DEĞİL — sadece BU iplik ölür)
+	m.xorKayit(rRDI, rRDI)
+	m.syscall()
+
+	// f_iplik_bekle(rdi=blokAdresi) -> rax=sonuç. Bitti bayrağı set olana
+	// kadar futex_wait ile uyu-kontrol-et döngüsü (standart futex-as-
+	// condvar deseni — kaçırılan uyandırmaya karşı GÜVENLİ: kernel WAIT'te
+	// değeri atomik kontrol eder, çoktan değişmişse hemen döner).
+	m.etiketKoy("f_iplik_bekle")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.etiketKoy("Libk_dongu")
+	m.movDolayliOku(rRAX, rRDI, 0) // rax = [blok+0] (bitti bayrağı)
+	m.testKayit(rRAX, rRAX)
+	m.jcc(0x85, "Libk_bitti") // jnz
+	m.pushKayit(rRDI)
+	m.xorKayit(rRSI, rRSI) // beklenen = 0 (henüz bitmedi)
+	m.call("f_futex_wait")
+	m.popKayit(rRDI)
+	m.jmp("Libk_dongu")
+	m.etiketKoy("Libk_bitti")
+	m.movDolayliOku(rRAX, rRDI, 8) // rax = [blok+8] (sonuç)
+	m.leave()
+	m.ret()
+
+	// f_kilit_al(rdi=kilitAdresi) -> rax=0. lock cmpxchg ile CAS(0->1);
+	// başarısızsa GÜNCEL değeri (rax, genelde 1) bekleyerek futex_wait,
+	// tekrar dene.
+	m.etiketKoy("f_kilit_al")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.etiketKoy("Lkal_dongu")
+	m.xorKayit(rRAX, rRAX) // beklenen = 0 (kilitli-değil)
+	m.movImm32(rRCX, 1)    // yeni = 1 (kilitli)
+	m.lockCmpxchgBellek(rRDI, rRCX)
+	m.jcc(0x84, "Lkal_alindi") // je (ZF=1 -> CAS başarılı)
+	m.pushKayit(rRDI)
+	m.movKayit(rRSI, rRAX) // beklenen = GÜNCEL [rdi] değeri (cmpxchg rax'a yazdı)
+	m.call("f_futex_wait")
+	m.popKayit(rRDI)
+	m.jmp("Lkal_dongu")
+	m.etiketKoy("Lkal_alindi")
+	m.movImm32(rRAX, 0)
+	m.leave()
+	m.ret()
+
+	// f_kilit_birak(rdi=kilitAdresi) -> rax=0. [rdi]=0, futex_wake(1).
+	m.etiketKoy("f_kilit_birak")
+	m.xorKayit(rRCX, rRCX)
+	m.movDolayliYaz(rRDI, 0, rRCX) // [rdi] = 0 (kilitli-değil)
+	m.movImm32(rRSI, 1)
+	m.call("f_futex_wake") // rdi zaten kilit adresi
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_atomik_ekle_ham(rdi=adres, rsi=miktar) -> rax=YENİ değer. lock xadd
+	// ile atomik fetch-and-add.
+	m.etiketKoy("f_atomik_ekle_ham")
+	m.movKayit(rRAX, rRSI)  // rax = miktar (xadd kaynağı)
+	m.lockXaddBellek(rRDI, rRAX) // [rdi]+=rax (atomik); rax = ESKİ değer
+	m.addKayit(rRAX, rRSI)  // rax = eski + miktar = YENİ değer
+	m.ret()
+}
+
 // yuvarla(rdi = sayı[ondalık ham], rsi = basamak[int64]) -> rax = ondalık ham
 // SSE4.1 roundsd YOK (taban/tavan ile aynı gerekçe) — carpan=10^basamak ile
 // olcekle, sıfıra-dogru-kes + |kesir|>=0.5 ise 1 duzelt (yarım-noktalar
@@ -4992,6 +5269,17 @@ func elfCagrilanAdlariTopla(d Dugum, hedef map[string]bool) {
 		}
 	case CagriDugum:
 		hedef[n.Ad] = true
+		// içParcaLat(ad, ...): ilk argüman ÇALIŞMA-ZAMANI değeri değil,
+		// derleme-zamanı bilinen bir işlev ADI (bkz. ifade() codegen'i) —
+		// normal CagriDugum/DegiskenDugum gezinmesi bunu bir "çağrı" olarak
+		// GÖRMEZ (DegiskenDugum bu tarayıcıda hiç ele alınmıyor), bu yüzden
+		// hedef işlev BAŞKA yerden çağrılmıyorsa "kullanılmayan işlev" budama
+		// geçişinde YANLIŞLIKLA silinirdi — özel durum.
+		if n.Ad == "içParcaLat" && len(n.Argumanlar) > 0 {
+			if dv, ok := n.Argumanlar[0].(DegiskenDugum); ok {
+				hedef[dv.Ad] = true
+			}
+		}
 		for _, a := range n.Argumanlar {
 			elfCagrilanAdlariTopla(a, hedef)
 		}
@@ -5141,7 +5429,10 @@ func derleElf(dosya string, cikti string) {
 	}
 	islevler = kullanilanIslevler
 
-	e := &elfUretici{m: yeniMakineKodu(), genel: map[string]bool{}, tipler: map[string]Tip{}, islevTipi: map[string]Tip{}, parametreTipi: map[string]Tip{}, kayitSemalari: map[string]*KayitSemasi{}}
+	e := &elfUretici{m: yeniMakineKodu(), genel: map[string]bool{}, tipler: map[string]Tip{}, islevTipi: map[string]Tip{}, parametreTipi: map[string]Tip{}, kayitSemalari: map[string]*KayitSemasi{}, islevParamSayisi: map[string]int{}}
+	for _, isv := range islevler {
+		e.islevParamSayisi[isv.Ad] = len(isv.Parametreler)
+	}
 
 	// --- KAYIT SEMALARI: alan sirasi/ofset + metotlar ---
 	// Metotlar HER ZAMAN derlenir (yukaridaki "kullanilmayan islevleri at"
@@ -5280,6 +5571,7 @@ func derleElf(dosya string, cikti string) {
 	e.yardimciEkleDosya()
 	e.yardimciDosyaVarMi()
 	e.yardimciPositionalIO()
+	e.yardimciEszamanlilik()
 	e.yardimciSayi()
 	e.yardimciYazKesir()
 	for _, isv := range islevler {

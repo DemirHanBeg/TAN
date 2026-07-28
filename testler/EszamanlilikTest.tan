@@ -1,0 +1,71 @@
+# EszamanlilikTest — ADIM 4: native iş parçacığı (clone syscall) + futex
+# tabanlı kilit/atomik. içParcaLat(islevAdi, args...): islevAdi DERLEME-
+# ZAMANI bilinen bir işlev adı olmalı (çalışma-zamanı fonksiyon DEĞERİ
+# native ELF'te yok — bilinen ayrı boşluk, bkz. yorum DerleElf.go içParcaLat
+# codegen'inde).
+#
+# İki senaryo:
+# 1) atomikEkleHam (lock xadd) — 4 iş parçacığı ORTAK sayacı kilitsiz
+#    atomik artırıyor. Sonuç TAM (4*5000=20000) olmalı.
+# 2) kilitle/kilidiAc (futex + lock cmpxchg) — 3 iş parçacığı ORTAK sayacı
+#    KİLİTLİ oku-değiştir-yaz ile artırıyor (hamOku8+hamYaz8, KENDİ BAŞINA
+#    atomik DEĞİL — kilit OLMASA kayıp güncelleme/yarış olurdu). Sonuç TAM
+#    (3*3000=9000) olmalıysa kilit doğru çalışıyor demektir.
+#
+# Beklenen çıktı (native ELF'te DETERMİNİSTİK — yarış koşulu YOK):
+# 10000
+# 20000
+# 9000
+
+işlev artir(sayacAdres, kacKere)
+    i = 0
+    iken i < kacKere
+        x = atomikEkleHam(sayacAdres, 1)
+        i = i + 1
+    son
+    döndür kacKere * 2
+son
+
+işlev artirKilitli(kilit, sayacAdres, kacKere)
+    i = 0
+    iken i < kacKere
+        x = kilitle(kilit)
+        v = hamOku8(sayacAdres)
+        hamYaz8(sayacAdres, v + 1)
+        x = kilidiAc(kilit)
+        i = i + 1
+    son
+    döndür 0
+son
+
+# --- Senaryo 1: atomik sayaç ---
+sayac = bellekEsle(8)
+hamYaz8(sayac, 0)
+
+ip1 = içParcaLat(artir, sayac, 5000)
+ip2 = içParcaLat(artir, sayac, 5000)
+ip3 = içParcaLat(artir, sayac, 5000)
+ip4 = içParcaLat(artir, sayac, 5000)
+
+sonuc1 = iplikBekle(ip1)
+x = iplikBekle(ip2)
+x = iplikBekle(ip3)
+x = iplikBekle(ip4)
+
+yaz(sonuc1)
+yaz(hamOku8(sayac))
+
+# --- Senaryo 2: kilitli (mutex korumalı) sayaç ---
+kilit = kilitOlustur()
+sayac2 = bellekEsle(8)
+hamYaz8(sayac2, 0)
+
+jp1 = içParcaLat(artirKilitli, kilit, sayac2, 3000)
+jp2 = içParcaLat(artirKilitli, kilit, sayac2, 3000)
+jp3 = içParcaLat(artirKilitli, kilit, sayac2, 3000)
+
+x = iplikBekle(jp1)
+x = iplikBekle(jp2)
+x = iplikBekle(jp3)
+
+yaz(hamOku8(sayac2))

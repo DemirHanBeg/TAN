@@ -18,7 +18,9 @@ import (
 	"syscall"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 func rastgeleTamSayi(n int) int {
@@ -890,6 +892,26 @@ func init() {
 		}
 		copy(hb[hedef:hedef+uzunluk], hb[kaynak:kaynak+uzunluk])
 		return int64(0)
+	}
+
+	// atomikEkleHam(adres, miktar): ham bellekteki (bellekEsle) 8-baytlık
+	// sözcüğe ATOMİK ekleme yapar (native'de lock xadd), YENİ değeri
+	// döndürür. atomikOlustur/atomikEkle'den farkı: opak *TanAtomik Go
+	// nesnesi DEĞİL, hamOku8/hamYaz8 ile de erişilebilen ham bir adres —
+	// içParcaLat ile üretilen iş parçacıkları arasında paylaşılan sayaç
+	// için (bkz. ADIM 4, testler/EszamanlilikTest.tan).
+	yerlesikler["atomikEkleHam"] = func(a []Deger, satir int) Deger {
+		adres, _ := tamAl(a[0])
+		miktar, ok := tamAl(a[1])
+		if !ok {
+			firlat(satir, "atomikEkleHam() miktar tam sayı olmalı")
+		}
+		hb := kuresel_yorumlayici.hamBellek
+		if adres < 0 || adres+8 > int64(len(hb)) {
+			firlat(satir, "atomikEkleHam(): sınır dışı adres")
+		}
+		p := (*int64)(unsafe.Pointer(&hb[adres]))
+		return atomic.AddInt64(p, miktar)
 	}
 
 	// bellekDoldur(adres, deger, uzunluk): memset — uzunluk baytı deger mod 256
