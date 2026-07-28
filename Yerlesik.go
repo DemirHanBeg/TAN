@@ -430,6 +430,52 @@ func init() {
 			}
 			return int64(n)
 		},
+		// dosyaOkuBlokHam(fd, adres, uzunluk): GÜNCEL konumdan en çok uzunluk
+		// bayt okur, ham bellekteki (bellekEsle) adrese DOĞRUDAN yazar — metin
+		// ayırma YOK. Sabit-boyut (ör. sayfa) arabellek kullanan çağıranlar
+		// için: dosyaOkuBlok her seferinde YENİ metin ayırırdı, sayfa
+		// yöneticisi gibi ÖNCEDEN AYRILMIŞ arabelleğe okumak isteyen kod bu
+		// yüzden köprüsüz kalıyordu (bkz. NEXUS sayfa yöneticisi denemesi).
+		// Gerçek okunan bayt sayısını döndürür.
+		"dosyaOkuBlokHam": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			adres, _ := tamAl(a[1])
+			uzunluk, ok := tamAl(a[2])
+			if !ok || uzunluk < 0 {
+				firlat(satir, "dosyaOkuBlokHam() uzunluk negatif olamaz")
+			}
+			hb := kuresel_yorumlayici.hamBellek
+			if adres < 0 || adres+uzunluk > int64(len(hb)) {
+				firlat(satir, "dosyaOkuBlokHam(): sınır dışı adres")
+			}
+			n, err := syscall.Read(int(fd), hb[adres:adres+uzunluk])
+			if err != nil {
+				firlat(satir, "dosyaOkuBlokHam() okuma hatası: %v", err)
+			}
+			return int64(n)
+		},
+
+		// dosyaYazBlokHam(fd, adres, uzunluk): ham bellekteki adresten GÜNCEL
+		// konuma DOĞRUDAN yazar — metin dönüşümü YOK. Yazılan bayt sayısını
+		// döndürür.
+		"dosyaYazBlokHam": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			adres, _ := tamAl(a[1])
+			uzunluk, ok := tamAl(a[2])
+			if !ok || uzunluk < 0 {
+				firlat(satir, "dosyaYazBlokHam() uzunluk negatif olamaz")
+			}
+			hb := kuresel_yorumlayici.hamBellek
+			if adres < 0 || adres+uzunluk > int64(len(hb)) {
+				firlat(satir, "dosyaYazBlokHam(): sınır dışı adres")
+			}
+			n, err := syscall.Write(int(fd), hb[adres:adres+uzunluk])
+			if err != nil {
+				firlat(satir, "dosyaYazBlokHam() yazma hatası: %v", err)
+			}
+			return int64(n)
+		},
+
 		// dosyaSenkron(fd): fsync — tamponları diske ZORLAR (dayanıklılık/crash-safe).
 		"dosyaSenkron": func(a []Deger, satir int) Deger {
 			fd, _ := tamAl(a[0])

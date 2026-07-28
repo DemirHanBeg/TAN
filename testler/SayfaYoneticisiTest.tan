@@ -1,0 +1,125 @@
+# SayfaYoneticisiTest — ADIM 3 backlog sonrası kullanıcı isteği: ADIM 1
+# primitiflerinin (bellekEsle/hamOku8/hamYaz8/hamOkuBayt/hamYazBayt +
+# positional IO) gerçek bir NEXUS senaryosunda (sabit-boyut 4KB, checksum'lı
+# sayfa oku/yaz, tek iş parçacıklı) yeterli olup olmadığını sınar.
+#
+# BULUNAN EKSİK PRİMİTİF: dosyaOkuBlok/dosyaYazBlok SADECE "metin" ile
+# çalışıyordu (dosyaOkuBlok her seferinde YENİ metin ayırır, dosyaYazBlok
+# metin bekler) — bellekEsle'nin döndürdüğü HAM adresle dosya arasında
+# doğrudan köprü YOKTU. Eklendi: dosyaOkuBlokHam/dosyaYazBlokHam (ham
+# adres<->dosya, metin ayırma/dönüşüm YOK, syscall read/write'a doğrudan
+# rdi/rsi/rdx geçiyor).
+#
+# Checksum: bit-op (XOR) native ELF'te YOK (bilinen ayrı boşluk) — polinom
+# hash (yalnız *,+,% kullanıyor, ikisi de native'de var) ile kasıtlı
+# kaçınıldı.
+#
+# Beklenen çıktı (yorumlayıcı VE native ELF'te BİREBİR AYNI):
+# 1
+# merhaba nexus
+# 1
+# 0
+# 44
+# 0
+
+PAGE_BOYUT = 4096
+BASLIK_BOYUT = 8
+
+# sayfaChecksum(adres, uzunluk): polinom hash — çarpan 131 / mod 1000000007.
+işlev sayfaChecksum(adres, uzunluk)
+    h = 0
+    i = 0
+    iken i < uzunluk
+        b = hamOkuBayt(adres + i)
+        h = (h * 131 + b) % 1000000007
+        i = i + 1
+    son
+    döndür h
+son
+
+# sayfaYaz(yol, sayfaNo, arabellek): arabellek[0..8) checksum alanı olarak
+# KULLANILIR (hesaplanıp buraya yazılır), arabellek[8..4096) gerçek veri.
+işlev sayfaYaz(yol, sayfaNo, arabellek)
+    cs = sayfaChecksum(arabellek + BASLIK_BOYUT, PAGE_BOYUT - BASLIK_BOYUT)
+    hamYaz8(arabellek, cs)
+    fd = dosyaAcOkuYaz(yol)
+    x = dosyaKonumla(fd, sayfaNo * PAGE_BOYUT)
+    yazilan = dosyaYazBlokHam(fd, arabellek, PAGE_BOYUT)
+    x = dosyaSenkron(fd)
+    x = dosyaKapat(fd)
+    döndür yazilan
+son
+
+# sayfaOku(yol, sayfaNo, arabellek): diskten arabellek'e okur, checksum
+# doğrular. Dönüş: 1 = geçerli, 0 = bozuk/eksik.
+işlev sayfaOku(yol, sayfaNo, arabellek)
+    fd = dosyaAcOkuYaz(yol)
+    x = dosyaKonumla(fd, sayfaNo * PAGE_BOYUT)
+    okunan = dosyaOkuBlokHam(fd, arabellek, PAGE_BOYUT)
+    x = dosyaKapat(fd)
+    eğer okunan != PAGE_BOYUT ise
+        döndür 0
+    son
+    sakliCs = hamOku8(arabellek)
+    gercekCs = sayfaChecksum(arabellek + BASLIK_BOYUT, PAGE_BOYUT - BASLIK_BOYUT)
+    eğer sakliCs == gercekCs ise
+        döndür 1
+    son
+    döndür 0
+son
+
+# --- Sınama ---
+yol = "/tmp/sayfa_test.dat"
+x = dosyaSil(yol)
+
+buf = bellekEsle(PAGE_BOYUT)
+
+# sayfa 0'a "merhaba nexus" yaz
+i = 0
+iken i < 13
+    hamYazBayt(buf + BASLIK_BOYUT + i, kod(metinAl("merhaba nexus", i)))
+    i = i + 1
+son
+x = sayfaYaz(yol, 0, buf)
+
+# sayfa 3'e farklı içerik yaz (sayfa 1,2 HİÇ yazılmadı — rastgele erişim testi)
+i = 0
+iken i < 4088
+    hamYazBayt(buf + BASLIK_BOYUT + i, i % 256)
+    i = i + 1
+son
+x = sayfaYaz(yol, 3, buf)
+
+# okuma testi — sayfa 0
+okBuf = bellekEsle(PAGE_BOYUT)
+gecerli0 = sayfaOku(yol, 0, okBuf)
+yaz(gecerli0)
+metinTop = ""
+i = 0
+iken i < 13
+    metinTop = metinTop + karakter(hamOkuBayt(okBuf + BASLIK_BOYUT + i))
+    i = i + 1
+son
+yaz(metinTop)
+
+# okuma testi — sayfa 3
+gecerli3 = sayfaOku(yol, 3, okBuf)
+yaz(gecerli3)
+yaz(hamOkuBayt(okBuf + BASLIK_BOYUT + 0))
+yaz(hamOkuBayt(okBuf + BASLIK_BOYUT + 300))
+
+# bozulma testi — sayfa 0'ın ilk payload baytını diskte manuel boz,
+# checksum yakalamalı
+fd = dosyaAcOkuYaz(yol)
+x = dosyaKonumla(fd, 0 * PAGE_BOYUT + BASLIK_BOYUT)
+bozBuf = bellekEsle(1)
+hamYazBayt(bozBuf, 90)
+x = dosyaYazBlokHam(fd, bozBuf, 1)
+x = dosyaSenkron(fd)
+x = dosyaKapat(fd)
+gecerliBozuk = sayfaOku(yol, 0, okBuf)
+yaz(gecerliBozuk)
+
+bellekCoz(buf, PAGE_BOYUT)
+bellekCoz(okBuf, PAGE_BOYUT)
+bellekCoz(bozBuf, 1)

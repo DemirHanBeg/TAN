@@ -818,7 +818,8 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			"dosyaYazBlok", "dosyaSenkron", "dosyaKapat", "dosyaSil",
 			"hamOku8", "hamYaz8", "bellekEsle", "bellekCoz",
 			"hamOku4", "hamYaz4", "hamOkuBayt", "hamYazBayt",
-			"bellekKopyala", "bellekDoldur":
+			"bellekKopyala", "bellekDoldur",
+			"dosyaOkuBlokHam", "dosyaYazBlokHam":
 			return TipTam
 		case "taban", "tavan", "yuvarla", "kök", "log", "e_üssü", "eÜssü":
 			return TipKesir
@@ -1934,6 +1935,36 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.popKayit(rRSI)
 			m.popKayit(rRDI)
 			m.call("f_bellek_doldur")
+			return
+		}
+		if n.Ad == "dosyaOkuBlokHam" {
+			if len(n.Argumanlar) != 3 {
+				panic(TanHata{Mesaj: "elf: dosyaOkuBlokHam() üç argüman (fd, adres, uzunluk) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[2])
+			m.movKayit(rRDX, rRAX)
+			m.popKayit(rRSI)
+			m.popKayit(rRDI)
+			m.call("f_dosya_oku_blok_ham")
+			return
+		}
+		if n.Ad == "dosyaYazBlokHam" {
+			if len(n.Argumanlar) != 3 {
+				panic(TanHata{Mesaj: "elf: dosyaYazBlokHam() üç argüman (fd, adres, uzunluk) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[2])
+			m.movKayit(rRDX, rRAX)
+			m.popKayit(rRSI)
+			m.popKayit(rRDI)
+			m.call("f_dosya_yaz_blok_ham")
 			return
 		}
 		if n.Ad == "karakter" {
@@ -4085,6 +4116,23 @@ func (e *elfUretici) yardimciPositionalIO() {
 	m.movDolayliOku(rRDX, rRSI, 0) // count = *metin (uzunluk)
 	m.leaDolayli(rRSI, rRSI, 8)    // buf = metin+8
 	m.movImm32(rRAX, 1)           // sys_write
+	m.syscall()
+	m.ret()
+
+	// f_dosya_oku_blok_ham(rdi=fd, rsi=adres, rdx=uzunluk) -> rax=okunan bayt
+	// [read] — dosyaOkuBlok'tan farkı: metin AYIRMAZ, DOĞRUDAN verilen ham
+	// adrese (bellekEsle) okur. Linux read(2) ABI'si zaten rdi/rsi/rdx —
+	// argümanlar HİÇ taşınmadan doğrudan syscall'a geçiyor.
+	m.etiketKoy("f_dosya_oku_blok_ham")
+	m.xorKayit(rRAX, rRAX) // sys_read (0)
+	m.syscall()
+	m.ret()
+
+	// f_dosya_yaz_blok_ham(rdi=fd, rsi=adres, rdx=uzunluk) -> rax=yazılan bayt
+	// [write] — dosyaYazBlok'tan farkı: metin BEKLEMEZ, ham adresten
+	// DOĞRUDAN yazar.
+	m.etiketKoy("f_dosya_yaz_blok_ham")
+	m.movImm32(rRAX, 1) // sys_write
 	m.syscall()
 	m.ret()
 
