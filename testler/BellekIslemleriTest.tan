@@ -1,0 +1,68 @@
+# hamOku4/hamYaz4, hamOkuBayt/hamYazBayt, bellekKopyala (memmove, çakışma
+# dahil), bellekDoldur (memset) testi — buffer pool için ADIM 1.
+# Yorumlayıcı ve native ELF birebir aynı çıktı vermeli:
+# 305419896
+# 42
+# 200
+# 65 66 67 68 69 70 71 72 73 74
+# 88 89 90 88 89 90 91 92 93 94
+# 88 89 90 91 92 93 94 92 93 94
+# 55 55 55 55 55
+
+adr = bellekEsle(4096)
+
+# 32-bit word round-trip
+hamYaz4(adr, 305419896)
+yaz(hamOku4(adr))
+
+# tek bayt round-trip
+hamYazBayt(adr + 100, 42)
+yaz(hamOkuBayt(adr + 100))
+hamYazBayt(adr + 100, 200)
+yaz(hamOkuBayt(adr + 100))
+
+# [200..210) = 65..74 doldur, çakışmayan bloğa kopyala, doğrula
+i = 0
+iken i < 10
+    hamYazBayt(adr + 200 + i, 65 + i)
+    i = i + 1
+son
+bellekKopyala(adr + 300, adr + 200, 10)
+i = 0
+iken i < 10
+    yaz(hamOkuBayt(adr + 300 + i))
+    i = i + 1
+son
+
+# İLERİ ÇAKIŞMA: [200..210)=88,89,...,97 -> hedef adr+203 (hedef>kaynak,
+# örtüşüyor) — kaynak baytları yazılmadan önce okunmalı (sondan başa kopya)
+i = 0
+iken i < 10
+    hamYazBayt(adr + 200 + i, 88 + i)
+    i = i + 1
+son
+bellekKopyala(adr + 203, adr + 200, 7)
+i = 0
+iken i < 10
+    yaz(hamOkuBayt(adr + 200 + i))
+    i = i + 1
+son
+
+# GERİ ÇAKIŞMA: mevcut [203..210) -> hedef adr+200 (hedef<kaynak, örtüşüyor)
+# — baştan sona kopya güvenli
+bellekKopyala(adr + 200, adr + 203, 7)
+i = 0
+iken i < 10
+    yaz(hamOkuBayt(adr + 200 + i))
+    i = i + 1
+son
+
+# bellekDoldur — memset
+bellekDoldur(adr + 600, 55, 5)
+i = 0
+iken i < 5
+    yaz(hamOkuBayt(adr + 600 + i))
+    i = i + 1
+son
+
+bellekCoz(adr, 4096)

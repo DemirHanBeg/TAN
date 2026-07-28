@@ -774,6 +774,98 @@ func init() {
 		return int64(0)
 	}
 
+	// hamOku4(adres): adresten 4 baytlık (32-bit) tam sayı okur (little-endian,
+	// işaretsiz — üst bitler sıfır). Sayfa başlığı/uzunluk alanları için.
+	yerlesikler["hamOku4"] = func(a []Deger, satir int) Deger {
+		p, _ := tamAl(a[0])
+		hb := kuresel_yorumlayici.hamBellek
+		if p < 0 || p+4 > int64(len(hb)) {
+			firlat(satir, "hamOku4(): sınır dışı adres")
+		}
+		var v int64
+		for i := int64(0); i < 4; i++ {
+			v |= int64(hb[p+i]) << uint(8*i)
+		}
+		return v
+	}
+
+	// hamYaz4(adres, deger): adrese 4 baytlık tam sayı yazar (little-endian,
+	// deger 2^32 mod alınır).
+	yerlesikler["hamYaz4"] = func(a []Deger, satir int) Deger {
+		p, _ := tamAl(a[0])
+		v, _ := tamAl(a[1])
+		hb := kuresel_yorumlayici.hamBellek
+		if p < 0 || p+4 > int64(len(hb)) {
+			firlat(satir, "hamYaz4(): sınır dışı adres")
+		}
+		for i := int64(0); i < 4; i++ {
+			hb[p+i] = byte(v >> uint(8*i))
+		}
+		return int64(0)
+	}
+
+	// hamOkuBayt(adres): tek bayt okur (0-255). hamOku ile aynı — bellekEsle
+	// ailesiyle (hamOku4/hamOku8) tutarlı adlandırma için.
+	yerlesikler["hamOkuBayt"] = func(a []Deger, satir int) Deger {
+		p, ok := tamAl(a[0])
+		if !ok || p < 0 || p >= int64(len(kuresel_yorumlayici.hamBellek)) {
+			firlat(satir, "hamOkuBayt(): sınır dışı adres")
+		}
+		return int64(kuresel_yorumlayici.hamBellek[p])
+	}
+
+	// hamYazBayt(adres, deger): tek bayt yazar (deger mod 256). hamYaz ile
+	// aynı — bellekEsle ailesiyle tutarlı adlandırma için.
+	yerlesikler["hamYazBayt"] = func(a []Deger, satir int) Deger {
+		p, ok := tamAl(a[0])
+		if !ok || p < 0 || p >= int64(len(kuresel_yorumlayici.hamBellek)) {
+			firlat(satir, "hamYazBayt(): sınır dışı adres")
+		}
+		v, ok := sabitDegerCikar(a[1])
+		if !ok {
+			firlat(satir, "hamYazBayt() değeri tam sayı olmalı")
+		}
+		kuresel_yorumlayici.hamBellek[p] = byte(v)
+		return int64(0)
+	}
+
+	// bellekKopyala(hedef, kaynak, uzunluk): memmove — hedef/kaynak aralıkları
+	// çakışsa bile doğru sonuç verir (Go'nun copy() ilkeli çakışma-güvenlidir).
+	yerlesikler["bellekKopyala"] = func(a []Deger, satir int) Deger {
+		hedef, _ := tamAl(a[0])
+		kaynak, _ := tamAl(a[1])
+		uzunluk, ok := tamAl(a[2])
+		if !ok || uzunluk < 0 {
+			firlat(satir, "bellekKopyala() uzunluk negatif olamaz")
+		}
+		hb := kuresel_yorumlayici.hamBellek
+		if hedef < 0 || hedef+uzunluk > int64(len(hb)) || kaynak < 0 || kaynak+uzunluk > int64(len(hb)) {
+			firlat(satir, "bellekKopyala(): sınır dışı adres")
+		}
+		copy(hb[hedef:hedef+uzunluk], hb[kaynak:kaynak+uzunluk])
+		return int64(0)
+	}
+
+	// bellekDoldur(adres, deger, uzunluk): memset — uzunluk baytı deger mod 256
+	// ile doldurur.
+	yerlesikler["bellekDoldur"] = func(a []Deger, satir int) Deger {
+		adres, _ := tamAl(a[0])
+		deger, _ := tamAl(a[1])
+		uzunluk, ok := tamAl(a[2])
+		if !ok || uzunluk < 0 {
+			firlat(satir, "bellekDoldur() uzunluk negatif olamaz")
+		}
+		hb := kuresel_yorumlayici.hamBellek
+		if adres < 0 || adres+uzunluk > int64(len(hb)) {
+			firlat(satir, "bellekDoldur(): sınır dışı adres")
+		}
+		b := byte(deger)
+		for i := int64(0); i < uzunluk; i++ {
+			hb[adres+i] = b
+		}
+		return int64(0)
+	}
+
 	// ---- Kripto (Faz A #1 — bkz. NexusCore/FazA_Kapsam.md) ----
 	// Kendi kripto yazma tuzağına düşülmedi: Go'nun crypto/sha256 ve
 	// crypto/aes+cipher (AES-256-GCM, NIST standardı, kimlik doğrulamalı

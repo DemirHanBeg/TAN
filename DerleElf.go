@@ -379,6 +379,45 @@ func (m *makineKodu) movDolayliYaz(taban byte, disp int8, kaynak byte) {
 	m.bayt(rex, 0x89, modrm(1, kaynak, taban), byte(disp))
 }
 
+// mov r32, [taban+disp8]  (8B /r, 32-bit işlenen — üst 32 bit x86-64 kuralıyla
+// otomatik sıfırlanır). movDolayliOku'dan farkı: REX.W YOK (64-bit değil).
+func (m *makineKodu) movDolayli32Oku(hedef, taban byte, disp int8) {
+	rex := byte(0)
+	if hedef >= 8 {
+		rex |= 4
+	}
+	if taban >= 8 {
+		rex |= 1
+	}
+	if rex != 0 {
+		m.bayt(0x40 | rex)
+	}
+	if disp == 0 && (taban&7) != rRBP {
+		m.bayt(0x8B, modrm(0, hedef, taban))
+		return
+	}
+	m.bayt(0x8B, modrm(1, hedef, taban), byte(disp))
+}
+
+// mov [taban+disp8], r32  (89 /r, 32-bit işlenen)
+func (m *makineKodu) movDolayli32Yaz(taban byte, disp int8, kaynak byte) {
+	rex := byte(0)
+	if kaynak >= 8 {
+		rex |= 4
+	}
+	if taban >= 8 {
+		rex |= 1
+	}
+	if rex != 0 {
+		m.bayt(0x40 | rex)
+	}
+	if disp == 0 && (taban&7) != rRBP {
+		m.bayt(0x89, modrm(0, kaynak, taban))
+		return
+	}
+	m.bayt(0x89, modrm(1, kaynak, taban), byte(disp))
+}
+
 // lea r64, [taban+disp8]
 func (m *makineKodu) leaDolayli(hedef, taban byte, disp int8) {
 	rex := byte(0x48)
@@ -777,7 +816,9 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			return TipTam
 		case "dosyaAcOku", "dosyaAcYaz", "dosyaAcOkuYaz", "dosyaKonumla",
 			"dosyaYazBlok", "dosyaSenkron", "dosyaKapat", "dosyaSil",
-			"hamOku8", "hamYaz8", "bellekEsle", "bellekCoz":
+			"hamOku8", "hamYaz8", "bellekEsle", "bellekCoz",
+			"hamOku4", "hamYaz4", "hamOkuBayt", "hamYazBayt",
+			"bellekKopyala", "bellekDoldur":
 			return TipTam
 		case "taban", "tavan", "yuvarla", "kök", "log", "e_üssü", "eÜssü":
 			return TipKesir
@@ -1821,6 +1862,78 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.movKayit(rRSI, rRAX)
 			m.popKayit(rRDI)
 			m.call("f_bellek_coz")
+			return
+		}
+		if n.Ad == "hamOku4" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: hamOku4() tek argüman (adres) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_ham_oku4")
+			return
+		}
+		if n.Ad == "hamYaz4" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: hamYaz4() iki argüman (adres, deger) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_ham_yaz4")
+			return
+		}
+		if n.Ad == "hamOkuBayt" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: hamOkuBayt() tek argüman (adres) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_ham_oku_bayt")
+			return
+		}
+		if n.Ad == "hamYazBayt" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: hamYazBayt() iki argüman (adres, deger) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_ham_yaz_bayt")
+			return
+		}
+		if n.Ad == "bellekKopyala" {
+			if len(n.Argumanlar) != 3 {
+				panic(TanHata{Mesaj: "elf: bellekKopyala() üç argüman (hedef, kaynak, uzunluk) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[2])
+			m.movKayit(rRDX, rRAX)
+			m.popKayit(rRSI)
+			m.popKayit(rRDI)
+			m.call("f_ham_bellek_tasi")
+			return
+		}
+		if n.Ad == "bellekDoldur" {
+			if len(n.Argumanlar) != 3 {
+				panic(TanHata{Mesaj: "elf: bellekDoldur() üç argüman (adres, deger, uzunluk) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[2])
+			m.movKayit(rRDX, rRAX)
+			m.popKayit(rRSI)
+			m.popKayit(rRDI)
+			m.call("f_bellek_doldur")
 			return
 		}
 		if n.Ad == "karakter" {
@@ -4041,6 +4154,81 @@ func (e *elfUretici) yardimciPositionalIO() {
 	m.etiketKoy("f_bellek_coz")
 	m.movImm32(rRAX, 11)         // sys_munmap
 	m.syscall()
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_ham_oku4(rdi=adres) -> rax = *(uint32*)adres (32-bit oku, üst bitler sıfır)
+	m.etiketKoy("f_ham_oku4")
+	m.movDolayli32Oku(rRAX, rRDI, 0)
+	m.ret()
+
+	// f_ham_yaz4(rdi=adres, rsi=deger) -> rax=0 : *(uint32*)adres = deger (alt 32 bit)
+	m.etiketKoy("f_ham_yaz4")
+	m.movDolayli32Yaz(rRDI, 0, rRSI)
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_ham_oku_bayt(rdi=adres) -> rax = *(uint8*)adres (üst bitler sıfır)
+	m.etiketKoy("f_ham_oku_bayt")
+	m.xorKayit(rRAX, rRAX)
+	m.movBaytOku(rRDI)
+	m.ret()
+
+	// f_ham_yaz_bayt(rdi=adres, rsi=deger) -> rax=0 : *(uint8*)adres = deger (alt bayt)
+	// movBaytKayit kaynak kaydı DL/CL/AL/BL ile sınırlı (REX olmadan yüksek
+	// bayt kodlamasına düşer) — deger önce rdx'e taşınır (kod tabanında
+	// yerleşik desen, bkz. yardimciMetinIndeks).
+	m.etiketKoy("f_ham_yaz_bayt")
+	m.movKayit(rRDX, rRSI)
+	m.movBaytKayit(rRDI, rRDX)
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_ham_bellek_tasi(rdi=hedef, rsi=kaynak, rdx=uzunluk) -> rax=0 : memmove
+	// (çakışma-güvenli — hedef>kaynak ise SONDAN BAŞA, aksi TAKDİRDE BAŞTAN
+	// SONA kopyalar; f_bellek_kopyala'dan farkı budur, o yalnız ileri kopyalar
+	// ve içeride TAZE ayrılan, çakışmayan bloklar için kullanılır).
+	m.etiketKoy("f_ham_bellek_tasi")
+	m.testKayit(rRDX, rRDX)
+	m.jcc(0x84, "Lhbt_son") // jz
+	m.cmpKayit(rRDI, rRSI)
+	m.jcc(0x86, "Lhbt_ileri") // jbe: hedef<=kaynak -> ileri kopya güvenli
+	// hedef > kaynak: sondan başa kopyala (çakışma güvenli)
+	m.addKayit(rRDI, rRDX)
+	m.addKayit(rRSI, rRDX)
+	m.decKayit(rRDI)
+	m.decKayit(rRSI)
+	m.etiketKoy("Lhbt_geri")
+	m.movBaytOku(rRSI)
+	m.movBaytYazAl(rRDI)
+	m.decKayit(rRSI)
+	m.decKayit(rRDI)
+	m.decKayit(rRDX)
+	m.jcc(0x85, "Lhbt_geri") // jnz
+	m.jmp("Lhbt_son")
+	m.etiketKoy("Lhbt_ileri")
+	m.movBaytOku(rRSI)
+	m.movBaytYazAl(rRDI)
+	m.incKayit(rRSI)
+	m.incKayit(rRDI)
+	m.decKayit(rRDX)
+	m.jcc(0x85, "Lhbt_ileri") // jnz
+	m.etiketKoy("Lhbt_son")
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_bellek_doldur(rdi=adres, rsi=deger, rdx=uzunluk) -> rax=0 : memset
+	// (uzunluk baytı deger'in alt baytıyla doldurur)
+	m.etiketKoy("f_bellek_doldur")
+	m.movKayit(rRCX, rRSI) // cl = deger (alt bayt)
+	m.testKayit(rRDX, rRDX)
+	m.jcc(0x84, "Lbd_son") // jz
+	m.etiketKoy("Lbd_dongu")
+	m.movBaytKayit(rRDI, rRCX)
+	m.incKayit(rRDI)
+	m.decKayit(rRDX)
+	m.jcc(0x85, "Lbd_dongu") // jnz
+	m.etiketKoy("Lbd_son")
 	m.movImm32(rRAX, 0)
 	m.ret()
 }
