@@ -10,6 +10,41 @@ Tan **semver** kullanır: BÜYÜK.KÜÇÜK.YAMA
 
 ---
 
+## Yayınlanmamış — Rastgele Erişimli (Positional) Dosya G/Ç
+
+NEXUS depolama motorunun tabanı. Şimdiye dek yalnız `oku`/`yaz_dosya`/
+`ekle_dosya` vardı — hepsi TÜM dosya veya sadece append. Sayfa-tabanlı
+B+Tree/buffer pool bu API ile yazılamıyordu. Eklenen fd-tabanlı yerleşikler:
+
+- `dosyaAcOku(yol)` / `dosyaAcYaz(yol)` / `dosyaAcOkuYaz(yol)` → fd (open)
+- `dosyaKonumla(fd, ofset)` → yeni konum (lseek, SEEK_SET)
+- `dosyaOkuBlok(fd, uzunluk)` → metin (read)
+- `dosyaYazBlok(fd, metin)` → yazılan bayt (write)
+- `dosyaSenkron(fd)` → fsync (dayanıklılık/crash-safe)
+- `dosyaKapat(fd)` → close
+- `dosyaSil(yol)` → unlink (native karşılığı eklendi; yorumlayıcıda vardı)
+
+Ayrıca bellek eşleme + ham word erişimi (buffer pool tabanı):
+- `bellekEsle(boyut)` → mmap anonim (native gerçek OS mmap), adres döndürür
+- `bellekCoz(adres, boyut)` → munmap
+- `hamOku8(adres)` / `hamYaz8(adres, deger)` → 8 baytlık word oku/yaz (LE)
+
+İki modda da doğrulandı (bkz. testler/BellekEslemeTest.tan). Native mmap'te
+extended register (r8/r9/r10) encoding ile 6-argümanlı syscall. Ham bellek
+native'de gerçek pointer, yorumlayıcıda simüle düz bellek — round-trip aynı.
+Bununla NEXUS depolama katmanı artık sayfa-tabanlı buffer pool yazabilir.
+
+**İki modda da doğrulandı** (yorumlayıcı + native ELF, birebir aynı çıktı;
+bkz. `testler/RastgeleErisimTest.tan`). Native tarafta open bayrakları makine
+kodunda SABİT (dallanma yok) — güvenli codegen. 20/20 elf regresyonu korundu.
+Native rutinler libc'siz saf syscall (open/lseek/read/write/fsync/close).
+
+NEXUS taban eksiklerinden #1 (rastgele IO) ve #2 (fsync) kapatıldı. Kalan
+ölümcül eksik: GC/free (bump allocator geri almıyor), native eşzamanlılık
+(clone/futex), işlev parametresi tip çıkarımı.
+
+---
+
 ## 0.5.0 — Self-Hosting Tamamlandı
 
 **TancElf.tan artık kanıtlanmış şekilde kendi kendini derliyor.** Sabit nokta:

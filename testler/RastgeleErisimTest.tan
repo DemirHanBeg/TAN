@@ -1,0 +1,22 @@
+# Rastgele erişimli (positional) dosya G/Ç testi
+# aç -> konumla(lseek) -> yaz/oku -> senkron(fsync) -> kapat
+# Hem yorumlayıcıda hem native ELF'te aynı çıktıyı verir:
+#   10 / 3 / 3 / ABCXYZGHIJ / ABCXYZGHIJ
+yol = "/tmp/tan_raio_test.bin"
+
+fd = dosyaAcYaz(yol)
+yaz(dosyaYazBlok(fd, "ABCDEFGHIJ"))
+dosyaKapat(fd)
+
+fd = dosyaAcOkuYaz(yol)
+yaz(dosyaKonumla(fd, 3))
+yaz(dosyaYazBlok(fd, "XYZ"))
+dosyaSenkron(fd)
+
+dosyaKonumla(fd, 0)
+yaz(dosyaOkuBlok(fd, 10))
+dosyaKapat(fd)
+
+fd2 = dosyaAcOku(yol)
+yaz(dosyaOkuBlok(fd2, 10))
+dosyaKapat(fd2)

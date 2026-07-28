@@ -1,0 +1,11 @@
+# mmap + ham word erişimi testi (buffer pool tabanı)
+# Yorumlayıcı ve native ELF birebir aynı: 123456789 987654321 42 987654321
+adr = bellekEsle(4096)
+hamYaz8(adr, 123456789)
+yaz(hamOku8(adr))
+hamYaz8(adr, 987654321)
+yaz(hamOku8(adr))
+hamYaz8(adr + 16, 42)
+yaz(hamOku8(adr + 16))
+yaz(hamOku8(adr))
+bellekCoz(adr, 4096)

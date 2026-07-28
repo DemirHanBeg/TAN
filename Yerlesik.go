@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"syscall"
 	"strconv"
 	"strings"
 	"time"
@@ -366,6 +367,86 @@ func init() {
 			return nil
 		},
 
+		// --- Rastgele erişimli (positional) dosya G/Ç ---
+		// Sayfa-tabanlı depolama motorunun (B+Tree, buffer pool) tabanı.
+		// oku()/yaz_dosya() tüm dosyayı işler; bunlar bir DOSYA TANITICISI (fd)
+		// üzerinden çalışır: aç -> konumla -> oku/yaz -> senkron -> kapat.
+		// dosyaAcOku(yol): salt-okuma açar, fd döndürür (O_RDONLY).
+		"dosyaAcOku": func(a []Deger, satir int) Deger {
+			fd, err := syscall.Open(metne(a[0]), syscall.O_RDONLY, 0644)
+			if err != nil {
+				firlat(satir, "dosyaAcOku() açılamadı: %v", err)
+			}
+			return int64(fd)
+		},
+		// dosyaAcYaz(yol): yazma için açar, VARSA SIFIRLAR (O_WRONLY|O_CREAT|O_TRUNC).
+		"dosyaAcYaz": func(a []Deger, satir int) Deger {
+			fd, err := syscall.Open(metne(a[0]), syscall.O_WRONLY|syscall.O_CREAT|syscall.O_TRUNC, 0644)
+			if err != nil {
+				firlat(satir, "dosyaAcYaz() açılamadı: %v", err)
+			}
+			return int64(fd)
+		},
+		// dosyaAcOkuYaz(yol): oku+yaz açar, YOKSA OLUŞTURUR, içeriği KORUR
+		// (O_RDWR|O_CREAT). Rastgele erişimli güncelleme için asıl kullanılan.
+		"dosyaAcOkuYaz": func(a []Deger, satir int) Deger {
+			fd, err := syscall.Open(metne(a[0]), syscall.O_RDWR|syscall.O_CREAT, 0644)
+			if err != nil {
+				firlat(satir, "dosyaAcOkuYaz() açılamadı: %v", err)
+			}
+			return int64(fd)
+		},
+		// dosyaKonumla(fd, ofset): mutlak ofsete gider (SEEK_SET), yeni konumu döndürür.
+		"dosyaKonumla": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			ofset, _ := tamAl(a[1])
+			yeni, err := syscall.Seek(int(fd), ofset, 0)
+			if err != nil {
+				firlat(satir, "dosyaKonumla() başarısız: %v", err)
+			}
+			return yeni
+		},
+		// dosyaOkuBlok(fd, uzunluk): GÜNCEL konumdan en çok uzunluk bayt okur,
+		// metin döndürür (dosya sonuysa daha kısa olabilir).
+		"dosyaOkuBlok": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			uzunluk, _ := tamAl(a[1])
+			if uzunluk < 0 {
+				firlat(satir, "dosyaOkuBlok() uzunluk negatif olamaz")
+			}
+			ara := make([]byte, uzunluk)
+			n, err := syscall.Read(int(fd), ara)
+			if err != nil {
+				firlat(satir, "dosyaOkuBlok() okuma hatası: %v", err)
+			}
+			return string(ara[:n])
+		},
+		// dosyaYazBlok(fd, metin): GÜNCEL konuma yazar, yazılan bayt sayısını döndürür.
+		"dosyaYazBlok": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			n, err := syscall.Write(int(fd), []byte(metne(a[1])))
+			if err != nil {
+				firlat(satir, "dosyaYazBlok() yazma hatası: %v", err)
+			}
+			return int64(n)
+		},
+		// dosyaSenkron(fd): fsync — tamponları diske ZORLAR (dayanıklılık/crash-safe).
+		"dosyaSenkron": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			if err := syscall.Fsync(int(fd)); err != nil {
+				firlat(satir, "dosyaSenkron() fsync hatası: %v", err)
+			}
+			return int64(0)
+		},
+		// dosyaKapat(fd): dosya tanıtıcısını kapatır.
+		"dosyaKapat": func(a []Deger, satir int) Deger {
+			fd, _ := tamAl(a[0])
+			if err := syscall.Close(int(fd)); err != nil {
+				firlat(satir, "dosyaKapat() kapatma hatası: %v", err)
+			}
+			return int64(0)
+		},
+
 		// --- Metin işleme (saf, dilin kendi parçası) ---
 
 		// satırlar(metin): metni satırlara böler, liste döndürür
@@ -643,6 +724,54 @@ func init() {
 		}
 		kuresel_yorumlayici.hamBellek[p] = byte(v)
 		return nil
+	}
+
+	// hamOku8(adres): adresten 8 baytlık (word) tam sayı okur (little-endian).
+	// Sayfa-tabanlı depolama: bellekEsle/arenaAyir'dan dönen bloklara word erişimi.
+	yerlesikler["hamOku8"] = func(a []Deger, satir int) Deger {
+		p, _ := tamAl(a[0])
+		hb := kuresel_yorumlayici.hamBellek
+		if p < 0 || p+8 > int64(len(hb)) {
+			firlat(satir, "hamOku8(): sınır dışı adres")
+		}
+		var v int64
+		for i := int64(0); i < 8; i++ {
+			v |= int64(hb[p+i]) << uint(8*i)
+		}
+		return v
+	}
+
+	// hamYaz8(adres, deger): adrese 8 baytlık tam sayı yazar (little-endian).
+	yerlesikler["hamYaz8"] = func(a []Deger, satir int) Deger {
+		p, _ := tamAl(a[0])
+		v, _ := tamAl(a[1])
+		hb := kuresel_yorumlayici.hamBellek
+		if p < 0 || p+8 > int64(len(hb)) {
+			firlat(satir, "hamYaz8(): sınır dışı adres")
+		}
+		for i := int64(0); i < 8; i++ {
+			hb[p+i] = byte(v >> uint(8*i))
+		}
+		return int64(0)
+	}
+
+	// bellekEsle(boyut): boyut baytlık bellek bloğu ayırır, başlangıç adresini
+	// döndürür. Native'de gerçek mmap (anonim); yorumlayıcıda simüle düz bellek.
+	// İki modda da: dönen adrese hamOku8/hamYaz8 ile erişilir (round-trip aynı).
+	yerlesikler["bellekEsle"] = func(a []Deger, satir int) Deger {
+		boyut, ok := tamAl(a[0])
+		if !ok || boyut < 0 {
+			firlat(satir, "bellekEsle(boyut) negatif olmayan tam sayı ister")
+		}
+		p := int64(len(kuresel_yorumlayici.hamBellek))
+		kuresel_yorumlayici.hamBellek = append(kuresel_yorumlayici.hamBellek, make([]byte, boyut)...)
+		return p
+	}
+
+	// bellekCoz(adres, boyut): native'de munmap; yorumlayıcıda simüle bellek
+	// geri verilmez (no-op) — API tutarlılığı için var.
+	yerlesikler["bellekCoz"] = func(a []Deger, satir int) Deger {
+		return int64(0)
 	}
 
 	// ---- Kripto (Faz A #1 — bkz. NexusCore/FazA_Kapsam.md) ----

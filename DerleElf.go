@@ -775,6 +775,10 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 		switch n.Ad {
 		case "uzunluk", "kod", "tamBol", "metinEsit", "sayı":
 			return TipTam
+		case "dosyaAcOku", "dosyaAcYaz", "dosyaAcOkuYaz", "dosyaKonumla",
+			"dosyaYazBlok", "dosyaSenkron", "dosyaKapat", "dosyaSil",
+			"hamOku8", "hamYaz8", "bellekEsle", "bellekCoz":
+			return TipTam
 		case "taban", "tavan", "yuvarla", "kök", "log", "e_üssü", "eÜssü":
 			return TipKesir
 		case "harfler":
@@ -785,7 +789,7 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 			return TipListe(TipMetin)
 		case "varMı", "var_mı":
 			return TipTam
-		case "metin", "karakter", "oku", "arg", "metinBirlestir", "metinAl", "birleştir":
+		case "metin", "karakter", "oku", "arg", "metinBirlestir", "metinAl", "birleştir", "dosyaOkuBlok":
 			return TipMetin
 		case "listeYap":
 			if len(n.Argumanlar) > 1 {
@@ -1694,6 +1698,129 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.movKayit(rRSI, rRAX)
 			m.popKayit(rRDI)
 			m.call("f_ekle_dosya")
+			return
+		}
+		// --- Rastgele erişimli (positional) dosya G/Ç — fd tabanlı ---
+		if n.Ad == "dosyaAcOku" || n.Ad == "dosyaAcYaz" || n.Ad == "dosyaAcOkuYaz" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: " + n.Ad + "() tek argüman (yol) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			switch n.Ad {
+			case "dosyaAcOku":
+				m.call("f_dosya_ac_oku")
+			case "dosyaAcYaz":
+				m.call("f_dosya_ac_yaz")
+			default:
+				m.call("f_dosya_ac_okuyaz")
+			}
+			return
+		}
+		if n.Ad == "dosyaKonumla" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: dosyaKonumla() iki argüman (fd, ofset) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_dosya_konumla")
+			return
+		}
+		if n.Ad == "dosyaOkuBlok" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: dosyaOkuBlok() iki argüman (fd, uzunluk) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_dosya_oku_blok")
+			return
+		}
+		if n.Ad == "dosyaYazBlok" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: dosyaYazBlok() iki argüman (fd, metin) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_dosya_yaz_blok")
+			return
+		}
+		if n.Ad == "dosyaSenkron" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: dosyaSenkron() tek argüman (fd) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_dosya_senkron")
+			return
+		}
+		if n.Ad == "dosyaKapat" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: dosyaKapat() tek argüman (fd) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_dosya_kapat")
+			return
+		}
+		if n.Ad == "dosyaSil" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: dosyaSil() tek argüman (yol) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_dosya_sil")
+			return
+		}
+		// --- Ham bellek (word) erişimi + mmap/munmap ---
+		if n.Ad == "hamOku8" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: hamOku8() tek argüman (adres) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_ham_oku8")
+			return
+		}
+		if n.Ad == "hamYaz8" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: hamYaz8() iki argüman (adres, deger) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_ham_yaz8")
+			return
+		}
+		if n.Ad == "bellekEsle" {
+			if len(n.Argumanlar) != 1 {
+				panic(TanHata{Mesaj: "elf: bellekEsle() tek argüman (boyut) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.movKayit(rRDI, rRAX)
+			m.call("f_bellek_esle")
+			return
+		}
+		if n.Ad == "bellekCoz" {
+			if len(n.Argumanlar) != 2 {
+				panic(TanHata{Mesaj: "elf: bellekCoz() iki argüman (adres, boyut) ister"})
+			}
+			e.ifade(n.Argumanlar[0])
+			m.pushKayit(rRAX)
+			e.ifade(n.Argumanlar[1])
+			m.movKayit(rRSI, rRAX)
+			m.popKayit(rRDI)
+			m.call("f_bellek_coz")
 			return
 		}
 		if n.Ad == "karakter" {
@@ -3726,6 +3853,198 @@ func (e *elfUretici) yardimciEkleDosya() {
 	m.ret()
 }
 
+// yardimciPositionalIO — RASTGELE ERİŞİMLİ (positional) dosya G/Ç rutinleri.
+// oku()/yaz_dosya() TÜM dosyayı işler; bunlar bir DOSYA TANITICISI (fd)
+// üzerinden çalışır: aç -> konumla(lseek) -> oku/yaz -> senkron(fsync) ->
+// kapat. Sayfa-tabanlı depolama motorunun (B+Tree, buffer pool) tabanı.
+// Not: aç bayrakları makine kodunda SABİT (dallanma yok) — güvenli codegen.
+func (e *elfUretici) yardimciPositionalIO() {
+	m := e.m
+
+	// --- aç: ortak C-string kur + open(path, BAYRAK, mode) ---
+	// f_dosya_ac_okuyaz(rdi=yol metin) -> rax=fd   [O_RDWR|O_CREAT=66]
+	m.etiketKoy("f_dosya_ac_okuyaz")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)         // yol pointer
+	m.movDolayliOku(rRAX, rRDI, 0)  // uzunluk = *yol
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)            // uzunluk+16 (tan_ayir sıfırlar -> C-string null'lu)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)        // C-string buffer
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)     // yol+8 (veri başı)
+	m.movYerelOku(rRDX, -16)
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRDI, -24)        // path
+	m.movImm32(rRSI, 66)           // O_RDWR|O_CREAT
+	m.movImm32(rRDX, 420)          // 0644
+	m.movImm32(rRAX, 2)            // sys_open
+	m.syscall()
+	m.leave()
+	m.ret()
+
+	// f_dosya_ac_oku(rdi=yol) -> rax=fd   [O_RDONLY=0]
+	m.etiketKoy("f_dosya_ac_oku")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movYerelOku(rRDX, -16)
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRDI, -24)
+	m.xorKayit(rRSI, rRSI)         // O_RDONLY
+	m.xorKayit(rRDX, rRDX)         // mode gereksiz
+	m.movImm32(rRAX, 2)
+	m.syscall()
+	m.leave()
+	m.ret()
+
+	// f_dosya_ac_yaz(rdi=yol) -> rax=fd   [O_WRONLY|O_CREAT|O_TRUNC=577]
+	m.etiketKoy("f_dosya_ac_yaz")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 48)
+	m.movYerelYaz(-8, rRDI)
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movYerelOku(rRDX, -16)
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRDI, -24)
+	m.movImm32(rRSI, 577)         // O_WRONLY|O_CREAT|O_TRUNC
+	m.movImm32(rRDX, 420)         // 0644
+	m.movImm32(rRAX, 2)
+	m.syscall()
+	m.leave()
+	m.ret()
+
+	// f_dosya_konumla(rdi=fd, rsi=ofset) -> rax=yeni konum   [lseek, whence=SEEK_SET]
+	m.etiketKoy("f_dosya_konumla")
+	m.xorKayit(rRDX, rRDX)        // whence = SEEK_SET (0)
+	m.movImm32(rRAX, 8)          // sys_lseek
+	m.syscall()
+	m.ret()
+
+	// f_dosya_oku_blok(rdi=fd, rsi=uzunluk) -> rax=metin   [read]
+	m.etiketKoy("f_dosya_oku_blok")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)       // fd
+	m.movYerelYaz(-16, rRSI)      // istenen uzunluk
+	m.movKayit(rRDI, rRSI)
+	m.addImm32(rRDI, 16)          // buffer = uzunluk+16
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)      // metin buffer
+	m.movYerelOku(rRDI, -8)       // fd
+	m.movYerelOku(rRSI, -24)
+	m.leaDolayli(rRSI, rRSI, 8)   // buf = buffer+8
+	m.movYerelOku(rRDX, -16)      // count
+	m.xorKayit(rRAX, rRAX)        // sys_read (0)
+	m.syscall()
+	m.movYerelOku(rRCX, -24)
+	m.movDolayliYaz(rRCX, 0, rRAX) // *buffer = gerçek okunan bayt (metin uzunluğu)
+	m.movYerelOku(rRAX, -24)      // dönüş = metin
+	m.leave()
+	m.ret()
+
+	// f_dosya_yaz_blok(rdi=fd, rsi=metin) -> rax=yazılan bayt   [write]
+	m.etiketKoy("f_dosya_yaz_blok")
+	m.movDolayliOku(rRDX, rRSI, 0) // count = *metin (uzunluk)
+	m.leaDolayli(rRSI, rRSI, 8)    // buf = metin+8
+	m.movImm32(rRAX, 1)           // sys_write
+	m.syscall()
+	m.ret()
+
+	// f_dosya_senkron(rdi=fd) -> rax=0   [fsync]
+	m.etiketKoy("f_dosya_senkron")
+	m.movImm32(rRAX, 74)          // sys_fsync
+	m.syscall()
+	m.xorKayit(rRAX, rRAX)
+	m.ret()
+
+	// f_dosya_kapat(rdi=fd) -> rax=0   [close]
+	m.etiketKoy("f_dosya_kapat")
+	m.movImm32(rRAX, 3)           // sys_close
+	m.syscall()
+	m.xorKayit(rRAX, rRAX)
+	m.ret()
+
+	// f_dosya_sil(rdi=yol metin) -> rax=0   [unlink]
+	m.etiketKoy("f_dosya_sil")
+	m.pushKayit(rRBP)
+	m.movKayit(rRBP, rRSP)
+	m.subImm32(rRSP, 32)
+	m.movYerelYaz(-8, rRDI)
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.movYerelYaz(-16, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.addImm32(rRDI, 16)
+	m.call("f_tan_ayir")
+	m.movYerelYaz(-24, rRAX)
+	m.movKayit(rRDI, rRAX)
+	m.movYerelOku(rRSI, -8)
+	m.leaDolayli(rRSI, rRSI, 8)
+	m.movYerelOku(rRDX, -16)
+	m.call("f_bellek_kopyala")
+	m.movYerelOku(rRDI, -24)      // C-string yol
+	m.movImm32(rRAX, 87)         // sys_unlink
+	m.syscall()
+	m.movImm32(rRAX, 0)          // 0 döndür (yorumlayıcı ile uyumlu)
+	m.leave()
+	m.ret()
+
+	// f_ham_oku8(rdi=adres) -> rax = *(int64*)adres
+	m.etiketKoy("f_ham_oku8")
+	m.movDolayliOku(rRAX, rRDI, 0)
+	m.ret()
+
+	// f_ham_yaz8(rdi=adres, rsi=deger) -> rax=0 : *(int64*)adres = deger
+	m.etiketKoy("f_ham_yaz8")
+	m.movDolayliYaz(rRDI, 0, rRSI)
+	m.movImm32(rRAX, 0)
+	m.ret()
+
+	// f_bellek_esle(rdi=boyut) -> rax=adres : anonim mmap
+	// mmap(NULL, boyut, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+	m.etiketKoy("f_bellek_esle")
+	m.movKayit(rRSI, rRDI)       // rsi = len = boyut
+	m.movImm32(rRDI, 0)          // rdi = addr = NULL
+	m.movImm32(rRDX, 3)          // rdx = prot = PROT_READ|PROT_WRITE
+	m.movImm32(rR10, 0x22)       // r10 = flags = MAP_PRIVATE|MAP_ANONYMOUS
+	m.movImm32(rR8, -1)          // r8 = fd = -1 (işaretli genişletme)
+	m.movImm32(rR9, 0)           // r9 = offset = 0
+	m.movImm32(rRAX, 9)          // sys_mmap
+	m.syscall()
+	m.ret()
+
+	// f_bellek_coz(rdi=adres, rsi=boyut) -> rax=0 : munmap
+	m.etiketKoy("f_bellek_coz")
+	m.movImm32(rRAX, 11)         // sys_munmap
+	m.syscall()
+	m.movImm32(rRAX, 0)
+	m.ret()
+}
+
 // yuvarla(rdi = sayı[ondalık ham], rsi = basamak[int64]) -> rax = ondalık ham
 // SSE4.1 roundsd YOK (taban/tavan ile aynı gerekçe) — carpan=10^basamak ile
 // olcekle, sıfıra-dogru-kes + |kesir|>=0.5 ise 1 duzelt (yarım-noktalar
@@ -4724,6 +5043,7 @@ func derleElf(dosya string, cikti string) {
 	e.yardimciBirlestirListesi("f_birlestir_kesir", "f_kesir_metne")
 	e.yardimciEkleDosya()
 	e.yardimciDosyaVarMi()
+	e.yardimciPositionalIO()
 	e.yardimciSayi()
 	e.yardimciYazKesir()
 	for _, isv := range islevler {
