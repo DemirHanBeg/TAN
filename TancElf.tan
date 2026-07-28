@@ -2672,6 +2672,220 @@ işlev islevDonusTipleriTara(tokenler, islevTipKutu)
     döndür 0
 son
 
+# ---------------- PARAMETRE TİPİ ÇIKARIMI (SINIRLI, ÇAĞRI-YERİ TABANLI) ----------------
+# ADIM 2 (devir promptu): islevDonusTipleriTara'nın (dönüş tipi) TAMAMLAYICISI
+# — parametrelerin tipini çağrı YERLERİNDEKİ argüman ifadelerinden çıkarır.
+# ÖNCEDEN: islevDerle her parametreyi KOŞULSUZ "tam" varsayıyordu (bkz.
+# tamTipListesi çağrısı, TanDurum.md madde ADIM2 notu) — metin argüman geçip
+# gövde içinde "+"/"=="/indeksleme kullanmak yanlış kod üretiyordu.
+#
+# AYNI kısıtlı felsefe (yanlış pozitif ASLA, bazı metin parametrelerini
+# kaçırmak kabul edilebilir — döndürüş tipi çıkarımıyla BİREBİR aynı ilke):
+# sadece (a) METİN LİTERALİ argüman ya da (b) TEK BAŞINA bilinen bir
+# metin-döndüren çağrının sonucu tanınır. Karmaşık ifadeler (a+b, iç içe
+# operatör, değişken) İZLENMEZ — güvenli varsayılan "tam" kalır.
+#
+# DEPOLAMA: yeni bir kutu AÇMAK YERİNE islevTipKutu 2 elemandan 4 elemana
+# genişletildi ([donusAdlar,donusTipler,parametreAdlar,parametreTipler]) —
+# blokDerle/deyimDerle/islevDerle/ifadeSonuc/ifadeBantYaz ZATEN 6 parametre
+# ile (ABI sınırında, bkz. Madde 9 notu) islevTipKutu'yu taşıyor; yeni bir
+# 7. parametre eklemek o sınırı tekrar patlatırdı. Mevcut kutuyu genişletmek
+# TEK satır threading değişikliği bile gerektirmiyor.
+
+# parametreTipiAra/parametreTipiKaydet: islevTipiAra/islevTipiKaydet ile
+# AYNI [adlar,tipler] deseni ama islevTipKutu[2]/[3]'te (anahtar =
+# "islevAd/parametreAdi", islevTipiAra/Kaydet'in kullandığı [0]/[1]'den
+# AYRI — aynı kutu, farklı bölme).
+işlev parametreTipiAra(islevTipKutu, anahtar)
+    adlar = islevTipKutu[2]
+    tipler = islevTipKutu[3]
+    n = uzunluk(adlar)
+    i = 0
+    iken i < n
+        eğer metinEsit(adlar[i], anahtar) ise
+            döndür tipler[i]
+        son
+        i = i + 1
+    son
+    döndür "tam"
+son
+
+işlev parametreTipiKaydet(islevTipKutu, anahtar, tip)
+    adlar = islevTipKutu[2]
+    n = uzunluk(adlar)
+    yuva = 0 - 1
+    i = 0
+    iken i < n
+        eğer metinEsit(adlar[i], anahtar) ise
+            yuva = i
+        son
+        i = i + 1
+    son
+    eğer yuva >= 0 ise
+        islevTipKutu[3][yuva] = tip
+    değilse
+        islevTipKutu[2] = ekle(islevTipKutu[2], anahtar)
+        islevTipKutu[3] = ekle(islevTipKutu[3], tip)
+    son
+    döndür 0
+son
+
+# islevParametreHaritasiCikar: TÜM üst-düzey "işlev ad(p0,p1,...)"
+# tanımlarını tarar, [adlar,parametreListeleri] paralel kutusu döner
+# (parametreListeleri[i] = adlar[i] işlevinin parametre ADI listesi).
+işlev islevParametreHaritasiCikar(tokenler)
+    n = uzunluk(tokenler)
+    adlar = []
+    parametreListeleri = []
+    i = 0
+    iken i < n
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "ANAHTAR" ve d == "işlev" ise
+            i = i + 1
+            eğer i >= n ise
+                döndür [adlar, parametreListeleri]
+            son
+            ad = alan(tokenler[i], 1)
+            i = i + 1   # ad yut -> pos '('
+            i = i + 1   # '(' yut -> pos ilk param / ')'
+            parametreler = []
+            iken i < n ve alan(tokenler[i], 0) != "PARKAPA"
+                eğer alan(tokenler[i], 0) == "AD" ise
+                    parametreler = ekle(parametreler, alan(tokenler[i], 1))
+                son
+                i = i + 1
+            son
+            adlar = ekle(adlar, ad)
+            parametreListeleri = ekle(parametreListeleri, parametreler)
+        değilse
+            i = i + 1
+        son
+    son
+    döndür [adlar, parametreListeleri]
+son
+
+# parametreListesiniBul: islevParametreHaritasiCikar çıktısında ad'ı ara,
+# bulunamazsa (yerleşik ya da bilinmeyen çağrı) boş liste döner.
+işlev parametreListesiniBul(harita, ad)
+    adlar = harita[0]
+    listeler = harita[1]
+    i = 0
+    iken i < uzunluk(adlar)
+        eğer metinEsit(adlar[i], ad) ise
+            döndür listeler[i]
+        son
+        i = i + 1
+    son
+    döndür []
+son
+
+# cagriArgumanSinirlariniBul: pos = çağrının '(' AÇAN parantezinden HEMEN
+# SONRAKİ pozisyon. Argümanları üst-düzey (derinlik 0) VİRGÜL'lerle ayırıp
+# [b0,s0,b1,s1,...] düz liste döner (Tan'da liste-of-tuple yerleşiği yok).
+işlev cagriArgumanSinirlariniBul(tokenler, pos)
+    n = uzunluk(tokenler)
+    sinirlar = []
+    i = pos
+    eğer i < n ve alan(tokenler[i], 0) == "PARKAPA" ise
+        döndür sinirlar   # f() - boş argüman listesi
+    son
+    argBas = i
+    derinlik = 0
+    iken i < n
+        t = alan(tokenler[i], 0)
+        eğer t == "PARAC" ise
+            derinlik = derinlik + 1
+        değilse eğer t == "PARKAPA" ise
+            eğer derinlik == 0 ise
+                sinirlar = ekle(sinirlar, argBas)
+                sinirlar = ekle(sinirlar, i)
+                döndür sinirlar
+            son
+            derinlik = derinlik - 1
+        değilse eğer t == "VIRGUL" ve derinlik == 0 ise
+            sinirlar = ekle(sinirlar, argBas)
+            sinirlar = ekle(sinirlar, i)
+            argBas = i + 1
+        son
+        i = i + 1
+    son
+    döndür sinirlar   # dengesiz parantez (olmamalı) — bulunanla güvenli döner
+son
+
+# argumanMetinMi: [argBas,argBitis) TEK argümanın metin olup olmadığını
+# SINIRLI kalıpla belirler: (a) tek METİN literali token, (b) tam olarak
+# "AD(...)" biçiminde TEK çağrı VE AD bilinen metin-döndüren biri (yerleşik
+# ya da islevTipiAra ile "metin"). Başka HER şey "tam" sayılır.
+işlev argumanMetinMi(tokenler, argBas, argBitis, islevTipKutu)
+    uzunlukTok = argBitis - argBas
+    eğer uzunlukTok == 1 ve alan(tokenler[argBas], 0) == "METIN" ise
+        döndür 1
+    son
+    eğer uzunlukTok >= 3 ve alan(tokenler[argBas], 0) == "AD" ve alan(tokenler[argBas + 1], 0) == "PARAC" ve alan(tokenler[argBitis - 1], 0) == "PARKAPA" ise
+        cagrilanAd = alan(tokenler[argBas], 1)
+        eğer yerlesikMetinDonerMi(cagrilanAd) == 1 ise
+            döndür 1
+        son
+        eğer islevTipiAra(islevTipKutu, cagrilanAd) == "metin" ise
+            döndür 1
+        son
+    son
+    döndür 0
+son
+
+# parametreTipleriniTara: tüm kaynağı TEK geçişte tarar; her CAGRI (AD
+# hemen ardından PARAC) görüldüğünde AD bilinen bir KULLANICI işleviyse
+# argümanları sınırlandırıp metin olanları islevTipKutu[2]/[3]'e yazar.
+# Fixed-point GEREKMİYOR: sınıflandırma sadece islevTipKutu'nun dönüş-tipi
+# yarısına (ÖNCEDEN sabit noktaya ulaşmış, bkz. islevDonusTipleriTara) ve
+# literal token'lara bakıyor — parametre yarısına geri beslenen bir
+# bağımlılık yok, TEK geçiş yeterli ve doğru.
+işlev parametreTipleriniTara(tokenler, islevTipKutu)
+    harita = islevParametreHaritasiCikar(tokenler)
+    n = uzunluk(tokenler)
+    i = 0
+    iken i < n
+        t = alan(tokenler[i], 0)
+        eğer t == "AD" ve i + 1 < n ve alan(tokenler[i + 1], 0) == "PARAC" ise
+            ad = alan(tokenler[i], 1)
+            parametreler = parametreListesiniBul(harita, ad)
+            eğer uzunluk(parametreler) > 0 ise
+                sinirlar = cagriArgumanSinirlariniBul(tokenler, i + 2)
+                argIndex = 0
+                k = 0
+                iken k < uzunluk(sinirlar)
+                    argBas = sinirlar[k]
+                    argBitis = sinirlar[k + 1]
+                    eğer argIndex < uzunluk(parametreler) ve argumanMetinMi(tokenler, argBas, argBitis, islevTipKutu) == 1 ise
+                        anahtar = metinBirlestir(ad, metinBirlestir("/", parametreler[argIndex]))
+                        z = parametreTipiKaydet(islevTipKutu, anahtar, "metin")
+                    son
+                    argIndex = argIndex + 1
+                    k = k + 2
+                son
+            son
+        son
+        i = i + 1
+    son
+    döndür 0
+son
+
+# parametreTipListesiOlustur: islevDerle'nin yerelAdlarKutu[1] başlangıç
+# tipi — ÖNCEDEN koşulsuz tamTipListesi (hepsi "tam"), ARTIK her parametre
+# için parametreTipiAra ile çağrı-yeri çıkarımı sonucu (bulunamazsa "tam",
+# aynı güvenli varsayılan).
+işlev parametreTipListesiOlustur(ad, parametreler, islevTipKutu)
+    sonuc = []
+    i = 0
+    iken i < uzunluk(parametreler)
+        anahtar = metinBirlestir(ad, metinBirlestir("/", parametreler[i]))
+        sonuc = ekle(sonuc, parametreTipiAra(islevTipKutu, anahtar))
+        i = i + 1
+    son
+    döndür sonuc
+son
+
 # ifadeBantYaz: Bölüm 2'nin RPN bandını yığın-makinesi mantığıyla makine
 # koduna çevirir. tipYigin ÇALIŞMA-ZAMANI yığınıyla (push/pop) BİREBİR AYNI
 # SIRADA ilerleyen bir DERLEME-ZAMANI paralel yığın — "metin mi tam mı"
@@ -3118,23 +3332,14 @@ son
 # yaklaşım: önce derle, sonra çerçeveyi öne ekle.
 # Parametreler kayıt sırasına göre rdi,rsi,rdx,rcx,r8,r9'dan yuvalara yazılır
 # (System V AMD64 çağrı kuralı, en fazla 6 parametre).
-işlev tamTipListesi(n)
-    sonuc = []
-    i = 0
-    iken i < n
-        sonuc = ekle(sonuc, "tam")
-        i = i + 1
-    son
-    döndür sonuc
-son
-
-# NOT (metin desteği sınırı): parametre tipleri çağrı yerlerinden
-# ÇIKARILMIYOR (DerleElf.go'nun parametreTipleriniOgren'i gibi bir sistem
-# yok) — tüm parametreler "tam" varsayılır. Bir işleve metin argüman
-# geçip gövde içinde "+" ile kullanmak bu yüzden YANLIŞ kod üretir. Bilinen
-# sınır, Metin1/Metin2 örnekleri bunun dışında kalacak şekilde yazıldı.
+# NOT (ADIM 2'de KAPANDI, bkz. "PARAMETRE TİPİ ÇIKARIMI" bölümü): parametre
+# tipleri artık çağrı yerlerindeki argümanlardan (SINIRLI kalıp — metin
+# literali ya da bilinen metin-döndüren tek çağrı) çıkarılıyor.
+# parametreTipListesiOlustur bulunamayanlar için güvenli "tam" varsayılanına
+# döner (DerleElf.go'nun parametreTipleriniOgren'i kadar derin değil ama
+# aynı "asla yanlış pozitif" ilkesiyle).
 işlev islevDerle(ad, parametreler, tokenler, pozKutu, sayacKutu, islevTipKutu)
-    yerelAdlarKutu = [parametreler, tamTipListesi(uzunluk(parametreler))]
+    yerelAdlarKutu = [parametreler, parametreTipListesiOlustur(ad, parametreler, islevTipKutu)]
     govde = blokDerle(tokenler, pozKutu, yerelAdlarKutu, sayacKutu, ["", ""], islevTipKutu)
     eğer pTur(tokenler, pozKutu) == "ANAHTAR" ve pDeger(tokenler, pozKutu) == "son" ise
         x = pIlerle(tokenler, pozKutu)
@@ -3291,8 +3496,9 @@ tokenler = tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
 pozKutu = [0]
 adlarKutu = [[], []]
 sayacKutu = [0]
-islevTipKutu = [[], []]
+islevTipKutu = [[], [], [], []]
 z = islevDonusTipleriTara(tokenler, islevTipKutu)
+z = parametreTipleriniTara(tokenler, islevTipKutu)
 
 govde = blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, ["", ""], islevTipKutu)
 # --- cerceve: degisken sayisi ancak govde derlenince belli olur ---

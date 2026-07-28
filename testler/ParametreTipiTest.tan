@@ -1,0 +1,44 @@
+# ParametreTipiTest: TancElf.tan'ın (self-hosted derleyici) ADIM 2 ile
+# eklenen parametre tipi çıkarımını sınar (bkz. "PARAMETRE TİPİ ÇIKARIMI"
+# bölümü). ÖNCEDEN gen2 (self-hosted) her parametreyi koşulsuz "tam"
+# sayıyordu — metin argüman geçip gövde içinde "=="/"+"/metinAl (indeksleme)
+# kullanmak yanlış kod üretirdi (ham pointer karşılaştırması/toplaması).
+# SADECE desteklenen İKİ kalıbı sınar (literal argüman / bilinen metin-
+# döndüren çağrının DOĞRUDAN sonucu) — değişken üzerinden argüman geçirme
+# AYRI, bilinen bir sınır (döndür-değişkeni izleme sınırıyla aynı aile,
+# bkz. DonusTipiTest.tan), bu testin kapsamı DIŞINDA bırakıldı.
+# Beklenen çıktı (yorumlayıcı, go-elf, gen2 üçünde de BİREBİR AYNI):
+# merhaba
+# m
+# EVET
+# E
+# HAYIR
+# H
+# 7
+
+işlev metinKontrol(h)
+    eğer h == "selam" ise
+        döndür "EVET"
+    son
+    döndür "HAYIR"
+son
+
+işlev metinYazVeAl(h)
+    yaz(h)
+    yaz(metinAl(h, 0))
+    döndür 0
+son
+
+# kontrol: tam sayı parametreli işlev, tam sayı argüman — regresyon yok
+işlev tamTopla(x, y)
+    döndür x + y
+son
+
+# Desen (a): metin literali doğrudan argüman
+z1 = metinYazVeAl("merhaba")
+
+# Desen (b): bilinen metin-döndüren çağrının SONUCU doğrudan argüman
+z2 = metinYazVeAl(metinKontrol("selam"))
+z3 = metinYazVeAl(metinKontrol("x"))
+
+yaz(tamTopla(3, 4))
