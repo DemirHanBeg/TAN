@@ -1,0 +1,24 @@
+# ArenaOlcumTest — ADIM 5 ölçüm: arena+serbest-liste allocator (arenaAyir/
+# arenaSerbest, 64 boyut sınıfı, 8-512 bayt) uzun-ömürlü alloc/free
+# döngüsünde belleği SINIRLI tutuyor mu? (bkz. devir prompu ADIM 5: "ÖNCE
+# ölç: arena yeterli mi? Değilse yap.")
+#
+# Kullanım: ./tan elf ArenaOlcumTest.tan /tmp/aot && /usr/bin/time -v
+# /tmp/aot <tekrarSayisi>. RSS, tekrarSayisi ile ORANTILI büyürse
+# (arena YETERSİZ, sızıntı var); SABİT kalırsa (birkaç sayfa farkla)
+# arena YETERLİ demektir.
+
+tekrarSayisi = sayı(arg(1))
+
+i = 0
+iken i < tekrarSayisi
+    p = arenaAyir(256)
+    hamYaz8(p, i)
+    q = arenaAyir(64)
+    hamYaz8(q, i * 2)
+    arenaSerbest(q, 64)
+    arenaSerbest(p, 256)
+    i = i + 1
+son
+
+yaz("bitti")
