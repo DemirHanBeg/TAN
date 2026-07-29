@@ -39,9 +39,54 @@ bkz. `testler/RastgeleErisimTest.tan`). Native tarafta open bayrakları makine
 kodunda SABİT (dallanma yok) — güvenli codegen. 20/20 elf regresyonu korundu.
 Native rutinler libc'siz saf syscall (open/lseek/read/write/fsync/close).
 
-NEXUS taban eksiklerinden #1 (rastgele IO) ve #2 (fsync) kapatıldı. Kalan
-ölümcül eksik: GC/free (bump allocator geri almıyor), native eşzamanlılık
-(clone/futex), işlev parametresi tip çıkarımı.
+NEXUS taban eksiklerinden #1 (rastgele IO) ve #2 (fsync) kapatıldı.
+
+---
+
+## Yayınlanmamış — "Kalan Sistem Eksikleri" devir promptu: ADIM 1-5 kapandı
+
+Yukarıdaki bölümün "kalan ölümcül eksik" listesi (GC/free, native eşzamanlılık,
+parametre tip çıkarımı) bu turda kapatıldı. Sıra: 1→2→3→4→5, her adımdan
+sonra `bash TestArkaUc.sh elf` 20/20 + `gen1/gen2/gen3` self-hosting sabit
+noktası doğrulandı.
+
+**ADIM 1 — ham bellek tamamlandı:** `hamOku4`/`hamYaz4` (32-bit),
+`hamOkuBayt`/`hamYazBayt` (native'de İLK KEZ), `bellekKopyala` (memmove,
+ÇAKIŞMA-GÜVENLİ — hem ileri hem geri örtüşme test edildi), `bellekDoldur`
+(memset). Bkz. `testler/BellekIslemleriTest.tan`.
+
+**ADIM 2 — TancElf.tan'a (self-hosted derleyici) parametre tipi çıkarımı:**
+DerleElf.go'nun (Go referans) `parametreTipleriniOgren`'i zaten vardı; eksik
+olan self-hosted taraftı. `islevDonusTipleriTara` (dönüş tipi) ile AYNI
+kısıtlı felsefe — sadece metin literali/bilinen metin-döndüren çağrının
+DOĞRUDAN sonucu tanınır. `islevTipKutu` 2 elemandan 4'e genişletildi (7.
+parametre ABI sınırına çarpardı). Bkz. `testler/ParametreTipiTest.tan`.
+
+**ADIM 3 — kısmen (`içe al` zaten kapalıydı; `dene`/`yakala` BACKLOG'a
+alındı, NEXUS için hata-kodu deseni tercih edildi):** Bunun yerine ADIM 1
+primitiflerinin gerçek NEXUS senaryosunda (4KB sabit-boyut checksum'lı
+sayfa yöneticisi) yeterliliği sınandı. Eksik primitif bulundu:
+`dosyaOkuBlok`/`dosyaYazBlok` SADECE "metin" ile çalışıyordu — ham
+bellek↔dosya köprüsü yoktu. Eklendi: `dosyaOkuBlokHam`/`dosyaYazBlokHam`
+(read/write(2) doğrudan ham adrese). Bkz. `testler/SayfaYoneticisiTest.tan`
+(checksum, rastgele erişim, bozulma tespiti hepsi doğrulandı).
+
+**ADIM 4 — native eşzamanlılık:** `clone`/`futex`/`lock cmpxchg`/
+`lock xadd` ile gerçek iş parçacığı. Fonksiyon-DEĞERİ native ELF'te
+YOK olduğundan `içParcaLat(islevAdi, args...)` derleme-zamanı bilinen
+işlev adı alır (çalışma-zamanı closure değil). Bkz.
+`testler/EszamanlilikTest.tan` — native ELF'te 8/8 tekrarlı çalıştırmada
+DETERMİNİSTİK (yarış koşulu yok).
+
+**ADIM 5 — ölçüldü, GC YAPILMADI:** `arenaAyir`/`arenaSerbest` (manuel
+malloc/free) 1.000→20.000.000 alloc-free döngüsünde RSS SABİT kaldı
+(256 KB). Normal `metin`/`liste` (bump, hiç serbest bırakılmıyor) ise
+DOĞRUSAL büyüyor (beklenen, ayrı yol). Karar: NEXUS'un asıl deseni
+(manuel yönetilen tampon) için arena zaten yeterli — gerçek GC şimdilik
+gerekmiyor. Bkz. `testler/ArenaOlcumTest.tan` / `testler/BumpOlcumTest.tan`.
+
+**Kalan (ADIM 6, en son — NEXUS için zorunlu değil):** ARM64 backend +
+DWARF hata ayıklama bilgisi.
 
 ---
 
