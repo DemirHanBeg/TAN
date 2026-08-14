@@ -45,7 +45,7 @@ son
 işlev medyan(liste)
     sıralı = hızlıSırala(liste)
     n = uzunluk(sıralı)
-    orta = n / 2
+    orta = tamBol(n, 2)
     eğer n % 2 == 0 ise
         döndür (sıralı[orta - 1] + sıralı[orta]) / 2
     son

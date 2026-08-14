@@ -1,0 +1,10 @@
+işlev olUst(x)
+    döndür x + 1
+son
+işlev olYardimci(x)
+    döndür x * 2
+son
+işlev olAra(y)
+    döndür olYardimci(y) + 1
+son
+yaz(metin(olUst(5)))

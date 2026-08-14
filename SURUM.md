@@ -10,6 +10,122 @@ Tan **semver** kullanır: BÜYÜK.KÜÇÜK.YAMA
 
 ---
 
+## Yayınlanmamış — Go'suz Bootstrap (üretim zincirinden Go çıkarıldı)
+
+**Hedef:** `Go → TAN compiler → TancElf.tan → gen1 → gen2 → gen3` zincirini
+`TAN bootstrap artifact → TancElf.tan → TAN compiler → TancElf.tan → TAN
+compiler` haline getirmek — Go'yu üretim zincirinden tamamen çıkarmak.
+
+**Go bağımlılık haritası (üretim zinciri açısından):** Depodaki 17 Go
+dosyasının (~11.100 satır) TEK üretim-zinciri rolü, `go build -o tan .` ile
+`tan` binary'sini üretip `./tan elf TancElf.tan gen1` komutuyla self-hosted
+derleyicinin İLK native ikilisini doğurmaktı. Geri kalan her şey —
+`Yorumlayici.go`/`VM.go`/`Yerlesik.go` (yorumlayıcı+VM+yerleşikler),
+`Lexer.go`/`Parser.go`/`Optimize.go` (Go'nun KENDİ, TancElf.tan'dan bağımsız
+lexer/parser'ı), `Modul.go`/`Paket.go`/`Paketle.go` (paket yöneticisi CLI'ı),
+`MainNative.go`/`MainWasm.go` (giriş noktaları) — geliştirici aracı/test
+referansıdır, derleyici ÇIKTISINI üretmez. `DerleElf.go` (5893 satır, Go'nun
+kendi elf arka ucu) da üretime girmez, sadece `TestArkaUc.sh`/`FarkTesti.sh`
+çapraz-kontrolünde referans olarak kalır.
+
+**Bulgu:** Bu TEK rol (gen1'i doğurmak) START'tan beri gereksizmiş —
+gerekçesi tarihsel: TancElf.tan'ın feature geçmişi HİÇ Go'suz olarak test
+edilmemişti, hep Go'nun DerleElf.go'su (her özelliği zaten baştan beri
+destekleyen) her commit'te sıfırdan "gen1" üretiyordu. `KanitGoSuzTarihce.sh`
+bunun ZORUNLU olmadığını kanıtlıyor: depoda commit'li duran (önceki bir
+turdan kalma) `TancElf` native ikilisi tohum alınıp, git tarihindeki HER
+TancElf.tan sürümü sırayla SADECE bir önceki native nesille (Go'ya hiç
+dönmeden) derlenerek mevcut HEAD'e kadar yürütülebiliyor:
+
+```
+62d0fce -> 086baeb -> 9ffe0b5(*) -> fd06ddc -> d6b4fac(**) -> 9723e7c -> 4aecdf4(=HEAD)
+```
+
+Sonuç: HEAD'deki TancElf.tan, üç kez üst üste doğrulanmış sabit noktayla
+(`gen_a == gen_b == gen_c`) TAMAMEN Go'suz üretiliyor. Bu depodaki `TancElf`
+ikilisi bu turda BU sonuçla güncellendi (önceki hali birkaç commit gerideydi
+ve mevcut kaynağı derleyemiyordu — `f_dosyaVarMi` etiket hatası veriyordu).
+
+**(*) 9ffe0b5 — bulunan 10. self-hosting bootstrap sorunu:** Bu commit AYNI
+ANDA (a) yeni bir yerleşik (`dosyaVarMi`) için derleyici desteği ekliyor VE
+(b) TancElf.tan'ın kendi modül-yolu çözümleme kodu (`iceAlYoluCoz`) o
+yerleşiği HEMEN kendi üzerinde kullanıyor. Önceki nesil derleyici bu adı hiç
+tanımadığından üretilen `call f_dosyaVarMi` için gövde hiç gömülmüyor —
+"BAGLAMA HATASI: etiket bulunamadi: f_dosyaVarMi". Kök desen SURUM.md'nin
+0.5.0 bölümündeki 9 hatayla AYNI sınıf (bkz. `adAra`, `cagriSonucTipi`) ama
+YENİ bir alt tür: "yeni özellik + aynı commit'te öz-kullanım" bootstrap
+sıralama sorunu — Go bu sorunu hep GİZLEDİ çünkü DerleElf.go her zaman
+ÖNCEDEN o yerleşiği zaten biliyordu. **Çözüm** (`KanitGoSuzTarihce.sh`
+içinde uygulanmış, TancElf.tan'ın KENDİSİ değiştirilmeden): iki adımlı geçici
+"shim" — önce öz-kullanım noktaları geçici nötrlenip derlenir (ara ikili artık
+yerleşiğin çalışma-zamanı gövdesini içeriyor), sonra GERÇEK/yamasız kaynak bu
+ara ikiliyle derlenir. Standart bootstrap tekniği (yeni derleyicilerde de
+sık): "önce öğret, sonra kullan" iki commit'e bölünseydi shim'e hiç gerek
+kalmazdı — gelecekte yeni bir yerleşik EKLEYİP AYNI COMMIT'TE TancElf.tan'ın
+kendi kaynağında kullanan katkılar için bu notu okuyun.
+
+**(**) d6b4fac — bilinen salınım, kök sebep zaten SURUM.md'de var:** Bu
+commit'te self-compile sabit nokta TUTMUYOR (109098 <-> 114000 <-> 109101
+bayt arası salınıyor, ama HER ikili kendi içinde deterministik — rastgelelik
+yok). Kök sebep: bu commit NEXUS'un metin/liste parametreli yeni
+fonksiyonlarını (kripto/soket/arena) ekliyor ama parametre tipi çıkarımı
+HENÜZ yok (bu ADIM 2 / 4aecdf4'te eklendi) — bazı çağrı bölgeleri eksik/yanlış
+derleniyor, üretim nesli nesle göre değişiyor. `KanitGoSuzTarihce.sh` bu
+adımda EN BÜYÜK (en tam) üretimi seçip devam ediyor; bir sonraki commit
+(9723e7c) bu tohumdan sabit noktaya ulaşıyor, 4aecdf4'te (parametre tipi
+çıkarımı) salınım tamamen kapanıyor. Düzeltilmedi (kapsam dışı bırakıldı):
+gerçek düzeltme d6b4fac'ı bizzat parametre-tipi-çıkarımlı hale getirmek
+olurdu ki bu zaten 4aecdf4'ün yaptığı şey — tarihi "düzeltmek" yerine "bir
+sonraki commit zaten düzeltiyor" olgusunu kullandık.
+
+**Yeni artifact'lar:**
+- `BootstrapGoSuz.sh` — birincil, ileri dönük üretim zinciri: commit'li
+  `TancElf` + güncel `TancElf.tan` -> gen1/gen2/gen3 -> sabit nokta. Go'ya
+  hiç dokunmuyor. `Bootstrap.sh` artık bunu birincil adım olarak çağırıyor;
+  Go varsa SADECE isteğe bağlı çapraz-kontrol için ek adım olarak kullanıyor.
+- `KanitGoSuzTarihce.sh` — yukarıdaki tüm tarihsel zinciri sıfırdan
+  yeniden üreten, bağımsız doğrulanabilir kanıt script'i.
+
+**Tek zorunlu kalan bootstrap artifact'ı:** commit'li `TancElf` ikilisi
+(native, statik bağlı x86-64 ELF, ~115 KB). Bu depoda deterministik olarak
+duruyor; `KanitGoSuzTarihce.sh` onun YERİNE geçebilecek daha eski bir kopyanın
+(62d0fce) bile git geçmişinden yeniden türetilebildiğini kanıtlıyor —
+yani bu ikili "gizemli/doğrulanamaz" bir kara kutu değil, kendi tarihinden
+adım adım yeniden inşa edilebilir bir sonuç.
+
+**TancElf.tan'ın (self-hosted derleyici) DerleElf.go'ya (Go referansı) göre
+BİLİNEN eksikleri — Go'yu zincirden çıkarmanın önünde engel DEĞİL (derleyici
+kendi kaynağını derlerken bunları kullanmıyor) ama TancElf.tan'ın genel amaçlı
+kullanıcı programları için TAM İKAME olmasının önünde engel:**
+- **Ondalık (float) sayı literalleri hiç desteklenmiyor** — kasıtlı, açıkça
+  belgeli (`TancElf.tan` içinde: "ondalık (kesir) sayı literalleri bu
+  derleyicide henüz desteklenmiyor... gerçek IEEE754 desteği eklemek yerine
+  (kapsamlı, ayrı bir görev)... TEMİZ, AÇIK hata"). Derleme zamanında net
+  hata veriyor, sessiz bozulma yok.
+- **`yazDosya`/`yaz_dosya` kullanıcı programı içinden çağrılamıyor**
+  ("BAGLAMA HATASI: etiket bulunamadi") — derleyicinin KENDİSİ dosya
+  okuma/yazmayı kendi `_start` mekanizmasıyla yapıyor ama bunu genel bir
+  kullanıcı yerleşiği olarak dışa açmıyor.
+- **`her x liste içinde` döngüsünde liste bir METİN LİTERALİ listesiyse**
+  (`["bir","iki","uc"]`), döngü değişkeninin tipi yanlış çıkarılıyor —
+  metin yerine ham gösterici (pointer) sayısı basılıyor. ✅ **KAPATILDI
+  (Faz 3, 14 Ağu 2026)** — `listeElemanTipiniBul` ile döngü değişkeni
+  literaldi metin/tam listelerde doğru etiketleniyor; `hertip.tan` testi
+  gen2 = Go ELF referansı birebir. Karışık/ifade elemanlı listelerde hâlâ
+  "tam" varsayılıyor (bilinçli sınır).
+
+**Ek (Faz 4, 14 Ağu 2026):** işlev dönüş tipi çıkarımındaki sınır da kısmen
+kapandı — `döndür <metin literali>` / `<bilinen-metin çağrısı>` /
+`<metin-kanıtlı değişken>` artık `tipSabitNoktasiTara`'da (dönüş+parametre
+ortak sabit noktası) izleniyor. Karmaşık dönüş ifadeleri (`döndür a+b`)
+hâlâ "tam" sayılır (bkz. TancElf.tan başlığı, Bilinen sınırlar #1).
+
+Bu üçü de derleme-zamanı NET hata ya da yanlış-ama-gözlemlenebilir çıktı
+üretiyor (segfault/sessiz bozulma yok) — gelecekteki iş için doğru
+önceliklendirilmiş, izole, regresyon testiyle kapatılabilir görevler.
+
+---
+
 ## Yayınlanmamış — Rastgele Erişimli (Positional) Dosya G/Ç
 
 NEXUS depolama motorunun tabanı. Şimdiye dek yalnız `oku`/`yaz_dosya`/
@@ -57,10 +173,12 @@ noktası doğrulandı.
 
 **ADIM 2 — TancElf.tan'a (self-hosted derleyici) parametre tipi çıkarımı:**
 DerleElf.go'nun (Go referans) `parametreTipleriniOgren`'i zaten vardı; eksik
-olan self-hosted taraftı. `islevDonusTipleriTara` (dönüş tipi) ile AYNI
-kısıtlı felsefe — sadece metin literali/bilinen metin-döndüren çağrının
-DOĞRUDAN sonucu tanınır. `islevTipKutu` 2 elemandan 4'e genişletildi (7.
-parametre ABI sınırına çarpardı). Bkz. `testler/ParametreTipiTest.tan`.
+olan self-hosted taraftı. `tipSabitNoktasiTara` (dönüş tipi; Faz 4 sonrası
+parametre çıkarımıyla ORTAK sabit nokta) ile AYNI kısıtlı felsefe — sadece
+metin literali/bilinen metin-döndüren çağrının/FAZ 4'te metin-kanıtlı
+değişkenin DOĞRUDAN sonucu tanınır. `islevTipKutu` 2 elemandan 4'e
+genişletildi (7. parametre ABI sınırına çarpardı). Bkz.
+`testler/ParametreTipiTest.tan`.
 
 **ADIM 3 — kısmen (`içe al` zaten kapalıydı; `dene`/`yakala` BACKLOG'a
 alındı, NEXUS için hata-kodu deseni tercih edildi):** Bunun yerine ADIM 1

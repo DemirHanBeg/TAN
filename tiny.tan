@@ -1,0 +1,4 @@
+işlev ikiKat(x)
+    döndür 2 * x
+son
+yaz(metin(ikiKat(5)))

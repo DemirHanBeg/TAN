@@ -9,7 +9,7 @@ son
 
 # günSay(saniye): saniyeyi güne çevirir
 işlev günSay(saniye)
-    döndür saniye / 86400
+    döndür tamBol(saniye, 86400)
 son
 
 # geçenSüre(f): bir işlevi çalıştırıp kaç saniye sürdüğünü döndürür

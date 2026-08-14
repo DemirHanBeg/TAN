@@ -11,6 +11,12 @@ tanc
 tanc2
 tanc_asm
 
+# Go'suz bootstrap ara üretimleri (BootstrapGoSuz.sh) — kalıcı artifact
+# TancElf'tir, gen1/gen2/gen3 her çalıştırmada yeniden üretilir
+gen1
+gen2
+gen3
+
 # Derleme çıktıları
 *.o
 *.s

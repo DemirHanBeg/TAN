@@ -10,10 +10,18 @@ package main
 // Kural:
 //   tam OP tam       -> tam    (bölme hariç)
 //   tam OP ondalık   -> ondalık
-//   tam / tam        -> bölünüyorsa tam, bölünmüyorsa ondalık
+//   tam / tam        -> HER ZAMAN ondalık (gerçek bölme)
 //
 // Bu katman, "123456789 * 987654321" gibi işlemlerin float64
 // yuvarlamasıyla bozulmasını engeller.
+//
+// '/' = gerçek bölme (float64), HER İKİ arka uçta aynı — 0.5.x öncesi
+// ELF/asm burada katı tam sayı (idiv) yapıyordu, yorumlayıcı runtime'da
+// "bölünüyorsa tam" diyordu; iki arka uç sessizce ayrışıyordu (bkz.
+// DOKUMANTASYON.md "Arka Uçlar"). Artık '/' HER ZAMAN float64 döner.
+// SONUÇ: 2^53 (9007199254740992) üstü tam sayılarda '/' kesinlik
+// kaybedebilir (float64'ün doğal sınırı) — kesin tam sayı bölmesi
+// (ör. büyük id/ofset/ns zaman damgası) gerekiyorsa tamBol() kullan.
 // ============================================================
 
 import "math"
@@ -83,10 +91,7 @@ func sayiIslem(islec string, sol, sag Deger) (Deger, bool) {
 			if gi == 0 {
 				return nil, true
 			}
-			// tam bölünüyorsa tam sayı, değilse ondalık
-			if si%gi == 0 {
-				return si / gi, false
-			}
+			// '/' HER ZAMAN ondalık — bkz. dosya başı yorumu.
 			return float64(si) / float64(gi), false
 		case "%":
 			if gi == 0 {

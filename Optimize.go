@@ -15,7 +15,10 @@ package main
 // değerleri hesaplar. Taşma davranışı int64 ile birebir aynıdır.
 // ============================================================
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type Optimizer struct {
 	Katlanan int // kaç düğüm katlandı (rapor için)
@@ -184,18 +187,27 @@ func (o *Optimizer) sabitKatla(n IkiliDugum) (Dugum, bool) {
 			}
 			return tamDugum(0), true
 		case "/":
+			// A1: "/" HER ZAMAN ondalik (float64) döner — iki arka uçta da
+			// (bkz. Sayi.go, DerleElf.go tipCikar). Eskiden burada
+			// "a%b==0 ise tam sayı kal" diye katlanıyordu; o kural artık
+			// çalışma-zamanı davranışıyla ÇAKIŞIR (runtime hep float
+			// veriyor, sabit katlama int verirse ikisi ayrışır).
 			if b == 0 {
-				return nil, false // sıfıra bölme: çalışma anına bırak
+				return nil, false // sıfıra bölme: çalışma anına bırak (runtime hata verir)
 			}
-			if a%b == 0 {
-				return tamDugum(a / b), true
+			// ŞART 1 — 2^53: iki taraf da SABİT ise (runtime değişken değil)
+			// büyüklüğü ŞİMDİ biliyoruz. float64 sınırını aşan bir sabit
+			// bölme sessizce hassasiyet kaybetmesin — derleme hatası ver.
+			// (ii) kararı: bu kontrol SADECE burada, sabitlerde — çalışma
+			// zamanı int/int için YOK (karekök/varyans gibi meşru büyük-
+			// sayı kesirli hesapları kırmamak için, bkz. A1 EK tartışması).
+			const guvenliSinir = int64(1) << 53 // 9007199254740992
+			if a > guvenliSinir || a < -guvenliSinir || b > guvenliSinir || b < -guvenliSinir {
+				panic(TanHata{Mesaj: fmt.Sprintf(
+					"derleme hatası: '%d / %d' — sabit işlenenlerden biri 2^53 (%d) tam sayı kesinlik sınırını aşıyor, '/' float64 kullanır ve sessizce hassasiyet kaybeder. Kesin tam sayı bölmesi için tamBol(%d, %d) kullanın.",
+					a, b, guvenliSinir, a, b)})
 			}
-			// TAM BÖLÜNMÜYORSA KATLAMA YAPMA.
-			// Sebep: arka uçlar tam sayı bölmesinde farklı davranıyor —
-			// elf/asm tam sayı bölmesi (14), yorumlayıcı ve C yolu ondalık
-			// (14.285714). Derleme aninda katlarsak hangi arka uca
-			// derlendigini bilemeyiz, anlam kayar. Calisma anina birak.
-			return nil, false
+			return kesirDugum(float64(a) / float64(b)), true
 		case "%":
 			if b == 0 {
 				return nil, false
@@ -280,10 +292,9 @@ func (o *Optimizer) cebirsel(n IkiliDugum) (Dugum, bool) {
 		if solSifir && yanEtkisiz(n.Sag) {
 			return tamDugum(0), true
 		}
-	case "/":
-		if sagBir {
-			return n.Sol, true
-		}
+	// "/" icin "x/1 -> x" YOK: A1'den sonra "/" HER ZAMAN ondalik
+	// donuyor; n.Sol'u degistirmeden dondurmek bu kurali (tipini) atlar
+	// (x int ise x/1 int kalirdi, "/" float donmeliydi).
 	}
 	return nil, false
 }

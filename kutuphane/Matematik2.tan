@@ -15,7 +15,7 @@ son
 
 # ekok (en küçük ortak kat)
 işlev ekok(a, b)
-    döndür (a * b) / ebob(a, b)
+    döndür tamBol(a * b, ebob(a, b))
 son
 
 # asalMı(n)

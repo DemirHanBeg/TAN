@@ -112,7 +112,7 @@ işlev yaprakBol(dugumId)
     anahtarlar = kAnahtarlar[dugumId]
     degerler = kDegerler[dugumId]
     n = uzunluk(anahtarlar)
-    orta = n / 2
+    orta = tamBol(n, 2)
     solAnahtarlar = araligi(anahtarlar, 0, orta)
     solDegerler = araligi(degerler, 0, orta)
     sagAnahtarlar = araligi(anahtarlar, orta, n)
@@ -132,7 +132,7 @@ işlev icBol(dugumId)
     anahtarlar = kAnahtarlar[dugumId]
     cocuklar = kCocuklar[dugumId]
     n = uzunluk(anahtarlar)
-    orta = n / 2
+    orta = tamBol(n, 2)
     ortaAnahtar = anahtarlar[orta]
     solAnahtarlar = araligi(anahtarlar, 0, orta)
     sagAnahtarlar = araligi(anahtarlar, orta + 1, n)

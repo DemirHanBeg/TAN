@@ -15,18 +15,22 @@ $ ldd cikti
 
 ---
 
-## Self-hosting: Tan compiles Tan
+## Self-hosting: Tan compiles Tan — zero Go, verified
 
-**`TancElf.tan` — the compiler itself, written in Tan — compiles itself and reproduces itself byte-for-byte.**
+**`TancElf.tan` — the compiler itself, written in Tan — compiles itself and reproduces itself byte-for-byte, with no Go involved.**
 
 ```bash
-./tan elf TancElf.tan gen1   # Go seed compiles the self-hosted compiler
-./gen1 TancElf.tan gen2      # gen1 compiles it again
-./gen2 TancElf.tan gen3      # gen2 compiles it again
+./TancElf TancElf.tan gen1   # committed native seed compiles the self-hosted compiler
+./gen1    TancElf.tan gen2   # gen1 compiles it again
+./gen2    TancElf.tan gen3   # gen2 compiles it again
 cmp gen2 gen3                 # silent — byte-identical, fixed point reached
 ```
 
-Go was used to build the first seed (`gen1`). After that, **Go's role in producing the compiler is retired** — `gen2` and every generation after it are produced entirely by Tan compiling Tan, zero external tools, zero Go. Go source (`DerleElf.go`, the interpreter, the VM) stays in the tree as an independent reference: `FarkTesti.sh` cross-checks `gen`'s output against Go's own `tan elf` output on every change, so a bug introduced into the self-hosted compiler can still be caught against an independent implementation (see `SURUM.md` 0.5.0 for the nine self-hosting bugs this caught).
+or simply `./BootstrapGoSuz.sh`, which does exactly this and checks the result.
+
+**Go is not part of this chain at all.** `TancElf` — a small (~115 KB), statically-linked, native x86-64 ELF binary committed in this repo — is the one bootstrap artifact the chain needs, and it is itself reproducible: `KanitGoSuzTarihce.sh` independently rebuilds it (and every historical generation of the compiler) straight from git history using nothing but earlier native `Tan` binaries, no Go, no gcc/clang/as/ld. See `SURUM.md` → "Go'suz Bootstrap" for the full trace, including the one place in the project's history (commit `9ffe0b5`) where a new builtin was introduced and self-used in the same commit — a classic bootstrap chicken-and-egg — and the two-step shim that gets past it without touching `TancElf.tan` itself.
+
+Go source (`DerleElf.go`, the interpreter, the VM) stays in the tree as an **independent reference only** — nothing in the production chain requires it. `FarkTesti.sh`/`TestArkaUc.sh` use it *if present* for cross-checking (Ken Thompson "Trusting Trust" reasoning: an independent second implementation catches bugs a self-hosted compiler could hide from itself — see `SURUM.md` 0.5.0 for the nine self-hosting bugs this caught, and the Go'suz Bootstrap section for a tenth).
 
 The two external-tool-dependent legacy backends (`tan derle` → C → gcc, `tan asm` → x86-64 asm → as/ld) are archived in `arsiv/` — superseded by `tan elf`, which needs nothing.
 
@@ -36,22 +40,34 @@ At the machine-code level, Tan writes the REX prefixes, ModRM bytes, RIP-relativ
 
 ## Quick start
 
+**Go-free (recommended — this is the real production path now):**
+
 ```bash
 git clone https://github.com/DemirHanBeg/TAN.git
 cd TAN
-go build -o tan .          # Go seed — only needed once, to bootstrap gen1
+./BootstrapGoSuz.sh        # TancElf -> gen1 -> gen2 -> gen3, fixed point, zero Go
 
-./tan Ornek.tan             # run with the interpreter
-./tan elf AsmTest.tan out   # compile to a native binary, zero external tools
+./gen2 AsmTest.tan out     # gen2 is a full native Tan compiler — use it directly
+./out
+```
+
+**With Go available (optional — only needed for the interpreter/VM and cross-checking):**
+
+```bash
+go build -o tan .           # only needed for the interpreter/VM/package manager
+./tan Ornek.tan              # run with the interpreter
+./tan elf AsmTest.tan out    # Go's own elf backend, for comparison
 ./out
 ```
 
 Verify everything, including the self-hosting fixed point:
 
 ```bash
-./Bootstrap.sh          # elf backend + self-hosting chain + regression
-./TestArkaUc.sh elf   # 20 backend regression tests
-./FarkTesti.sh ornekler/*.tan   # interpreter vs native cross-check
+./Bootstrap.sh                  # Go-free chain first, then Go cross-check if Go is present
+./KanitGoSuzTarihce.sh          # independent proof: rebuilds the whole history, zero Go
+./TestArkaUcGoSuzTemiz.sh       # clean-room check: no go/gcc/clang/as/ld touched
+./TestArkaUc.sh elf             # 20 backend regression tests (needs Go)
+./FarkTesti.sh ornekler/*.tan   # interpreter vs native cross-check (needs Go)
 ```
 
 ---

@@ -7,7 +7,7 @@ işlev ikiliArama(liste, hedef)
     alt = 0
     üst = uzunluk(liste) - 1
     iken alt <= üst
-        orta = taban((alt + üst) / 2)
+        orta = tamBol(alt + üst, 2)
         eğer liste[orta] == hedef ise
             döndür orta
         değilse eğer liste[orta] < hedef ise

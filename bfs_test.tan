@@ -1,0 +1,10 @@
+işlev ikiyleCarp(x)
+    döndür x * 2
+son
+işlev ikiKat(x)
+    döndür ikiyleCarp(x)
+son
+işlev olAra(y)
+    döndür y + 1
+son
+yaz(metin(ikiKat(5)))

@@ -776,6 +776,7 @@ type elfUretici struct {
 	yiginVar  bool           // yigin ayirici koda eklendi mi
 	kayitSemalari map[string]*KayitSemasi // kayit adi -> sema
 	islevParamSayisi map[string]int // islev adi -> parametre sayisi (içParcaLat icin)
+	dinamikBolmeUyarilari []string // A1 EK-B: calisma-zamani int/int "/" gorulen islevler (TAN_OPT_RAPOR icin)
 }
 
 // tipCikar: bir ifadenin tipini derleme aninda belirler.
@@ -807,8 +808,13 @@ func (e *elfUretici) tipCikar(d Dugum) Tip {
 				return TipMetin
 			}
 		}
+		// '/' HER ZAMAN ondalık — yorumlayıcıyla aynı kural (Sayi.go).
+		// int/int için de idiv değil, gerçek bölme (bkz. ifade() "/" kolu).
+		if n.Islec == "/" {
+			return TipKesir
+		}
 		switch n.Islec {
-		case "+", "-", "*", "/":
+		case "+", "-", "*":
 			if e.tipCikar(n.Sol).Cesit == CKesir || e.tipCikar(n.Sag).Cesit == CKesir {
 				return TipKesir
 			}
@@ -1410,7 +1416,19 @@ func (e *elfUretici) ifade(d Dugum) {
 		// --- ONDALIK YOL ---
 		solT := e.tipCikar(n.Sol)
 		sagT := e.tipCikar(n.Sag)
-		if solT.Cesit == CKesir || sagT.Cesit == CKesir {
+		// '/' HER ZAMAN bu yoldan gecer (gercek bolme) — int/int dahil.
+		// Once burada olmasaydi asagidaki int idiv yoluna dusup katı tam
+		// sayi bolmesi yapardi (A1 arizasinin kaynagi).
+		if solT.Cesit == CKesir || sagT.Cesit == CKesir || n.Islec == "/" {
+			if n.Islec == "/" && solT.Cesit == CTam && sagT.Cesit == CTam {
+				// derleme-ani sabit DEGIL (oyle olsaydi Optimize.go
+				// sabitKatla bunu zaten katlamis olurdu) — calisma-zamaninda
+				// buyukluk bilinmiyor, 2^53 kesinlik sinirini asabilir.
+				// (ii) karari: burada calisma-zamani kontrolu YOK (meşru
+				// buyuk-sayi kesirli hesaplari — karekök, varyans — kirilir).
+				// Sadece TAN_OPT_RAPOR icin danisma notu biriktir.
+				e.dinamikBolmeUyarilari = append(e.dinamikBolmeUyarilari, e.suanIslev)
+			}
 			e.ifade(n.Sol)
 			if solT.Cesit != CKesir {
 				m.cvtTamKesir(0, rRAX)
@@ -1418,6 +1436,13 @@ func (e *elfUretici) ifade(d Dugum) {
 			}
 			m.pushKayit(rRAX)
 			e.ifade(n.Sag)
+			if n.Islec == "/" {
+				// sifira bolme: int VEYA float64 +0.0 icin bit-kalibi hepsi
+				// sifir — tek test yeter (float -0.0 kapsanmiyor, ihmal
+				// edilebilir kenar durum — bkz. A1 EK1/EK2 notlari).
+				m.testKayit(rRAX, rRAX)
+				m.jcc(0x84, "f_hata_sifira_bolme") // jz
+			}
 			if sagT.Cesit != CKesir {
 				m.cvtTamKesir(0, rRAX)
 				m.movqKayitXmm(rRAX, 0)
@@ -1485,10 +1510,12 @@ func (e *elfUretici) ifade(d Dugum) {
 			m.subKayit(rRAX, rRCX)
 		case "*":
 			m.imulKayit(rRAX, rRCX)
-		case "/":
-			m.cqo()
-			m.idivKayit(rRCX)
+		// "/" burada YOK — her zaman ONDALIK YOL'dan gecer (yukarida),
+		// bu switch'e hic ulasmaz. "%" tam sayida kalir (dil kurali
+		// degismedi), ama sifir kontrolu ekliyoruz — ayni idiv, ayni risk.
 		case "%":
+			m.testKayit(rRCX, rRCX)
+			m.jcc(0x84, "f_hata_sifira_bolme") // jz
 			m.cqo()
 			m.idivKayit(rRCX)
 			m.movKayit(rRAX, rRDX)
@@ -1604,11 +1631,11 @@ func (e *elfUretici) ifade(d Dugum) {
 
 	case IndeksDugum:
 		ht := e.tipCikar(n.Hedef)
+		it := e.tipCikar(n.Indeks)
 		e.ifade(n.Hedef)
 		m.pushKayit(rRAX)
 		e.ifade(n.Indeks)
 		if ht.Cesit == CSozluk {
-			it := e.tipCikar(n.Indeks)
 			if it.Cesit != CMetin {
 				m.movKayit(rRDI, rRAX)
 				if it.Cesit == CKesir {
@@ -1617,6 +1644,14 @@ func (e *elfUretici) ifade(d Dugum) {
 					m.call("f_sayi_metne")
 				}
 			}
+		} else if it.Cesit == CKesir {
+			// A1 SART3(a): liste/metin indeksi ondalik gelirse (artik "/"
+			// her zaman ondalik dondurdugu icin olagan) sifira dogru kes —
+			// aksi halde float64 bit-kalibi ham gosterici ofseti gibi
+			// kullanilir (BAgaci.tan'daki gibi sessiz bellek bozulmasi).
+			m.movqXmmKayit(0, rRAX)
+			m.cvtKesirTam(rRCX, 0)
+			m.movKayit(rRAX, rRCX)
 		}
 		m.movKayit(rRSI, rRAX)
 		m.popKayit(rRDI)
@@ -2634,6 +2669,13 @@ func (e *elfUretici) deyim(d Dugum) {
 		e.ifade(n.Hedef)
 		m.pushKayit(rRAX) // liste isaretcisi
 		e.ifade(n.Indeks)
+		if e.tipCikar(n.Indeks).Cesit == CKesir {
+			// A1 SART3(a): okuma yolundaki genel kirpma ile ayni — yazma
+			// yolu da ondalik indeksi sifira dogru kesmeli.
+			m.movqXmmKayit(0, rRAX)
+			m.cvtKesirTam(rRCX, 0)
+			m.movKayit(rRAX, rRCX)
+		}
 		m.movKayit(rRSI, rRAX) // rsi = indeks
 		m.popKayit(rRDI)       // rdi = liste isaretcisi
 		m.leaOge(rRAX, rRDI, rRSI)
@@ -2815,6 +2857,50 @@ func (e *elfUretici) yiginIlkle() {
 	m.syscall()
 	m.popKayit(rRDI)
 	m.movGenelYaz("v___yiginSon", rRDI) // yigin siniri
+}
+
+// veriEkle: bir metni veri bolumune ekler, "sN" etiketini dondurur.
+// yardimciHataMesajlari gibi sabit runtime mesajlari icin kullanilir
+// (MetinDugum codegen'iyle AYNI mekanizma — bkz. ifade() MetinDugum kolu).
+func (e *elfUretici) veriEkle(s string) string {
+	ad := fmt.Sprintf("s%d", len(e.metinler))
+	e.metinler = append(e.metinler, s)
+	return ad
+}
+
+// f_hata_cik(rdi=mesaj-bayt-isaretcisi, rsi=uzunluk, rdx=cikis-kodu):
+// stderr'e yazar, sonra exit(rdx). GERI DONMEZ.
+// A1 EK2: ELF arka ucunda GRAFIK/mesajli runtime hatasinin ILK ornegi —
+// eskiden idiv-sifir SIGFPE (cikis kodu 136) ile sessizce cokerdi,
+// yorumlayici "HATA: sifira bolme" basip duzgun cikardi. Simdi ikisi
+// de acik mesaj + kontrollu cikis kodu veriyor (kod farkli olabilir,
+// mesaj/davranis ayni niyeti tasiyor).
+func (e *elfUretici) yardimciHataCik() {
+	m := e.m
+	m.etiketKoy("f_hata_cik")
+	m.movKayit(rR8, rRDX)  // r8 = cikis kodu (write syscall rdx'i kullanir)
+	m.movKayit(rRDX, rRSI) // rdx = uzunluk
+	m.movKayit(rRSI, rRDI) // rsi = buf
+	m.movImm32(rRDI, 2)    // rdi = fd (stderr)
+	m.movImm32(rRAX, 1)    // sys_write
+	m.syscall()
+	m.movKayit(rRDI, rR8) // cikis kodu
+	m.movImm32(rRAX, 60)  // sys_exit
+	m.syscall()
+}
+
+// f_hata_sifira_bolme: "/" veya "%" sirasinda sifir gorulunce buraya
+// atlanir (jz). Cikis kodu 4 — OOM'un exit(3)'una (yardimciAyir) paralel,
+// dokumante edilmis/kontrollu bir kod, SIGFPE'nin 136'si gibi opak degil.
+func (e *elfUretici) yardimciHataSifiraBolme() {
+	m := e.m
+	msg := e.veriEkle("HATA: sıfıra bölme\n")
+	m.etiketKoy("f_hata_sifira_bolme")
+	m.leaVeri(rRDI, msg)
+	m.addImm32(rRDI, 8) // uzunluk basligini atla, ham baytlara gel
+	m.movImm32(rRSI, int32(len("HATA: sıfıra bölme\n")))
+	m.movImm32(rRDX, 4) // cikis kodu
+	m.call("f_hata_cik")
 }
 
 // tan_ayir(rdi = bayt) -> rax = isaretci   (bump allocator)
@@ -5532,6 +5618,8 @@ func derleElf(dosya string, cikti string) {
 	// yardımcılar + kullanıcı işlevleri + _start
 	e.yardimciYazMetin()
 	e.yardimciYazSayi()
+	e.yardimciHataCik()
+	e.yardimciHataSifiraBolme()
 	e.yardimciAyir()
 	e.yardimciArenaAyir()
 	e.yardimciArenaSerbest()
@@ -5745,6 +5833,23 @@ func derleElf(dosya string, cikti string) {
 	fmt.Printf("ELF doğrudan yazıldı: %s  (%d bayt, kod %d bayt, veri %d bayt)\n",
 		cikti, len(dosyaBaytlari), kodBoy, len(veri))
 	fmt.Println("Kullanılan dış araç: YOK (as/ld/gcc/libc hiçbiri)")
+
+	// A1 EK-B: (ii) karari sadece derleme-ani sabitleri yakalar — calisma
+	// zamaninda buyuklugu bilinmeyen int/int "/" icin bu, TEK danisma agidir.
+	if os.Getenv("TAN_OPT_RAPOR") != "" && len(e.dinamikBolmeUyarilari) > 0 {
+		fmt.Fprintf(os.Stderr, "opt-danisma: %d yerde calisma-zamani int/int '/' — büyüklük bilinmiyor, 2^53 üstünde kesinlik kaybedebilir, tamBol() gerekebilir:\n", len(e.dinamikBolmeUyarilari))
+		gorulen := map[string]bool{}
+		for _, isv := range e.dinamikBolmeUyarilari {
+			ad := isv
+			if ad == "" {
+				ad = "(ana gövde)"
+			}
+			if !gorulen[ad] {
+				gorulen[ad] = true
+				fmt.Fprintf(os.Stderr, "  - %s\n", ad)
+			}
+		}
+	}
 }
 
 

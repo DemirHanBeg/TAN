@@ -788,6 +788,12 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipK
             z = tamponEkleTumu(kodKutu, nKutu, callBant("f_yaz_metin"))
             döndür tamponSonuc(kodKutu, nKutu)
         son
+        eğer tipKutu[0] == "kesir" ise
+            # FAZ 6: kesir değeri f_kesir_metne ile metne çevrilir (Go
+            # yazDugum'da CKesir dalı — f_yaz_kesir yardımcısı).
+            z = tamponEkleTumu(kodKutu, nKutu, callBant("f_yaz_kesir"))
+            döndür tamponSonuc(kodKutu, nKutu)
+        son
         z = tamponEkleTumu(kodKutu, nKutu, callBant("yaz_sayi"))
         döndür tamponSonuc(kodKutu, nKutu)
     son
@@ -948,6 +954,17 @@ işlev deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipK
             son
         son
         x = pIlerle(tokenler, pozKutu)      # ')' yut
+
+        # --- FAZ 5 (A): erişilemeyen işlevi derleme (ölü budama) ---
+        # islevTipKutu[4] erişilebilir işlev kümesidir. Boş/geçersizse eski
+        # davranış: TÜM işlevler derlenir. Erişilebilir değilse gövdeyi atla.
+        eğer uzunluk(islevTipKutu) > 4 ve uzunluk(islevTipKutu[4]) > 0 ve adIndisBul(islevTipKutu[4], ad) == 0 - 1 ise
+            govdeSonuc = islevGovdeSonBul(tokenler, pozKutu[0])
+            iken pozKutu[0] < govdeSonuc[0]
+                x = pIlerle(tokenler, pozKutu)
+            son
+            döndür []
+        son
 
         etAtla = yeniEtiket(sayacKutu, "Lislevatla")
         kodKutu = tamponOlustur()
@@ -1201,6 +1218,144 @@ işlev metneTamSayi(s)
     döndür deger
 son
 
+# ---------------- FAZ 6: ONDALIK LITERAL -> IEEE754 BIT DESENI ----------------
+# Go tarafında int64(math.Float64bits(ParseFloat(s,64))) TEK SATIRDA bit
+# deseni üretir; TancElf'ta float YOK, bu yüzden "d.ddd" metnini tamamen
+# TAMSAYI aritmetiğiyle IEEE754 double bit desenine çeviren saf bir rutin
+# gerekli. Yöntem: değer = M/10^F (M = tüm basamaklar, F = nokta sonrası
+# basamak sayısı, her zaman F >= 0). Tam kısım t = M/10^F ve kesirli kısım
+# k/olcek (k = M % olcek) ayrıştırılır; kesirli kısım UZUN BÖLME ile ikili
+# bitlere (2^-1, 2^-2, ...) açılır; 53-bit mantis toplanır, 54. bit
+# YUVARLA-YARIYA-EŞİT (round-half-even) ile yuvarlanır; biased üs + mantis
+# birleştirilir. İşaret biti NEGATIF kolu tarafından xor ile eklenir.
+# Sınır: ~15 anlamlı basamak (M int64'e sığmalı) ve normal double aralığı
+# (2^-1022'den küçük değerler subnormal — gerçek literal'lerde asla oluşmaz).
+
+işlev guc2(k)
+    g = 1
+    j = 0
+    iken j < k
+        g = g * 2
+        j = j + 1
+    son
+    döndür g
+son
+
+# kesirBit: k/olcek'in fi'inci ikili biti (fi=1 -> 2^-1). Uzun bölme:
+# bit_i = tamBol(f*2, olcek) OLMADAN önce, kalan f = (f*2) mod olcek.
+işlev kesirBit(k, olcek, fi)
+    f = k
+    j = 0
+    bit = 0
+    iken j < fi
+        f = f * 2
+        bit = tamBol(f, olcek)
+        f = f % olcek
+        j = j + 1
+    son
+    döndür bit
+son
+
+# kesirKalan: fi bit çıkarıldıktan SONRAKI kuyruk (f) — yuvarlama sticky'si.
+# f != 0 ise aşağıda en az bir 1 daha var demektir.
+işlev kesirKalan(k, olcek, n)
+    f = k
+    j = 0
+    iken j < n
+        f = f * 2
+        f = f % olcek
+        j = j + 1
+    son
+    döndür f
+son
+
+işlev kesirBits(s)
+    n = uzunluk(s)
+    M = 0
+    F = 0
+    sonraNokta = 0
+    i = 0
+    iken i < n
+        c = metinAl(s, i)
+        eğer c == "." ise
+            sonraNokta = 1
+        değilse
+            M = M * 10 + (kod(c) - 48)
+            eğer sonraNokta == 1 ise
+                F = F + 1
+            son
+        son
+        i = i + 1
+    son
+    eğer M == 0 ise
+        döndür 0
+    son
+    olcek = 1
+    j = 0
+    iken j < F
+        olcek = olcek * 10
+        j = j + 1
+    son
+    t = tamBol(M, olcek)
+    k = M % olcek
+    tt = t
+    L = 0
+    iken tt > 0
+        L = L + 1
+        tt = tamBol(tt, 2)
+    son
+    e = 0
+    mantis = 0
+    eğer t == 0 ise
+        # kesirli kısmın ilk set bitini bul (2^-p konumu), üs = -p
+        p = 1
+        iken kesirBit(k, olcek, p) == 0
+            p = p + 1
+        son
+        e = 0 - p
+        j = 1
+        iken j <= 52
+            mantis = mantis * 2 + kesirBit(k, olcek, p + j)
+            j = j + 1
+        son
+        rB = kesirBit(k, olcek, p + 53)
+        kalan = kesirKalan(k, olcek, p + 53)
+    değilse
+        e = L - 1
+        j = 1
+        iken j <= 52
+            pos = L - 1 - j
+            eğer pos >= 0 ise
+                bit = tamBol(t, guc2(pos)) % 2
+            değilse
+                bit = kesirBit(k, olcek, j - L + 1)
+            son
+            mantis = mantis * 2 + bit
+            j = j + 1
+        son
+        eğer L - 54 >= 0 ise
+            rB = tamBol(t, guc2(L - 54)) % 2
+            kalan = t % guc2(L - 54)
+            eğer k != 0 ise
+                kalan = 1
+            son
+        değilse
+            rB = kesirBit(k, olcek, 54 - L)
+            kalan = kesirKalan(k, olcek, 54 - L)
+        son
+    son
+    eğer rB == 1 ise
+        eğer kalan != 0 veya mantis % 2 == 1 ise
+            mantis = mantis + 1
+            eğer mantis == 9007199254740992 ise
+                mantis = 0
+                e = e + 1
+            son
+        son
+    son
+    döndür (e + 1023) * 4503599627370496 + mantis
+son
+
 # ---------------- BANT (etiket/rel32 destekli kod temsili) ----------------
 # Kayıt/mov/syscall kodlayıcıları artık HAM BAYT değil "bant" (bc() ile
 # kodlanmış işaretleyici dizisi) üretiyor — RPN ile AYNI SOH kodlaması,
@@ -1294,6 +1449,101 @@ işlev cmpKayit(sol, sag)
 son
 işlev xorKayit(hedef, kaynak)
     döndür ikiliKayit(49, hedef, kaynak) # 0x31
+son
+işlev andKayit(hedef, kaynak)
+    döndür ikiliKayit(33, hedef, kaynak) # 0x21
+son
+
+# ---------------- SSE (ondalık/kesir sayı) komut kodlayıcıları ----------------
+# DerleElf.go satır 604-691 ile BİREBİR. Kesir değerleri kayıtlarda HAM BIT
+# DESENİ olarak taşınır (tip farkı statik) — xmm'ler yalnız aritmetikte
+# geçici kullanılır. Kodlayıcı rex kuralları: modrm'deki reg alanı xmm8+ için
+# REX.R(4), rm alanı gpr/xmm8+ için REX.B(1); comisd/sseIkili rex'i 0x40'tan
+# başlar (W biti YOK), movq/cvt çiftleri 0x48'den (W biti VAR).
+
+# movq xmm<x>, r64<r>   (66 REX.W 0F 6E /r) — gpr bit desenini xmm'e taşı
+işlev movqXmmKayit(x, r)
+    rex = 72
+    eğer x >= 8 ise
+        rex = rex + 4
+    son
+    eğer r >= 8 ise
+        rex = rex + 1
+    son
+    döndür [bcBayt(102), bcBayt(rex), bcBayt(15), bcBayt(110), bcBayt(modrmBayt(3, x, r))]
+son
+
+# movq r64<r>, xmm<x>   (66 REX.W 0F 7E /r) — sonucu GPR'e geri al
+işlev movqKayitXmm(r, x)
+    rex = 72
+    eğer x >= 8 ise
+        rex = rex + 4
+    son
+    eğer r >= 8 ise
+        rex = rex + 1
+    son
+    döndür [bcBayt(102), bcBayt(rex), bcBayt(15), bcBayt(126), bcBayt(modrmBayt(3, x, r))]
+son
+
+# F2 0F <op> /r : addsd(58) subsd(5C) mulsd(59) divsd(5E) xmm<hedef>, xmm<kaynak>
+işlev sseIkili(op, hedef, kaynak)
+    bant = [bcBayt(242)]
+    eğer hedef >= 8 veya kaynak >= 8 ise
+        rex = 64
+        eğer hedef >= 8 ise
+            rex = rex + 4
+        son
+        eğer kaynak >= 8 ise
+            rex = rex + 1
+        son
+        bant = ekle(bant, bcBayt(rex))
+    son
+    bant = ekle(bant, bcBayt(15))
+    bant = ekle(bant, bcBayt(op))
+    döndür ekle(bant, bcBayt(modrmBayt(3, hedef, kaynak)))
+son
+
+# cvtsi2sd xmm<x>, r64<r>   (F2 REX.W 0F 2A /r) — tam sayıyı double'a çevir
+işlev cvtTamKesir(x, r)
+    rex = 72
+    eğer x >= 8 ise
+        rex = rex + 4
+    son
+    eğer r >= 8 ise
+        rex = rex + 1
+    son
+    döndür [bcBayt(242), bcBayt(rex), bcBayt(15), bcBayt(42), bcBayt(modrmBayt(3, x, r))]
+son
+
+# cvttsd2si r64<r>, xmm<x>   (F2 REX.W 0F 2C /r) — double'ı SIFIRA DOĞRU kes
+işlev cvtKesirTam(r, x)
+    rex = 72
+    eğer r >= 8 ise
+        rex = rex + 4
+    son
+    eğer x >= 8 ise
+        rex = rex + 1
+    son
+    döndür [bcBayt(242), bcBayt(rex), bcBayt(15), bcBayt(44), bcBayt(modrmBayt(3, r, x))]
+son
+
+# comisd xmm<a>, xmm<b>   (66 [rex] 0F 2F /r) — işaretsiz bayrak kullanır
+# (ondalık karşılaştırma setcc kodları tamsayı kodlarından FARKLI).
+işlev comisd(a, b)
+    bant = [bcBayt(102)]
+    eğer a >= 8 veya b >= 8 ise
+        rex = 64
+        eğer a >= 8 ise
+            rex = rex + 4
+        son
+        eğer b >= 8 ise
+            rex = rex + 1
+        son
+        bant = ekle(bant, bcBayt(rex))
+    son
+    bant = ekle(bant, bcBayt(15))
+    bant = ekle(bant, bcBayt(47))
+    döndür ekle(bant, bcBayt(modrmBayt(3, a, b)))
 son
 
 # imul r64, r64 (REX.W 0F AF /r)
@@ -2229,6 +2479,177 @@ işlev yazMetinBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# ---------------- FAZ 6: KESİR (ONDALIK) RUNTIME YARDIMCILARI ----------------
+# f_kesir_metne(rdi = double bit deseni) -> rax = YENİ metin.
+# DerleElf.go yardimciKesirMetne (5081-5213) ile BİREBİR port: 6 ondalık
+# basamak, sondaki sıfırlar kırpılır, tam kısım 0 ise "0" yazılır, kesirli
+# kısım 0 ise noktasız tam sayı yazılır. Yazma rbp-tamponundan GERİYE
+# (rbp-40..rbp-1) yapılır; çıktı HEAP'e metin olarak kopyalanır.
+# Yuvarlama: kesirli kısım *1e6 + 0.5 ile kesilir; 1000000 taşarsa tam kısım
+# 1 artırılır (0.9999995+ kenarı — "log(e)" gibi değerlerde 6 basamağa
+# sığmayan 1000000 üretiyordu). İşaret biti rbp-56'da saklanır (Go -9223...=
+# maskesiyle; TancElf aynı maskeyi -1'u 63 kez kaydırıp üretiyor).
+işlev kesirMetneBant()
+    b = [bcEtiket("f_kesir_metne")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 160))
+    b = listeBirlestir(b, movYerelYaz(0 - 48, 7))   # [-48] = giriş bitleri
+    # isaret biti: rcx = 0x8000000000000000
+    b = listeBirlestir(b, movKayit(0, 7))
+    b = listeBirlestir(b, movImm32(1, 0 - 1))
+    b = listeBirlestir(b, shlImm(1, 63))
+    b = listeBirlestir(b, andKayit(0, 1))
+    b = listeBirlestir(b, movYerelYaz(0 - 56, 0))   # [-56] = işaret (0 veya 0x8000...)
+    # mutlak değer: rcx = 0x7FFFFFFFFFFFFFFF (9223372036854775807)
+    b = listeBirlestir(b, movKayit(0, 7))
+    b = listeBirlestir(b, movImm64(1, 9223372036854775807))
+    b = listeBirlestir(b, andKayit(0, 1))
+    b = listeBirlestir(b, movqXmmKayit(0, 0))       # xmm0 = mutlak değer
+    # tam kısım
+    b = listeBirlestir(b, cvtKesirTam(1, 0))        # rcx = tam kısım
+    b = listeBirlestir(b, movYerelYaz(0 - 64, 1))   # [-64] = tam kısım
+    b = listeBirlestir(b, cvtTamKesir(1, 1))        # xmm1 = tam kısım (double)
+    b = listeBirlestir(b, sseIkili(92, 0, 1))       # subsd xmm0, xmm1 -> kesirli kısım
+    # *1e6 (0x412E848000000000)
+    b = listeBirlestir(b, movImm64(0, 4696837146684686336))
+    b = listeBirlestir(b, movqXmmKayit(2, 0))
+    b = listeBirlestir(b, sseIkili(89, 0, 2))       # mulsd xmm0, xmm2
+    # +0.5 (0x3FE0000000000000) — yuvarlama
+    b = listeBirlestir(b, movImm64(0, 4602678819172646912))
+    b = listeBirlestir(b, movqXmmKayit(2, 0))
+    b = listeBirlestir(b, sseIkili(88, 0, 2))       # addsd xmm0, xmm2
+    b = listeBirlestir(b, cvtKesirTam(2, 0))        # rdx = kesir*1e6+0.5 (kes)
+    b = listeBirlestir(b, movYerelYaz(0 - 72, 2))   # [-72] = kesir basamakları
+
+    # --- YUVARLAMA TAŞMASI ---
+    b = listeBirlestir(b, cmpImm32(2, 1000000))
+    b = listeBirlestir(b, jccBant(133, "Lkm_tasmayok")) # jne
+    b = listeBirlestir(b, movYerelOku(0, 0 - 64))
+    b = listeBirlestir(b, incKayit(0))
+    b = listeBirlestir(b, movYerelYaz(0 - 64, 0))
+    b = listeBirlestir(b, movImm32(2, 0))
+    b = listeBirlestir(b, movYerelYaz(0 - 72, 2))
+    b = ekle(b, bcEtiket("Lkm_tasmayok"))
+
+    # --- SONDAKİ SIFIRLARI KIRP (r10 kaç basamak kalacağını sayar) ---
+    b = listeBirlestir(b, movImm32(10, 6))
+    b = listeBirlestir(b, movYerelOku(0, 0 - 72))
+    b = ekle(b, bcEtiket("Lkm_trim"))
+    b = listeBirlestir(b, cmpImm32(10, 1))
+    b = listeBirlestir(b, jccBant(142, "Lkm_fdone")) # jle
+    b = listeBirlestir(b, movImm32(9, 10))
+    b = listeBirlestir(b, xorKayit(2, 2))
+    b = listeBirlestir(b, divKayit(9))
+    b = listeBirlestir(b, testKayit(2, 2))
+    b = listeBirlestir(b, jccBant(133, "Lkm_undo"))  # jnz
+    b = listeBirlestir(b, decKayit(10))
+    b = listeBirlestir(b, jmpBant("Lkm_trim"))
+    b = ekle(b, bcEtiket("Lkm_undo"))
+    b = listeBirlestir(b, movImm32(9, 10))
+    b = listeBirlestir(b, imulKayit(0, 9))
+    b = listeBirlestir(b, addKayit(0, 2))
+    b = ekle(b, bcEtiket("Lkm_fdone"))
+
+    # --- basamakları rbp-tamponuna GERİYE doğru yaz ---
+    b = listeBirlestir(b, leaRbp(1, 0))             # rcx = rbp (tampon SONU)
+    b = listeBirlestir(b, testKayit(0, 0))          # kesirli kısım 0 mı?
+    b = listeBirlestir(b, jccBant(132, "Lkm_tamsayi")) # jz -> "4" yaz, "4.0" değil
+    b = listeBirlestir(b, movKayit(11, 10))         # r11 = kalan basamak sayısı
+    b = ekle(b, bcEtiket("Lkm_fd"))
+    b = listeBirlestir(b, testKayit(11, 11))
+    b = listeBirlestir(b, jccBant(132, "Lkm_dot"))  # jz
+    b = listeBirlestir(b, movImm32(9, 10))
+    b = listeBirlestir(b, xorKayit(2, 2))
+    b = listeBirlestir(b, divKayit(9))
+    b = listeBirlestir(b, addBaytImm(2, 48))        # dl += '0'
+    b = listeBirlestir(b, decKayit(1))
+    b = listeBirlestir(b, movBaytKayit(1, 2))       # [rcx] = dl
+    b = listeBirlestir(b, decKayit(11))
+    b = listeBirlestir(b, jmpBant("Lkm_fd"))
+    b = ekle(b, bcEtiket("Lkm_dot"))
+    b = listeBirlestir(b, decKayit(1))
+    b = listeBirlestir(b, movBaytImm(1, 46))        # [rcx] = '.'
+    b = ekle(b, bcEtiket("Lkm_tamsayi"))
+    # tam kısım
+    b = listeBirlestir(b, movYerelOku(0, 0 - 64))
+    b = listeBirlestir(b, testKayit(0, 0))
+    b = listeBirlestir(b, jccBant(133, "Lkm_id"))   # jnz
+    b = listeBirlestir(b, decKayit(1))
+    b = listeBirlestir(b, movBaytImm(1, 48))        # '0'
+    b = listeBirlestir(b, jmpBant("Lkm_sign"))
+    b = ekle(b, bcEtiket("Lkm_id"))
+    b = ekle(b, bcEtiket("Lkm_idl"))
+    b = listeBirlestir(b, testKayit(0, 0))
+    b = listeBirlestir(b, jccBant(132, "Lkm_sign")) # jz
+    b = listeBirlestir(b, movImm32(9, 10))
+    b = listeBirlestir(b, xorKayit(2, 2))
+    b = listeBirlestir(b, divKayit(9))
+    b = listeBirlestir(b, addBaytImm(2, 48))
+    b = listeBirlestir(b, decKayit(1))
+    b = listeBirlestir(b, movBaytKayit(1, 2))
+    b = listeBirlestir(b, jmpBant("Lkm_idl"))
+    b = ekle(b, bcEtiket("Lkm_sign"))
+    # işaret
+    b = listeBirlestir(b, movYerelOku(9, 0 - 56))
+    b = listeBirlestir(b, cmpImm32(9, 0))
+    b = listeBirlestir(b, jccBant(132, "Lkm_fin"))  # je
+    b = listeBirlestir(b, decKayit(1))
+    b = listeBirlestir(b, movBaytImm(1, 45))        # '-'
+    b = ekle(b, bcEtiket("Lkm_fin"))
+    # uzunluk = rbp - rcx; yeni metin ayır, kopyala
+    b = listeBirlestir(b, movKayit(2, 5))           # rdx = rbp
+    b = listeBirlestir(b, subKayit(2, 1))           # rdx = rbp - rcx (uzunluk)
+    b = listeBirlestir(b, movYerelYaz(0 - 80, 1))   # [-80] = veri başlangıcı (rcx)
+    b = listeBirlestir(b, movYerelYaz(0 - 88, 2))   # [-88] = uzunluk
+    b = listeBirlestir(b, movKayit(7, 2))           # rdi = uzunluk
+    b = listeBirlestir(b, addImm32(7, 16))          # rdi += 16 (başlık + pay)
+    b = listeBirlestir(b, callBant("f_tan_ayir"))
+    b = listeBirlestir(b, movYerelYaz(0 - 96, 0))   # [-96] = yeni metin
+    b = listeBirlestir(b, movYerelOku(1, 0 - 88))   # rcx = uzunluk
+    b = listeBirlestir(b, movPtrYaz(0, 1))          # *yeniMetin = uzunluk
+    b = listeBirlestir(b, leaDolayli(7, 0, 8))      # rdi = yeniMetin+8
+    b = listeBirlestir(b, movYerelOku(6, 0 - 80))   # rsi = veri başlangıcı
+    b = listeBirlestir(b, movYerelOku(2, 0 - 88))   # rdx = uzunluk
+    b = listeBirlestir(b, callBant("f_bellek_kopyala"))
+    b = listeBirlestir(b, movYerelOku(0, 0 - 96))   # rax = yeni metin
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
+# yaz_kesir(rdi = double bit deseni) — Go yardimciYazKesir (5216-5223) portu.
+# Çerçevesiz: f_kesir_metne -> rdi=metin -> f_yaz_metin.
+işlev yazKesirBant()
+    b = [bcEtiket("f_yaz_kesir")]
+    b = listeBirlestir(b, callBant("f_kesir_metne"))
+    b = listeBirlestir(b, movKayit(7, 0))
+    b = listeBirlestir(b, callBant("f_yaz_metin"))
+    döndür listeBirlestir(b, retBant())
+son
+
+# hata_sifira_bolme: "/" veya "%" operasyonunda sıfır bölen görülünce
+# (jz hedefi). Mesajı INLINE gömer (METIN dalı deseni), stderr'e yazar,
+# exit(4) yapar — SIGFPE'nin opak 136'sı yerine kontrollü çıkış (Go
+# yardimciHataSifiraBolme 2895-2904; Go veri bölümüne gömüyor, TancElf
+# kod içine gömüyor).
+işlev hataSifiraBolmeBant()
+    b = [bcEtiket("f_hata_sifira_bolme")]
+    b = listeBirlestir(b, jmpBant("Lsifir_atla"))
+    b = ekle(b, bcEtiket("Lsifir_veri"))
+    b = listeBirlestir(b, metinVerisiBant("HATA: sıfıra bölme\n"))
+    b = ekle(b, bcEtiket("Lsifir_atla"))
+    b = listeBirlestir(b, leaVeri(6, "Lsifir_veri")) # rsi = &veri
+    b = listeBirlestir(b, addImm32(6, 8))            # rsi += 8 (uzunluk başlığını atla)
+    b = listeBirlestir(b, movImm32(7, 2))            # rdi = 2 (stderr)
+    b = listeBirlestir(b, movImm32(2, 22))           # rdx = 22 (bayt uzunluğu)
+    b = listeBirlestir(b, movImm32(0, 1))            # rax = 1 (sys_write)
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movImm32(7, 4))            # rdi = 4 (çıkış kodu)
+    b = listeBirlestir(b, movImm32(0, 60))           # rax = 60 (sys_exit)
+    döndür listeBirlestir(b, syscallEmit())
+son
+
+
 # ---------------- DOSYA G/Ç (ham syscall, libc YOK) ----------------
 # DerleElf.go yardimciOku/yardimciYazBaytlar ile AYNI yaklaşım. Yol metnini
 # NULL-SONLANDIRILMIŞ C-string'e çevirmek gerekiyor (open() syscall'ı
@@ -2685,8 +3106,9 @@ son
 # metin-döndüren çağrının sonucu tanınır. Karmaşık ifadeler (a+b, iç içe
 # operatör, değişken) İZLENMEZ — güvenli varsayılan "tam" kalır.
 #
-# DEPOLAMA: yeni bir kutu AÇMAK YERİNE islevTipKutu 2 elemandan 4 elemana
-# genişletildi ([donusAdlar,donusTipler,parametreAdlar,parametreTipler]) —
+# DEPOLAMA: yeni bir kutu AÇMAK YERİNE islevTipKutu 2 elemandan önce 4, Faz
+# 5 (A) ölü budamasıyla 5 elemana genişletildi
+# ([donusAdlar,donusTipler,parametreAdlar,parametreTipler,ulasilabilirAdlar]) —
 # blokDerle/deyimDerle/islevDerle/ifadeSonuc/ifadeBantYaz ZATEN 6 parametre
 # ile (ABI sınırında, bkz. Madde 9 notu) islevTipKutu'yu taşıyor; yeni bir
 # 7. parametre eklemek o sınırı tekrar patlatırdı. Mevcut kutuyu genişletmek
@@ -2946,23 +3368,19 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
             tipYigin = ekle(tipYigin, "tam")
 
         değilse eğer op == "SAYIKESIR" ise
-            # BULUNDU: ondalık (kesir) sayı literalleri ("0.5" gibi) temelAyristir
-            # tarafından ayrı bir RPN op'una ("SAYIKESIR") kodlanıyordu ama burada
-            # HİÇ İŞLENMİYORDU — hiçbir kod üretilmeden, kodKutu'ya HİÇBİR ŞEY
-            # eklenmeden (pushKayit YOK) sessizce atlanıyordu. Tek başına bir
-            # ifade olduğunda (örn "yaz(0.5)") fark edilmiyordu (rax'taki ÇÖP
-            # değer basılıyordu, çökme yok) ama bir İKİLİ işlecin (örn "3+0.5")
-            # bir operandı olduğunda İKİLİ dalı "popKayit" ile HİÇ PUSH EDİLMEMİŞ
-            # bir değeri yığından ÇEKMEYE çalışıyor, bu da çalışma zamanı
-            # yığınını (RSP) kaydırıp SEGFAULT'a yol açıyordu (izole edildi:
-            # `3 >= 0.5` ve `3 + 0.5` gen2'yi DERLEME SIRASINDA çökertiyordu,
-            # `yaz(0.5)` tek başına çökmüyordu ama yanlış/çöp değer basıyordu).
-            # Bu derleyicide 'kesir' (ondalık) tipi HENÜZ YOK (bkz. NEGATIF/DEGIL
-            # notları) — gerçek IEEE754 desteği eklemek yerine (kapsamlı, ayrı
-            # bir görev), SessizYutma düzeltmesiyle AYNI ilke: sessiz bozulma
-            # yerine TEMİZ, AÇIK hata.
-            yaz(metinBirlestir("DERLEME HATASI: ondalık (kesir) sayı literalleri bu derleyicide henüz desteklenmiyor: ", a1))
-            sistemDur(1)
+            # FAZ 6: ondalık (kesir) literal. ÖNCEDEN (Faz 6 öncesi) burada
+            # SESSİZCE atlanıyordu (pushKayit YOK — "3+0.5" pop ile push
+            # edilmemiş değeri çekip RSP'yi kaydırıp SEGFAULT veriyordu),
+            # sonra "henüz desteklenmiyor" hatası veriyordu. Artık gerçek
+            # IEEE754 kodlaması: kesirBits("d.ddd") ham bit desenini saf
+            # tamsayı aritmetiğiyle hesaplar, movImm64 ile GPR'e yüklenir
+            # (Go: math.Float64bits — değer kayıtta HAM BIT DESENİ taşınır,
+            # tip farkı tamamen statik: tipYigin'e "kesir" yazılır). İşaret
+            # biti pozitif kısımda YOK — NEGATIF kolu xor ile ekler.
+            v = kesirBits(a1)
+            z = tamponEkleTumu(kodKutu, nKutu, movImm64(0, v))
+            z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
+            tipYigin = ekle(tipYigin, "kesir")
 
         değilse eğer op == "METIN" ise
             # Metin literali: veri BULUNDUĞU YERE gömülü üretilir (işlev
@@ -3017,13 +3435,21 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
             tipYigin = ekle(tipYigin, "tam")
 
         değilse eğer op == "NEGATIF" ise
-            # tekli eksi (-x). Bu derleyicide "kesir" (ondalık) tipi HENÜZ
-            # YOK — bu yüzden sadece tam sayı negKayit ile ele alınıyor.
-            # DEGIL ile AYNI eksiklik: parser RPN'e üretiyordu ama burada
-            # hiç işlenmiyordu — deger DEĞİŞMEDEN yığında kalıyordu (SESSİZ
-            # yanlış sonuç, çökme bile yoktu çünkü sadece atlanıyordu).
+            # tekli eksi (-x). ÖNCEDEN sadece tam sayı negKayit ile ele
+            # alınıyordu (kesir yoktu). FAZ 6: operandın tipine bakarız —
+            # kesir ise İŞARET BİTİNİ (2^63) xor ile çeviririz (Go: rcx=-1;
+            # xor rax, rcx ile sign biti), tamsayı ise negKayit. -1<<63'ü
+            # kaynakta yazmak için -1'i 63 kez sola kaydırıyoruz (0x8000...
+            # literali int64'te taşardı).
             z = tamponEkleTumu(kodKutu, nKutu, popKayit(0))
-            z = tamponEkleTumu(kodKutu, nKutu, negKayit(0))
+            nt = uzunluk(tipYigin)
+            eğer nt > 0 ve tipYigin[nt - 1] == "kesir" ise
+                z = tamponEkleTumu(kodKutu, nKutu, movImm32(1, 0 - 1))
+                z = tamponEkleTumu(kodKutu, nKutu, shlImm(1, 63))
+                z = tamponEkleTumu(kodKutu, nKutu, xorKayit(0, 1))
+            değilse
+                z = tamponEkleTumu(kodKutu, nKutu, negKayit(0))
+            son
             z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
             # tip değişmez — tek girdi tek çıktı, tipYigin'e dokunulmuyor.
 
@@ -3120,11 +3546,15 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
                 tipYigin = ekle(tipYigin, "liste")
             değilse eğer ad == "metin" ise
                 # metin(x): x zaten metin ise NO-OP (aynı işaretçi), tam ise
-                # f_sayi_metne ile çevir.
+                # f_sayi_metne, kesir ise f_kesir_metne (FAZ 6) ile çevir.
                 z = tamponEkleTumu(kodKutu, nKutu, popKayit(0))     # rax = x
                 eğer sonTip != "metin" ise
                     z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 0))
-                    z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    eğer sonTip == "kesir" ise
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_kesir_metne"))
+                    değilse
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    son
                 son
                 z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))
                 tipYigin = ekle(tipYigin, "metin")
@@ -3226,15 +3656,23 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
                     z = tamponEkleTumu(kodKutu, nKutu, callBant("f_metin_birlestir"))
                 değilse eğer solTip == "metin" ise
                     z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))    # sol(metin) sakla
-                    z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 1))  # rdi = sağ(tam)
-                    z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 1))  # rdi = sağ
+                    eğer sagTip == "kesir" ise
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_kesir_metne"))
+                    değilse
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    son
                     z = tamponEkleTumu(kodKutu, nKutu, movKayit(6, 0))  # rsi = sağ(metin)
                     z = tamponEkleTumu(kodKutu, nKutu, popKayit(7))     # rdi = sol(metin)
                     z = tamponEkleTumu(kodKutu, nKutu, callBant("f_metin_birlestir"))
                 değilse
                     z = tamponEkleTumu(kodKutu, nKutu, pushKayit(1))    # sağ(metin) sakla
-                    z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 0))  # rdi = sol(tam)
-                    z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 0))  # rdi = sol
+                    eğer solTip == "kesir" ise
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_kesir_metne"))
+                    değilse
+                        z = tamponEkleTumu(kodKutu, nKutu, callBant("f_sayi_metne"))
+                    son
                     z = tamponEkleTumu(kodKutu, nKutu, movKayit(7, 0))  # rdi = sol(metin)
                     z = tamponEkleTumu(kodKutu, nKutu, popKayit(6))     # rsi = sağ(metin)
                     z = tamponEkleTumu(kodKutu, nKutu, callBant("f_metin_birlestir"))
@@ -3254,6 +3692,52 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
                 son
                 tipYigin = ekle(tipYigin, "tam")
 
+            değilse eğer a1 != "%" ve (solTip == "kesir" veya sagTip == "kesir" veya a1 == "/") ise
+                # FAZ 6: kesir (ondalık) aritmetiği/karşılaştırması. Tamsayı
+                # operandlar cvtsi2sd ile double'a çevrilir (Go A1 kararı:
+                # "/" HER ZAMAN float64; tamsayı bölmesi yalnız tamBol'da).
+                # Aritmetik sonucu "kesir", karşılaştırma sonucu "tam" tipine
+                # yazılır. comisd İŞARETSİZ bayrak kullanır — setcc kodları
+                # tamsayı kodlarından farklıdır (bkz. kesirKarsilastirmaKodu).
+                # sol'u kesirleştir (gerekirse) ÖNCE, sonra SAKLA — böylece
+                # pop, dönüştürülmüş bitleri alır (tam sol için 1.0 != 1).
+                eğer solTip != "kesir" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, cvtTamKesir(0, 0))
+                    z = tamponEkleTumu(kodKutu, nKutu, movqKayitXmm(0, 0))
+                son
+                z = tamponEkleTumu(kodKutu, nKutu, pushKayit(0))   # sol(rax) sakla
+                eğer a1 == "/" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, testKayit(1, 1))
+                    z = tamponEkleTumu(kodKutu, nKutu, jccBant(132, "f_hata_sifira_bolme"))
+                son
+                eğer sagTip != "kesir" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, cvtTamKesir(0, 1))
+                    z = tamponEkleTumu(kodKutu, nKutu, movqKayitXmm(1, 0))
+                son
+                z = tamponEkleTumu(kodKutu, nKutu, movqXmmKayit(1, 1)) # xmm1 = sağ
+                z = tamponEkleTumu(kodKutu, nKutu, popKayit(0))        # rax = sol
+                z = tamponEkleTumu(kodKutu, nKutu, movqXmmKayit(0, 0)) # xmm0 = sol
+                eğer karsilastirmaMi(a1) ise
+                    z = tamponEkleTumu(kodKutu, nKutu, comisd(0, 1))
+                    z = tamponEkleTumu(kodKutu, nKutu, setccBant(kesirKarsilastirmaKodu(a1)))
+                    z = tamponEkleTumu(kodKutu, nKutu, movzxAlBant())
+                    tipYigin = ekle(tipYigin, "tam")
+                değilse
+                    ok = 88  # addsd
+                    eğer a1 == "-" ise
+                        ok = 92 # subsd
+                    son
+                    eğer a1 == "*" ise
+                        ok = 89 # mulsd
+                    son
+                    eğer a1 == "/" ise
+                        ok = 94 # divsd
+                    son
+                    z = tamponEkleTumu(kodKutu, nKutu, sseIkili(ok, 0, 1))
+                    z = tamponEkleTumu(kodKutu, nKutu, movqKayitXmm(0, 0))
+                    tipYigin = ekle(tipYigin, "kesir")
+                son
+
             değilse
                 eğer a1 == "+" ise
                     z = tamponEkleTumu(kodKutu, nKutu, addKayit(0, 1))
@@ -3262,9 +3746,15 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
                 değilse eğer a1 == "*" ise
                     z = tamponEkleTumu(kodKutu, nKutu, imulKayit(0, 1))
                 değilse eğer a1 == "/" ise
+                    # GERÇEK `/` kesir yoluna düşer (A1); savunma amaçlı
+                    # tamsayı yedeği (burada normalde asla çalışmaz).
                     z = tamponEkleTumu(kodKutu, nKutu, cqo())
                     z = tamponEkleTumu(kodKutu, nKutu, idivKayit(1))
                 değilse eğer a1 == "%" ise
+                    # FAZ 6: sıfıra bölme koruması (Go ile aynı — test rcx,rcx
+                    # + je f_hata_sifira_bolme). `%` HER ZAMAN tamsayıdır.
+                    z = tamponEkleTumu(kodKutu, nKutu, testKayit(1, 1))
+                    z = tamponEkleTumu(kodKutu, nKutu, jccBant(132, "f_hata_sifira_bolme"))
                     z = tamponEkleTumu(kodKutu, nKutu, cqo())
                     z = tamponEkleTumu(kodKutu, nKutu, idivKayit(1))
                     z = tamponEkleTumu(kodKutu, nKutu, movKayit(0, 2)) # rax = rdx (kalan)
@@ -3323,6 +3813,36 @@ işlev karsilastirmaKodu(islec)
         döndür 158
     son
     döndür 157
+son
+
+# karsilastirmaMi: islec bir KARŞILAŞTIRMA operatörü mü (sonuç tipi "tam").
+işlev karsilastirmaMi(islec)
+    eğer islec == "==" veya islec == "!=" veya islec == ">" veya islec == "<" veya islec == ">=" veya islec == "<=" ise
+        döndür 1
+    son
+    döndür 0
+son
+
+# kesirKarsilastirmaKodu: comisd (66 0F 2F) İŞARETSİZ bayraklar üretir, bu
+# yüzden setcc kodları tamsayı (cmp) kodlarından FARKLIDIR (Go 1452-1462):
+# ==148 !=149 >151 <146 >=147 <=150.
+işlev kesirKarsilastirmaKodu(islec)
+    eğer islec == "==" ise
+        döndür 148
+    son
+    eğer islec == "!=" ise
+        döndür 149
+    son
+    eğer islec == ">" ise
+        döndür 151
+    son
+    eğer islec == "<" ise
+        döndür 146
+    son
+    eğer islec == ">=" ise
+        döndür 147
+    son
+    döndür 150
 son
 
 # islevDerle: işlev gövdesini KENDİ yerel değişken tablosuyla (parametrelerle
@@ -3482,6 +4002,247 @@ işlev tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
     döndür tamponSonuc(cikisKutu, cN)
 son
 
+# ================= FAZ 5 (A): ÖLÜ İŞLEV BUDAMASI =================
+# islevGovdeHaritasiCikar: üst-seviye TÜM işlevlerin [adlar, basListe,
+# bitisListe] paralel listelerini tek geçişte çıkarır. bitis = kapanış "son"
+# sonrası ilk pozisyon (islevGovdeSonBul semantiği). İç içe işlevler AYRI
+# kaydedilmez — gövdeleri üst işlevin [bas, bitis) aralığında kalır; üst
+# erişilebilirse gövde taraması zaten onları da kapsar.
+işlev islevGovdeHaritasiCikar(tokenler, haritaKutu)
+    n = uzunluk(tokenler)
+    adlar = []
+    basListe = []
+    bitisListe = []
+    i = 0
+    iken i < n
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "ANAHTAR" ve d == "işlev" ise
+            i = i + 1
+            eğer i >= n ise
+                döndür 0
+            son
+            ad = alan(tokenler[i], 1)
+            i = i + 1
+            iken i < n ve alan(tokenler[i], 0) != "PARKAPA"
+                i = i + 1
+            son
+            i = i + 1
+            sonuclar = islevGovdeSonBul(tokenler, i)
+            govdeSonu = sonuclar[0]
+            adlar = ekle(adlar, ad)
+            basListe = ekle(basListe, i)
+            bitisListe = ekle(bitisListe, govdeSonu)
+            i = govdeSonu
+        son
+        i = i + 1
+    son
+    haritaKutu[0] = adlar
+    haritaKutu[1] = basListe
+    haritaKutu[2] = bitisListe
+    döndür 0
+son
+
+işlev adListedeMi(liste, ad)
+    n = uzunluk(liste)
+    i = 0
+    iken i < n
+        eğer metinEsit(liste[i], ad) ise
+            döndür 1
+        son
+        i = i + 1
+    son
+    döndür 0
+son
+
+işlev adIndisBul(liste, ad)
+    n = uzunluk(liste)
+    i = 0
+    iken i < n
+        eğer metinEsit(liste[i], ad) ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# işlevCagirdiklariniTopla: [bas, bitis) aralığındaki KULLANICI işlev
+# çağrılarını toplar. Çağrı belirtisi: AD jetonunu hemen PARAC "(" izler VE
+# ad işlev adları listesindeyse. Builtin'ler (yaz, metin, ekle, uzunluk...)
+# işlev adları listesinde OLMADIĞI için elenir; yanlış-pozitifler en kötü
+# ihtimalle bir işlevi budanmaktan korur (güvenli yön), yanlış-negatif yok.
+işlev işlevCagirdiklariniTopla(tokenler, bas, bitis, işlevAdlari)
+    sonuc = []
+    i = bas
+    iken i < bitis - 1
+        t = alan(tokenler[i], 0)
+        d = alan(tokenler[i], 1)
+        eğer t == "AD" ve alan(tokenler[i + 1], 0) == "PARAC" ve adListedeMi(işlevAdlari, d) == 1 ise
+            sonuc = ekle(sonuc, d)
+        son
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# ulasilabilirIslevleriTara: DerleElf.go'daki elfUlasilabilirIslevler'in
+# token tabanlı karşılığı (BFS). Tohum: ana (üst-seviye) gövdenin kullanıcı
+# işlev çağrıları — işlev gövdeleri [bas, bitis) aralıklarından atlanarak
+# top-level jetonlar taranır. Sonuç islevTipKutu[4]'e yazılır.
+işlev ulasilabilirIslevleriTara(tokenler, islevTipKutu)
+    haritaKutu = [[], [], []]
+    z = islevGovdeHaritasiCikar(tokenler, haritaKutu)
+    adlar = haritaKutu[0]
+    baslar = haritaKutu[1]
+    bitisler = haritaKutu[2]
+    ulasilan = []
+    kuyruk = []
+    n = uzunluk(tokenler)
+    govdeIndis = 0
+    govdeAdet = uzunluk(baslar)
+    i = 0
+    iken i < n
+        govdedeyiz = 0
+        eğer govdeIndis < govdeAdet ise
+            eğer i >= baslar[govdeIndis] ve i < bitisler[govdeIndis] ise
+                govdedeyiz = 1
+            son
+        son
+        eğer govdedeyiz == 1 ise
+            i = bitisler[govdeIndis]
+            govdeIndis = govdeIndis + 1
+        değilse
+            eğer i + 1 < n ise
+                t = alan(tokenler[i], 0)
+                d = alan(tokenler[i], 1)
+                cagriMi = 0
+                eğer t == "AD" ise
+                    eğer alan(tokenler[i + 1], 0) == "PARAC" ise
+                        eğer adListedeMi(adlar, d) == 1 ise
+                            cagriMi = 1
+                            eğer i > 0 ise
+                                eğer metinEsit(alan(tokenler[i - 1], 1), "işlev") ise
+                                    cagriMi = 0
+                                son
+                            son
+                        son
+                    son
+                son
+                eğer cagriMi == 1 ise
+                    eğer adListedeMi(ulasilan, d) == 0 ise
+                        ulasilan = ekle(ulasilan, d)
+                        kuyruk = ekle(kuyruk, d)
+                    son
+                son
+            son
+            i = i + 1
+        son
+    son
+    j = 0
+    iken j < uzunluk(kuyruk)
+        suAn = kuyruk[j]
+        indis = adIndisBul(adlar, suAn)
+        eğer indis != 0 - 1 ise
+            cagiranlar = işlevCagirdiklariniTopla(tokenler, baslar[indis], bitisler[indis], adlar)
+            k = 0
+            iken k < uzunluk(cagiranlar)
+                cAd = cagiranlar[k]
+                eğer adListedeMi(ulasilan, cAd) == 0 ise
+                    ulasilan = ekle(ulasilan, cAd)
+                    kuyruk = ekle(kuyruk, cAd)
+                son
+                k = k + 1
+            son
+        son
+        j = j + 1
+    son
+    islevTipKutu[4] = ulasilan
+    döndür 0
+son
+
+# ---------------- FAZ 5 (B): RUNTIME YARDIMCI BUDAMASI ----------------
+# Eskiden sürücü 17 yardımcıyı KOŞULSUZ gömüyordu (satır ~3698-3714). Burada
+# önce govde bandındaki REL32 hedeflerinden hangi yardımcıların gerçekten
+# çağrıldığı taranır, bağımlılık kapanışı (f_tan_ayir/f_bellek_kopyala gibi
+# iç çağrılar) eklenir ve SADECE o küme gömülür. Go tarafı (DerleElf.go) bu
+# budamayı otomatik yapar — TancElf'in karşılığı bu üç işlevdir.
+işlev yardimciBagimliliklari(ad)
+    eğer metinEsit(ad, "f_liste_ekle") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_liste_yap") ise
+        döndür ["f_tan_ayir"]
+    değilse eğer metinEsit(ad, "f_sayi_metne") ise
+        döndür ["f_tan_ayir"]
+    değilse eğer metinEsit(ad, "f_metin_birlestir") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_metin_indeks") ise
+        döndür ["f_tan_ayir"]
+    değilse eğer metinEsit(ad, "f_karakter") ise
+        döndür ["f_tan_ayir"]
+    değilse eğer metinEsit(ad, "f_oku") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_dosyaVarMi") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_yazBaytlar") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_arg") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_kesir_metne") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_yaz_kesir") ise
+        döndür ["f_kesir_metne", "f_yaz_metin"]
+    son
+    döndür []
+son
+
+# yardimciKapanisi: kökler (govde'de DOĞRUDAN çağrılan yardımcılar) +
+# bağımlılık kapanışı. BFS — yardimciBagimliliklari yapraklara iner.
+işlev yardimciKapanisi(kokler)
+    sonuc = kokler
+    kuyruk = kokler
+    j = 0
+    iken j < uzunluk(kuyruk)
+        suAn = kuyruk[j]
+        baglar = yardimciBagimliliklari(suAn)
+        k = 0
+        iken k < uzunluk(baglar)
+            b = baglar[k]
+            eğer adListedeMi(sonuc, b) == 0 ise
+                sonuc = ekle(sonuc, b)
+                kuyruk = ekle(kuyruk, b)
+            son
+            k = k + 1
+        son
+        j = j + 1
+    son
+    döndür sonuc
+son
+
+# yardimciKullanimiTara: banddaki TÜM REL32 hedeflerini tarar, bilinen
+# yardımcı adlarında olanları (tekil) toplar. Kullanıcı işlevleri "f_"+ad
+# etiketiyle çağrıldığından whitelist (yardimciAdlar) dışında kalan tüm
+# f_* hedefleri ESNEKTİR — yalnız gerçek yardımcılar yakalanır.
+işlev yardimciKullanimiTara(bant, yardimciAdlar)
+    sonuc = []
+    n = uzunluk(bant)
+    i = 0
+    iken i < n
+        giris = bant[i]
+        op = alan(giris, 0)
+        eğer metinEsit(op, "REL32") ise
+            hedef = alan(giris, 1)
+            eğer adListedeMi(yardimciAdlar, hedef) == 1 ise
+                eğer adListedeMi(sonuc, hedef) == 0 ise
+                    sonuc = ekle(sonuc, hedef)
+                son
+            son
+        son
+        i = i + 1
+    son
+    döndür sonuc
+son
+
 # ---------------- SÜRÜCÜ: TAM KAYNAK DOSYASI DERLEME ----------------
 # Kullanim:  TancElf <girdi.tan> <cikti-binary>
 # Destek: tam sayi ifadeleri, degisken atamasi, yaz, eger/degilse, iken.
@@ -3496,14 +4257,21 @@ tokenler = tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
 pozKutu = [0]
 adlarKutu = [[], []]
 sayacKutu = [0]
-islevTipKutu = [[], [], [], []]
+islevTipKutu = [[], [], [], [], []]
 z = islevDonusTipleriTara(tokenler, islevTipKutu)
 z = parametreTipleriniTara(tokenler, islevTipKutu)
+z = ulasilabilirIslevleriTara(tokenler, islevTipKutu)
 
 govde = blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, ["", ""], islevTipKutu)
 # --- cerceve: degisken sayisi ancak govde derlenince belli olur ---
 degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
+
+# --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_oku", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), okuBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
+gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 
 # NOT (bulunan İKİNCİ büyük O(n²) kaynağı, sabit nokta denemesinde): burada
 # önceden "bantTumu = listeBirlestir(bantTumu, X())" zinciri vardı — govde
@@ -3523,23 +4291,13 @@ z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, govde)
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, movImm32(0, 60))     # mov rax, 60 (exit)
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, xorKayit(7, 7))      # xor rdi, rdi
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, syscallEmit())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yazSayiBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, tanAyirBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, bellekKopyalaBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, listeEkleBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, listeYapBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, sayiMetneBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, metinBirlestirBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, metinEsitBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, metinIndeksBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, kodBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, karakterBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yazMetinBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, okuBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, dosyaVarMiBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yazBaytlarBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, argsayBant())
-z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, argBant())
+i = 0
+iken i < uzunluk(yardimciAdlar)
+    eğer adListedeMi(gomulcekYardimcilar, yardimciAdlar[i]) == 1 ise
+        z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, yardimciBantlar[i])
+    son
+    i = i + 1
+son
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, veriAyir("v_yigin", 8))
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, veriAyir("v_yiginSon", 8))
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, veriAyir("v___argv", 8))
