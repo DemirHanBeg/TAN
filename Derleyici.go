@@ -49,10 +49,12 @@ const (
 	OP_DONDUR      // işlevden dön (yığın tepesi: dönüş değeri)
 )
 
-// Komut: op kodu + isteğe bağlı operand
+// Komut: op kodu + isteğe bağlı operand + kaynak konumu (diyagnostik için)
 type Komut struct {
 	Op      OpKodu
 	Operand int
+	Satir   int
+	Sutun   int
 }
 
 // DerlenmisKod: bytecode + sabit havuzu + değişken adları
@@ -74,6 +76,9 @@ type VMIslev struct {
 // Derleyici: AST -> bytecode
 type Derleyici struct {
 	kod *DerlenmisKod
+	// Şu an işlenen kaynak konumu — yay() bunu her komuta damgalar.
+	satir int
+	sutun int
 }
 
 func YeniDerleyici() *Derleyici {
@@ -96,7 +101,7 @@ func (d *Derleyici) adEkle(ad string) int {
 }
 
 func (d *Derleyici) yay(op OpKodu, operand int) int {
-	d.kod.Komutlar = append(d.kod.Komutlar, Komut{op, operand})
+	d.kod.Komutlar = append(d.kod.Komutlar, Komut{op, operand, d.satir, d.sutun})
 	return len(d.kod.Komutlar) - 1
 }
 
@@ -180,6 +185,8 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 	case YokDugum:
 		d.yay(OP_SABIT, d.sabitEkle(nil))
 	case DegiskenDugum:
+		d.satir = n.Satir
+		d.sutun = n.Sutun
 		d.yay(OP_DEGISKEN_OKU, d.adEkle(n.Ad))
 	case IkiliDugum:
 		// --- KISA DEVRE: ve / veya ---
@@ -189,6 +196,8 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 		// yapiyordu, VM yapmiyordu — ayni kaynak farkli sonuc.
 		if n.Islec == "ve" || n.Islec == "veya" {
 			d.ifadeDerle(n.Sol)
+			d.satir = n.Satir
+			d.sutun = n.Sutun
 			d.yay(OP_KOPYALA, 0)
 			var atla int
 			if n.Islec == "ve" {
@@ -201,26 +210,36 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 			d.kod.Komutlar[atla].Operand = len(d.kod.Komutlar)
 			// Sonucu mantik degerine cevir: yorumlayici da bool donduruyor,
 			// aksi halde "1 ve 1" VM'de 1, yorumlayicida dogru verirdi.
+			d.satir = n.Satir
+			d.sutun = n.Sutun
 			d.yay(OP_MANTIK, 0)
 			return
 		}
 		if n.Islec == "değil" {
 			d.ifadeDerle(n.Sol)
+			d.satir = n.Satir
+			d.sutun = n.Sutun
 			d.yay(OP_DEGIL, 0)
 			return
 		}
 		if n.Islec == "negatif" {
 			d.ifadeDerle(n.Sol)
+			d.satir = n.Satir
+			d.sutun = n.Sutun
 			d.yay(OP_NEGATIF, 0)
 			return
 		}
 		if n.Islec == "bitdegil" {
 			d.ifadeDerle(n.Sol)
+			d.satir = n.Satir
+			d.sutun = n.Sutun
 			d.yay(OP_BITDEGIL, 0)
 			return
 		}
 		d.ifadeDerle(n.Sol)
 		d.ifadeDerle(n.Sag)
+		d.satir = n.Satir
+		d.sutun = n.Sutun
 		switch n.Islec {
 		case "+":
 			d.yay(OP_TOPLA, 0)
@@ -269,6 +288,8 @@ func (d *Derleyici) ifadeDerle(dugum Dugum) {
 		for _, arg := range n.Argumanlar {
 			d.ifadeDerle(arg)
 		}
+		d.satir = n.Satir
+		d.sutun = n.Sutun
 		d.yay(OP_CAGIR, len(n.Argumanlar))
 	default:
 		// VM'nin desteklemediği ifade (işlev çağrısı, liste, sözlük, köprü):

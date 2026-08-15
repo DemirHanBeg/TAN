@@ -8,14 +8,14 @@
 
 ```
 BUGÜN (üretim zinciri, Go'suz):                     HEDEF (uzun vade):
-TancElf (commit'li seed, 123.775 B)                  TAN bootstrap artifact
-  → TancElf.tan → gen1 (123.775 B)                     → TancElf.tan → TAN compiler
-  → gen1  → gen2 (123.775 B)                           → TancElf.tan → TAN compiler
-  → gen2  → gen3 (123.775 B)                           → sabit nokta (sabit)
+TancElf (commit'li seed, 152.625 B)                  TAN bootstrap artifact
+  → TancElf.tan → gen1 (152.625 B)                     → TancElf.tan → TAN compiler
+  → gen1  → gen2 (152.625 B)                           → TancElf.tan → TAN compiler
+  → gen2  → gen3 (152.625 B)                           → sabit nokta (sabit)
   → cmp gen2 gen3 ✓
 ```
 - **Go, üretim zincirinden ÇIKMIŞTIR.** Go'nun tarihsel tek rolü: `go build -o tan .` → `./tan elf TancElf.tan gen1` (SURUM.md:20-21, 31-38). Bugün Go yalnız çapraz-kontrol aracıdır (`Bootstrap.sh:17-38`, `FarkTesti.sh`, `TestArkaUc.sh`).
-- **Kalan iş:** Go compiler'ının henüz TAN'a taşınmamış bileşenlerini (optimizer, tam tip çıkarımı, ondalık, sözlük, budama, konumlamalı dosya G/Ç, native eşzamanlılık) bootstrap-güvenli fazlarla taşımak. Bileşen envanteri ve TAN karşılıkları **BOOTSTRAP.md** §3-§8'dedir.
+- **Kalan iş:** Go compiler'ının henüz TAN'a taşınmamış bileşenlerini (tam tip çıkarımı, ondalık, sözlük, budama, konumlamalı dosya G/Ç, native eşzamanlılık) bootstrap-güvenli fazlarla taşımak. Optimizer çekirdeği (Faz 1) taşındı. Bileşen envanteri ve TAN karşılıkları **BOOTSTRAP.md** §3-§8'dedir.
 
 ---
 
@@ -50,32 +50,23 @@ TancElf (commit'li seed, 123.775 B)                  TAN bootstrap artifact
 
 ---
 
-## 4. Faz 1 — Optimizer Çekirdeği (EN KÜÇÜK TAŞINABİLİR BİLEŞEN)
+## 4. Faz 1 — Optimizer Çekirdeği — ✅ YAPILDI (14 Ağu 2026)
 
-**Seçim gerekçesi:** BOOTSTRAP.md §9. Go Optimize.go'nun iki ana işlevi `sabitKatla` (164-260) + `cebirsel` (263-300) + koşul düzleme/ölü blok (deyim 49-112, blokDugumu 115-121). TAN karşılığı AST üzerinde DEĞİL, **RPN bant seviyesinde** yazılacak — TancElf.tan AST kullanmaz (TancElf.tan:229-231).
+**Seçim gerekçesi:** BOOTSTRAP.md §9. Go Optimize.go'nun iki ana işlevi `sabitKatla` (164-260) + `cebirsel` (263-300) + koşul düzleme/ölü blok (deyim 49-112, blokDugumu 115-121). TAN karşılığı AST üzerinde DEĞİL, **RPN bant seviyesinde** yazıldı — TancElf.tan AST kullanmaz (TancElf.tan:229-231).
 
-**Kapsam:**
-1. **Bant içi sabit katlama:** `ifadeBantYaz`'ın `IKILI` kolundan (3211) ÖNCE, bantta ardışık iki `SAYITAM` + `IKILI` örüntüsünü derleme-anı int64 aritmetiğiyle (`+ - * % == != < <= > >=`) tek `SAYITAM`'a indir.
-   - Taşma denetimi Go ile aynı: `c/a != b` ise katlama (Optimize.go:181-188).
-   - `/` özel kuralı: TAN'da `/` runtime'da float64 döner ama TancElf.tan'da ondalık YOK — Go'nun "sabit `/` 2^53 sınırı aşılırsa derleme hatası" kuralını (Optimize.go:195-209) birebir taşı. 2^53 sabiti `9007199254740992`.
-   - `tamBol` özel kuralı: tam bölme aynı şekilde katlanabilir (kalan sıfır koşulu).
-2. **Cebirsel sadeleştirme:** `x+0`, `0+x`, `x-0`, `x*1`, `1*x`, `x*0`/`0*x` (sağ operand yan-etkisiz ise) → tek operand. `/` için `x/1` YOK (Go kuralı, Optimize.go:295-297).
-3. **Sabit koşul düzleme + ölü blok:** `deyimDerle`'nin `eğer` kolunda koşul bant üretiminden sonra koşul SABİT `SAYITAM` ise: 0 → dalı tamamen at, 0≠0 → dalı gövdeyle değiştir. `iken`'de sabit 0 → döngüyü sil (Optimize.go:90-97).
-4. **Rapor:** `TAN_OPT_RAPOR` benzeri opsiyonel sayım (DerleElf.go:5472). TAN tarafında ortam değişkeni okuma yok — opsiyonel, ilk fazda atlanabilir.
-
-**TAN'da implementasyon noktaları (mevcut iskelet):**
-- `ifadeBantYaz` (2896) `IKILI` kolunun (3211) başına ön-geçiş; `tipYigin` mantığını bozmadan.
-- Bant girişi üretimi `bc` (364), `SAYITAM` kodu (2932).
-- Yeni işlev sayısı tahmini: 4-6 `işlev` (~150-220 satır).
+**Uygulandı:**
+1. **Bant içi sabit katlama:** `ikiliBirlestir` yardımcısı karsilastirmaAyristir/toplamaAyristir/carpmaAyristir sonlarına bağlandı. Bantta ardışık iki `SAYITAM` + `IKILI` örüntüsü derleme-anı int64 aritmetiğiyle (`+ - * % == != < <= > >=`) tek `SAYITAM`'a indirilir. `*` taşma denetimi Go ile aynı (`c/a != b` ise katlama, Optimize.go:181-188); `/` 2^53 (9007199254740992) aşımı → `yaz(DERLEME HATASI…)`+`sistemDur(1)` (Go A1, Optimize.go:195-209); `% 0` ve bölünemeyen `/` runtime'a bırakılır; bölünebilen `/` `tamBol` ile SAYITAM'a katlanır.
+2. **Cebirsel sadeleştirme:** `x+0`, `0+x`, `x-0`, `x*1`, `1*x` koşulsuz; `x*0`/`0*x` → 0 yalnız sağ/sol operand yan-etkisizse (CAGRI engeller). `x/1` YOK (Go kuralı, Optimize.go:295-297).
+3. **Sabit koşul + ölü dal:** `kosulDogruluk` (SAYITAM/SAYIKESIR/YOK/DOGRU/YANLIS → sabit doğruluk; karışık → -1) + `zincirAtla` (derinlik sayacı; `değilse eğer`'deki "eğer" derinliği artırmaz; `değilse`/`son` durma kuralları). eğer sabit-doğru → gövde + zinciri `değilse eğer`/`değilse` üzerinden atla; eğer sabit-yanlış → gövdeyi at, zincire devam; iken sabit-yanlış → deyim silinir. `iken doğru` (kaynakta mevcut) korunur.
+4. **Kritik düzeltme (self-host tuzağı):** yeniden yapılandırılan eğer/iken handler'ları koşul bandını `ifadeBantYaz` ile üretirken `popKayit(0)` (ifadeSonuc'un 974'teki 3. adımı) EKLENMEDİĞİNDE yığın sızdı → gen2 her girdide segfault (`yaz(42)` dahil). Düzeltme: koşul üretiminden sonra `popKayit(0)` şart.
 
 **Doğrulama:**
-- `FarkTesti.sh ornekler/*.tan` → katlama her iki TancElf yolunda aynı olduğundan `[AYNI]` korunur.
-- `TestArkaUc.sh elf` → 20/20 değer paritesi (Go kendi optimizerini zaten çalıştırır).
-- Sabit nokta 2-ayak + 3. ayak (28 dosya).
-- Boyut: `katlamaTetigi.tan` örneği (örn. `yaz 2 + 3 * 4`) derlenen bayt sayısında küçülme.
-- Sabit nokta sonucu: TancElf.tan KENDİ kaynağında katlama tetiklenirse gen2 boyutu değişir (muhtemel küçülme). Kaydet, `cp gen2 TancElf`.
+- `TestOptimize.sh` (YENİ): 7 bölüm — katlama değerleri, 2^53 sınırında/üstü büyük sabitler, cebirsel, ölü dal, döngü içi fold+dal, 2^53 DERLEME HATASI (exit 1), `5 % 0` runtime exit 4 — tümü [GECTI].
+- Go referansıyla 2^53 paritesi: `./tan elf` (güncel Go host) aynı hata + çıkış; eski `tan.exe` (Windows, Jul 26) bayat — kural YOK.
+- FarkTesti 13/13 `[AYNI]`, TestArkaUc.sh elf 20/20, GercekProgramlar 43/43, TestArkaUcGoSuzTemiz GEÇTİ (go/gcc/as/ld çağrılmadı).
+- Sabit nokta: gen1=gen2=gen3=152.625 B; yeni tohum md5 `031c5435…`, kendi kaynağından yeniden sabit nokta g1==g2==g3. `cp gen2 TancElf` yapıldı.
 
-**Riskler:** sabit nokta boyut salınımı (protokol #6), `/` 2^53 kuralının runtime davranışla çelişmesi (Go A1 kararı, Optimize.go:190-209) — kuralı birebir taşı.
+**Risk notu:** `/` 2^53 kuralı runtime davranışla bilinçli çelişir (Go A1 kararı) — birebir taşındı; yalnız SABİT işlenenlerde tetiklenir.
 
 ---
 
@@ -172,13 +163,13 @@ TancElf (commit'li seed, 123.775 B)                  TAN bootstrap artifact
 
 ```
 Faz 0  [ön koşul] zincir + boyut tabanı doğrulama      ✅ (zemin)
-Faz 1  sabit katlama/cebirsel/ölü blok      (bağımsız) ⏳ (henüz yapılmadı)
+Faz 1  sabit katlama/cebirsel/ölü blok      (bağımsız) ✅ YAPILDI (14 Ağu)
 Faz 2  mantık tip ayrımı                    (bağımsız) ✅ YAPILDI (14 Ağu)
 Faz 3  liste eleman tipi                    (Faz 2'ye yaslanır) ✅ YAPILDI (14 Ağu)
 Faz 4  dönüş tipi izleme                    (Faz 2+3'ün üstüne) ✅ YAPILDI (14 Ağu)
 Faz 5  ölü işlev/yardımcı budaması          (bağımsız; Faz 6/7'yi küçültür) ✅ YAPILDI (14 Ağu)
 Faz 6  ondalık + SSE                        (Faz 5 sonrası: yardımcı kümesi netleşir) ✅ YAPILDI (14 Ağu)
-Faz 7  sözlük                               (Faz 5 sonrası)
+Faz 7  sözlük                               (Faz 5 sonrası) ⏳ (planlandı)
 ```
 
 Her faz 1 → 2 → 3 → 4 → 5 → 6 → 7 sırasıyla; fazlar arası `cp gen2 TancElf` tohum commit'i.
@@ -187,11 +178,12 @@ Her faz 1 → 2 → 3 → 4 → 5 → 6 → 7 sırasıyla; fazlar arası `cp gen
 
 ## 13. Ölçülebilir Hedefler (başarı kriterleri)
 
-| Metrik | Bugün (Faz 1-5 sonrası) | Faz 5 sonrası hedef |
+| Metrik | Bugün (Faz 1-6 sonrası) | Faz 5 sonrası hedef |
 |---|---|---|
-| gen2 == gen3 (sabit nokta) | ✅ 123.775 B (md5 `d401fb0b…`) | ✅ korunur |
+| gen2 == gen3 (sabit nokta) | ✅ 152.625 B (md5 `031c5435…`) | ✅ korunur |
 | FarkTesti ornekler | 13/13 `[AYNI]` | 13/13 korunur |
 | TestArkaUc.sh elf | 20/20 | 20/20 |
+| TestOptimize.sh (Faz 1 optimizer) | ✅ 7/7 | — |
 | `yaz 42` ikili boyutu | ✅ 395 B (yalnız `f_yaz_metin`+`yaz_sayi`+`f_tan_ayir`+`f_bellek_kopyala`) | min. yardımcı kümesi ✅ |
 | TancElf.tan belgeli sınırlar (#1,#2,#3) | 3 açık | 0 açık |
 

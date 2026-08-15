@@ -25,7 +25,10 @@ func tanCalistirJS(this js.Value, args []js.Value) interface{} {
 		defer func() {
 			if r := recover(); r != nil {
 				if h, ok := r.(TanHata); ok {
-					tampon.WriteString("\n" + h.Error())
+					if h.Dosya == "" {
+						h.Dosya = "girdi"
+					}
+					tampon.WriteString("\n" + diyagnostikMetin(h, kaynak))
 				} else if _, ok := r.(vmDesteklemiyor); ok {
 					// yok say — ağaç-gezene düşülür (aşağıda ele alınır)
 				} else {

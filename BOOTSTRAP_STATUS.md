@@ -18,7 +18,10 @@
 
 ## 2. Canlı Doğrulama Kanıtı
 
-### 2.1 Go tohumu → Gen1 → Gen2 → Gen3 (çapraz-kontrol yolu)
+### 2.1 Go tohumu → Gen1 → Gen2 → Gen3 (çapraz-kontrol yolu) — TARİHSEL
+
+*Bu bölüm Faz 1-4 öncesi (114998 bayt) Go-çapraz sonucunu belgeler; güncel
+durum §2.2'dedir.*
 
 ```
 go build → ./tan
@@ -34,26 +37,25 @@ cmp -s gen2 gen3              → SESSİZ  (sabit nokta)
   Go referans motoru ile TAN motoru bayt-bayt özdeş üretmek zorunda değildir;
   sabit nokta, TAN üretimi nesiller arasında aranır.
 
-### 2.2 Go'suz birincil zincir (`BootstrapGoSuz.sh`) — FAZ 2+3+4
+### 2.2 Go'suz birincil zincir (`BootstrapGoSuz.sh`) — FAZ 1+2+3+4
 
 ```
-./TancElf TancElf.tan gen1    → 126851 bayt   (md5 e5ff2eae…)
-./gen1    TancElf.tan gen2    → 126851 bayt   (md5 e5ff2eae…)
-./gen2    TancElf.tan gen3    → 126851 bayt   (md5 e5ff2eae…)
+./TancElf TancElf.tan gen1    → 152625 bayt   (md5 031c5435…)
+./gen1    TancElf.tan gen2    → 152625 bayt   (md5 031c5435…)
+./gen2    TancElf.tan gen3    → 152625 bayt   (md5 031c5435…)
 SABİT NOKTA: gen1 == gen2 == gen3
 ```
 
-- Hiçbir dış araç çağrılmadı.
-- **Faz 2 (mantik tip ayrımı), Faz 3 (liste eleman tipi) ve Faz 4 (dönüş tipi
-  izleme) AKTİF.** Tohum = sabit-nokta artifact'i (gen2), kendi çıktısıdır →
-  gen1'den itibaren birebir.
-- **Faz 1 (sabit katlama + sabit koşul düzleme) HENÜZ UYGULANMADI** — Optimize.go
-  karşılığı Aşama 1 kapsamında TancElf.tan'a taşınacak. Aşağıdaki "Faz 1"
-  boyut kayıtları/doğrulama maddeleri o tarihteki ara durumu yansıtır; katlama
-  mantığı kaynakta şu an yoktur (grep: sabitKatla/katlama bulunamadı).
-- Boyut seyri: 114998 (HEAD tohumu) → 119769 (Faz 1 ara kaydı) → 123180 (Faz 2) →
-  124392 (Faz 3) → 126851 (Faz 4). Her büyüme derleyici kaynağına eklenen
-  yeni mantığın gömülmesindendir.
+- Hiçbir dış araç çağrılmadı (`TestArkaUcGoSuzTemiz.sh`: go/gcc/as/ld hiç
+  çağrılmadı — GEÇTİ).
+- **Faz 1 (sabit katlama + cebirsel + sabit koşul/ölü dal), Faz 2 (mantik tip
+  ayrımı), Faz 3 (liste eleman tipi) ve Faz 4 (dönüş tipi izleme) AKTİF.**
+  Tohum = sabit-nokta artifact'i (gen2), kendi çıktısıdır → gen1'den itibaren
+  birebir.
+- Boyut seyri: 114998 (HEAD tohumu) → 119769 (Faz 1 ara kaydı) → 123180
+  (Faz 2) → 124392 (Faz 3) → 126851 (Faz 4) → 152625 (Faz 1 katlama + Faz 5
+  budama + Faz 6 ondalık sonrası). Faz 1 fold'un eklenmesi derleyici kaynağına
+  gömülen fold yardımcılarının boyut büyümesidir (derlenen KOD küçülür).
 
 ---
 
@@ -61,23 +63,27 @@ SABİT NOKTA: gen1 == gen2 == gen3
 
 | nesil | kaynak | derleyen | derleyen_kaynagi | cikti_hash (md5) | boyut | deterministik | bagimlilik | sabit_nokta |
 |-------|--------|----------|------------------|------------------|-------|---------------|------------|-------------|
-| gen1 | TancElf.tan | ./TancElf (tohum, Faz 1-4) | `./TancElf TancElf.tan gen1` | `e5ff2eae97e6c6067e6b61c3d38101f6` | 126851 | EVET (sabit nokta turu) | YOK | gen1 == gen2 |
-| gen2 | TancElf.tan | gen1 | `gen1 TancElf.tan gen2` | `e5ff2eae97e6c6067e6b61c3d38101f6` | 126851 | EVET | YOK | gen2 == gen3 |
-| gen3 | TancElf.tan | gen2 | `gen2 TancElf.tan gen3` | `e5ff2eae97e6c6067e6b61c3d38101f6` | 126851 | EVET | YOK | gen3 == gen2 |
+| gen1 | TancElf.tan | ./TancElf (tohum, Faz 1-6) | `./TancElf TancElf.tan gen1` | `031c5435be12f28e567e3f50933621d6` | 152625 | EVET (sabit nokta turu) | YOK | gen1 == gen2 |
+| gen2 | TancElf.tan | gen1 | `gen1 TancElf.tan gen2` | `031c5435be12f28e567e3f50933621d6` | 152625 | EVET | YOK | gen2 == gen3 |
+| gen3 | TancElf.tan | gen2 | `gen2 TancElf.tan gen3` | `031c5435be12f28e567e3f50933621d6` | 152625 | EVET | YOK | gen3 == gen2 |
 
-Tohum artifact'i `TancElf` = `gen2` = `gen3` (md5 `e5ff2eae…`).
+Tohum artifact'i `TancElf` = `gen2` = `gen3` (md5 `031c5435…`). Yeni tohum
+kendi kaynağından yeniden doğrulandı: `TancElf → g1 → g2 → g3` ile
+g1 == g2 == g3.
 
-### 2.3 Faz 2+3+4 doğrulaması (14 Ağustos 2026)
-
-> **DÜZELTME:** Bu bölümün başlığı "Faz 1+2+3+4" idi ve katlama örneklerini
-> (foldedge.tan, foldtest.tan) Faz 1'in AKTİF olduğu izlenimini verecek şekilde
-> listeliyordu. Faz 1 (sabit katlama) TancElf.tan'a HİÇ taşınmadı (kaynakta
-> katlama mantığı yok). Katlama örnekleri Go tarafındaki Optimize.go doğrulaması
-> olarak okunmalıdır; TAN tarafı için Aşama 1 bekleniyor.
-
+### 2.3 Faz 1+2+3+4 doğrulaması (14 Ağustos 2026)
 
 - `bash FarkTesti.sh ornekler/*.tan` → **13 ayni, 0 sapma**.
 - `bash TestArkaUc.sh elf` → **20 gecti, 0 kaldi**.
+- `bash GercekProgramlar.sh` → **43 gecti, 0 kaldi**.
+- `bash TestOptimize.sh` (Faz 1 optimizer regresyonu, YENİ) → **7/7 gecti**:
+  katlama değerleri, 2^53 sınırında/üstü büyük sabitler, cebirsel sadeleştirme,
+  sabit koşul/ölü dal, döngü içi fold, 2^53 DERLEME HATASI (exit 1),
+  `5 % 0` runtime exit 4.
+- **2^53 paritesi (Go referansıyla):** `./tan elf` (güncel Go host, Linux)
+  `9007199254740993 / 1` için aynı derleme hatası + exit 1 verir; TAN-native
+  (gen2) aynı. **Not:** `tan.exe` (Windows, Jul 26) BAYAT — 2^53 kuralı yok;
+  Linux `tan` (Aug 14) güncel.
 - Katlama örneği `foldedge.tan` (zincir + karşılaştırma + negatif + cebirsel +
   değişkenli + kısa devre): gen2 ve Go referansı çıktıları **aynı** (tek fark:
   `/` — TancElf'te **tam** bölme, `10/2/2` → `2`; Go referansı float `2.5`.
@@ -167,55 +173,76 @@ yazılmadı, hiçbir hata gizlenmedi; TancElf.tan değiştirilmedi.**
 
 ## 6. Faz 1 — Sabit Katlama: Uygulama Notları (14 Ağustos 2026)
 
-TancElf.tan'da `katlamaDeger` / `yanEtkisizBant` / `sabitKatla` eklendi;
-`ifadeBantYaz` başında `rpnBant = sabitKatla(rpnBant)` (TancElf.tan ~2900-3095).
+> **DÜZELTME (14 Ağu):** Bu bölümün eski hali `katlamaDeger`/`sabitKatla`/
+> `kosulSabit` isimleriyle bir implementasyon anlatıyordu; kaynakta o isimler
+> HİÇ YOKTUR (grep ile doğrulandı). Gerçek implementasyon aşağıdadır.
 
-**Kurallar:** KURAL 1 `[S a][S b][IKILI op] → [S (a op b)]` (op: `+ - * % == !=
-> < >= <=`); KURAL 2 `[x][S0][-] → [x]`, `[x][S1][*] → [x]`, `[x][S0][*] → [S0]`
-(yalnız önceki bant yan-etkisizse); KURAL 3 `[S v][NEGATIF] → [S (0-v)]`. Kısa
-devre/BAYT/REL32/ETIKET girişleri opak bariyer.
+**Uygulanan mimari (bant seviyesinde, Go AST optimizasyonu değil):**
+- `ikiliBirlestir(bant, sag, islec)` (TancElf.tan:677) üç ayrıştırıcının
+  son noktasıdır (karsilastirmaAyristir 727, toplamaAyristir 739,
+  carpmaAyristir 751): sol/sağ bant `tekTamSabit` ile tekil SAYITAM ise
+  `sabitSayisalBant` (579) ile katla; katlanamadıysa CEBİRSEL kuralları dene;
+  olmadıysa `[sol][sag][IKILI islec]` yay.
+- `sabitSayisalBant(aTxt, bTxt, islec)`: `+ - * % == != < <= > >=` için
+  metin→int64→metin (`tamMetne`, idiv tabanlı) aritmetik.
+  - `*` taşma denetimi Go ile aynı: `c/a != b` ise katlamaz (Optimize.go:181-188).
+  - `/` A1 (Go 2^53 kuralı, Optimize.go:195-209): operandlardan biri
+    `9007199254740992` mutlak sınırını aşarsa `mutlak53uAsiyorMu` (saf metin
+    karşılaştırması) → `yaz("DERLEME HATASI: …2^53…")` + `sistemDur(1)`.
+    Aşmıyorsa `a % b == 0` ise `tamBol` ile SAYITAM'a katlanır (TancElf
+    `tamBol` semantiği), değilse runtime'a bırakılır (float64 → `3.5`).
+  - `% 0` ve `/ 0`: katlanmaz, runtime (`HATA: sıfıra bölme`, exit 4).
+- **CEBİRSEL (Go `cebirsel()` ile birebir):** `x+0`, `0+x`, `x-0`, `x*1`,
+  `1*x` koşulsuz; `x*0`/`0*x` → `0` yalnız diğer operand `yanEtkisizBant`
+  ise (CAGRI engeller). `x/1` YOK (Go kuralı, Optimize.go:295-297).
+- **Metin koruması:** `tekTamSabit`/`tamSabitMetin` yalnız `SAYITAM` kabul
+  eder; METIN operanda `""` döner — `"ab" + 0 → "ab0"` yanlış katlama olmaz.
 
-**Bulunan ve düzeltilen hata (önemli):** KURAL 1 ilk sürümde
-`ilkNHaric(sonuc, 2)` kullanıyordu — [S a] artığını bantta bırakıp `[S a][S c]`
-üretiyordu. Yorumlayıcıda zararsızdı (son değer doğruydu) ama native ELF'te yığın
-dengelemesini bozup **SIGSEGV** veriyordu; `./gen2 TancElf.tan gen3` çöküyordu.
-Düzeltme: `ilkNHaric(sonuc, 3)` (üçlünün tamamı silinir). Düzeltme sonrası sabit
-nokta + FarkTesti 13/13 + TestArkaUc 20/20 + fold testi doğru.
+**Bulunan ve düzeltilen hata (önemli, self-host tuzağı):** eğer/iken
+handler'ları yeniden yapılandırılırken koşul bandı `ifadeSonuc` yerine
+`ifadeBantYaz` + `popKayit(0)` ayrı çağrıldı; ilk sürümde `popKayit(0)`
+EKLENMEDİ. `ifadeSonuc` (974) üç adımlıdır: `ifadeAyristir` + `ifadeBantYaz`
++ `popKayit(0)` — son adım koşul değerini yığından alıp cmpImm32(0,0) için
+yığını dengeler. Eksik kalınca yığın sızdı → **gen2 her girdide segfault**
+(`yaz(42)` dahil; sayısal fold'un kapatılmasıyla sürdüğü doğrulandı — sorun
+fold'da değildi). Düzeltme: eğer (sabit-değil yolu) ve iken handler'larına
+`ifadeBantYaz(kosulBant,…)` sonrası `popKayit(0)` eklendi. Düzeltme sonrası
+gen2 == gen3 sabit nokta + tam regresyon yeşil.
 
 **Roadmap'ten bilinçli sapmalar:**
-- `x+0`, `0+x`, `1*x` KATLANMIYOR. TAN'da `+` metin birleştirmede de geçerli;
-  Go'nun tip-kör kuralı metin için yanlış olurdu (`"ab"+0` → `"ab0"`). `-` ve `*`
-  her zaman sayısaldır, bu yüzden `x-0`, `x*1`, `x*0` güvenle katlandı.
-- `/` Go'nun 2^53 float kuralıyla DEĞİL, TancElf'in runtime **tam** bölme
-  semantiğiyle katlanıyor (guard: b==0 veya (b==-1 ve a==INT64_MIN) ise
-  katlanmaz). `%` aynı guard'ı kullanır.
-
-**Açık:** Faz 1 madde 3 — sabit koşul düzleme / ölü blok (`eğer <sabit>` dallama
-ve `iken 0` döngü silme) — **YAPILDI** (aşağıda §6b). TancElf.tan kendi
-kaynağında sabit koşul içermediği için bu ekleme sabit noktayı etkilemez
-(düşük risk).
+- Go'nun `/` 2^53 kuralı runtime davranışla ÇELİŞİR (Go A1 kararı) — birebir
+  taşındı, yalnız SABİT işlenenlerde tetiklenir; runtime değişken `/` için
+  sınır yok.
+- Kural 3 (`[S v][NEGATIF] → [S (0-v)]`) `ikiliBirlestir`'de DEĞİL,
+  `ifadeBantYaz` NEGATIF kolunda yerleşiktir (mevcut davranış, korundu).
 
 ### 6b. Faz 1 madde 3 — Sabit Koşul Düzleme / Ölü Blok
 
-`kosulSabit(bant, kutu)` yardımcısı eklendi; `deyimDerle`'nin `eğer` ve `iken`
-kolları koşulu önce ayrıştırıp `sabitKatla`'dan geçiriyor, sonra tek
-`SAYITAM` mı diye bakıyor:
+`kosulDogruluk(bant)` (1027) + `zincirAtla(tokenler, pozKutu, degilseDursun)`
+(1060) yardımcıları eklendi; `deyimDerle`'nin `eğer` (1139) ve `iken` (1202)
+kolları koşul bandı üretildikten sonra doğruluğu ölçer:
 
-- **`eğer 0 ise`** (sabit yanlış): dal ölü — gövde yalnızca token-tüketimi için
-  derlenip atılıyor, zincire devam.
-- **`eğer sabit-doğru ise`**: gövde derleniyor, kalan tüm `değilse eğer`/
-  `değilse` zinciri yutuluyor.
-- **`iken 0`**: döngü tamamen siliniyor (gövde derle-at).
-- `sabitKatla` artık `doğru`→`SAYITAM 1`, `yanlış`→`SAYITAM 0` üretiyor
-  (koşul katlaması `iken doğru` gibi literal sabitleri de yakalar).
+- `kosulDogruluk`: bant tek girişli SAYITAM/SAYIKESIR/YOK/DOGRU/YANLIS ise
+  `metinSifirMi` ile 0/1; karışık → -1 (normal yol).
+- **`eğer <sabit-yanlış>`:** gövdeyi DERLE ama at (token tüketimi için),
+  `zincirAtla(...,1)` ile `değilse eğer`/`değilse` zincirine devam.
+- **`eğer <sabit-doğru>`:** gövdeyi derle, `zincirAtla(...,0)` ile kalan
+  `değilse eğer`/`değilse`/`son` yığınını derinlik sayacıyla yut.
+- **`iken <sabit-yanlış>`:** deyim tamamen silinir (gövde derle-at).
+- **`iken <sabit-doğru>`:** korunur (derleyicinin kendi `iken doğru` döngüleri).
+- `zincirAtla` derinlik sayacı: `eğer` açtıkça +1, `son` kapatınca -1 (0'da
+  durur); `değilse eğer`'deki "eğer" derinliği ARTIRMAZ (önceki token takibi
+  ile); koşulsuz `değilse` yalnız `degilseDursun=1` ise durdurur.
 
 **Bulunan ve düzeltilen hatalar:**
 1. İlk deneme `iken <koşul> ise` yazdı — TAN'da `iken` **`ise` ALMAZ**
    (`iken <koşul> ... son`); derleyicinin kendi kaynağı "bilinmeyen deyim: ise"
    ile patladı. Düzeltildi.
-2. Sabit-yanlış dalında koşulsuz `değilse` gövdesi `x = blokDerle(...)`
-   (yutma) idi — gövde HİÇ derlenmiyordu (testte A1 eksikti). Düzeltme:
-   `z = tamponEkleTumu(..., blokDerle(...))` (derleme).
+2. Sabit-yanlış dalında gövde `blokDerle` ile DERLENMEDEN yutuluyordu —
+   içerideki deyimlerden çağrılan işlevler/yardımcılar gömülmüyordu. Düzeltme:
+   gövde her durumda `blokDerle` ile derlenir (ölü dalın deyimleri yine de
+   token-akışı için işlenir), sabit dal yalnız KOD ÜRETİMİNDE atlanır.
+3. `popKayit(0)` yığın dengesi — yukarıdaki kritik hata.
 
 ### 6c. Faz 2 — Mantik (bool) Tip Ayrımı
 
@@ -304,8 +331,10 @@ kayıtlı tip değişimi İNERT çünkü cagriSonucTipi/argumanMetinMi hardcoded
 
 | Karar | Durum |
 |-------|-------|
-| Kanonik tohum = sabit-nokta artifact'i (`TancElf` == gen2, Faz 1-4) | **YAPILDI** (14 Ağu; md5 `e5ff2eae…`) |
-| Faz 1 (sabit katlama), Faz 2 (mantik), Faz 3 (liste eleman tipi), Faz 4 (dönüş tipi izleme) | **YAPILDI** (14 Ağu, doğrulandı) |
+| Kanonik tohum = sabit-nokta artifact'i (`TancElf` == gen2, Faz 1-6) | **YAPILDI** (14 Ağu; md5 `031c5435…`, 152625 B) |
+| Faz 1 (sabit katlama + cebirsel + sabit koşul/ölü dal), Faz 2 (mantik), Faz 3 (liste eleman tipi), Faz 4 (dönüş tipi izleme) | **YAPILDI** (14 Ağu, doğrulandı) |
+| Faz 5 (ölü işlev/yardımcı budaması), Faz 6 (ondalık + SSE) | **YAPILDI** (önceki aşamalar, roadmap §5/§6) |
+| `TestOptimize.sh` (Faz 1 optimizer regresyonu) | **YENİ** (14 Ağu; 7/7) |
 | `BootstrapGoSuz.sh`, `KanitGoSuzTarihce.sh` üretim zinciri script'leri | git'e alınacak (untracked) |
 | `BOOTSTRAP_ARCHITECTURE.md`, `BOOTSTRAP_STATUS.md` | yeni (bu tur) |
 

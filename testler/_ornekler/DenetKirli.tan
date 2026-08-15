@@ -1,0 +1,38 @@
+# DenetKirli — her kuralı bilerek tetikleyen denetim fikstürü.
+
+liste = [1, 2, 3]
+x = 5
+s = 99999999999999999999
+
+işlev iki(a)
+	döndür a + a
+	yaz a
+son
+
+işlev iki(b)
+	döndür b
+son
+
+işlev yalniz(c)
+	döndür c * 2
+son
+
+kayıt Kisil
+	ad
+	ad
+	işlev bilgi()
+		döndür 42
+	son
+son
+
+deger = 0.1
+eşitMi = deger == 0.5
+
+eğer doğru ise
+	yaz liste
+değilse
+	yaz x
+son
+
+sonuc = iki(3) + iki(4)
+yaz sonuc

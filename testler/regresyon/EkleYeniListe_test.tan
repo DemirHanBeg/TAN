@@ -1,0 +1,12 @@
+# tür: regresyon
+
+# ekle() yeni liste döndürmeli (yerinde mutasyon hatası: bkz. Yerlesik.go
+# ekle() yorumu). Yorumlayıcı önce yerinde değiştirip AYNI listeyi
+# döndürüyordu; ELF arka ucu yeni alan ayırıyordu. Bu test iki arka ucu
+# AYNI sonucu üretmesini garanti eder.
+
+a = [1, 2]
+b = ekle(a, 3)
+bekle(uzunluk(a) == 2)
+bekle(uzunluk(b) == 3)
+yaz "regresyon: ok"

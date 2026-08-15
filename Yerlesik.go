@@ -15,10 +15,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"syscall"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unsafe"
 )
@@ -64,6 +64,30 @@ func init() {
 			}
 			os.Exit(int(kod))
 			return int64(0)
+		},
+
+		// bekle(kosul): test koşulu. Koşul doğru değilse TAN9001 fırlatır
+		// (tan test ile tespit edilen başarısız test). Yeni sözdizimi İÇERMEZ;
+		// diğer yerleşikler gibi ağaç-gezende çalışır.
+		"bekle": func(a []Deger, satir int) Deger {
+			if len(a) < 1 {
+				firlat(satir, "bekle(koşul) bir argüman ister")
+			}
+			if !dogruMu(a[0]) {
+				firlat(satir, "bekle() başarısız: koşul doğru değil")
+			}
+			return int64(1)
+		},
+
+		// bekleEsit(a, b): iki değerin metin gösterimi eşit mi? Değilse TAN9002.
+		"bekleEsit": func(a []Deger, satir int) Deger {
+			if len(a) < 2 {
+				firlat(satir, "bekleEsit(a, b) iki argüman ister")
+			}
+			if metne(a[0]) != metne(a[1]) {
+				firlat(satir, "bekleEsit() başarısız: '%s' ile '%s' eşit değil", metne(a[0]), metne(a[1]))
+			}
+			return int64(1)
 		},
 
 		// ekle(liste, x): sona ekler (yerinde), listeyi döndürür

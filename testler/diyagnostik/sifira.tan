@@ -1,0 +1,2 @@
+sayi = 1
+yaz(sayi / 0)

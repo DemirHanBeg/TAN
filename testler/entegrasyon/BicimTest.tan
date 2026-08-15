@@ -1,0 +1,8 @@
+# tür: entegrasyon
+
+içe al "kutuphane/Bicim.tan"
+
+bekleEsit(tekrarMetin("ab", 3), "ababab")
+bekleEsit(paraBiçim(1234567), "1.234.567")
+bekleEsit(solaYasla("x", 4, "."), "x...")
+yaz "bicim: ok"

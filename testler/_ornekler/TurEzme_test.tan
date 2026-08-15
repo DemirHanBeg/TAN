@@ -1,0 +1,4 @@
+# tür: regresyon
+
+bekleEsit(2 + 2, 4)
+yaz "tur-ezme: ok"

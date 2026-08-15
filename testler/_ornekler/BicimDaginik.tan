@@ -1,0 +1,27 @@
+# BicimDaginik: biçimleyici test girişi (bilerek düzensiz yazılmıştır)
+içe al "kutuphane/Bicim.tan"
+
+işlev  topla(a,b)
+    sonuç=a+b   # toplam
+    döndür  sonuç
+son
+
+x=5
+y = (x+1)*2
+z= topla(x,y)
+yaz  "z: " + z
+yaz  tekrarMetin("ab",2)
+eğer z>10 ise
+    yaz "büyük"
+değilse
+    yaz "küçük"
+son
+harfler= ["a","b","c"]
+her  h harfler içinde
+    yaz h
+son
+dene
+    a2=1/0
+yakala hata
+    yaz "bölme hatası"
+son

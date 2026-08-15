@@ -1,0 +1,2 @@
+sonuc = u8(1) + i8(1)
+yaz(sonuc)

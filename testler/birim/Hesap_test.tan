@@ -1,0 +1,6 @@
+# tür: birim
+
+a = 6 * 7
+bekle(a == 42)
+bekleEsit(a, 42)
+yaz "hesap: 42"

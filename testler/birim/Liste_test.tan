@@ -1,0 +1,8 @@
+# tür: birim
+
+a = [1, 2]
+b = ekle(a, 3)
+bekle(uzunluk(a) == 2)
+bekle(uzunluk(b) == 3)
+bekleEsit(b[2], 3)
+yaz "liste: ok"

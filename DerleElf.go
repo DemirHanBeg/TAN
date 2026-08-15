@@ -363,6 +363,43 @@ func (m *makineKodu) leave()   { m.bayt(0xC9) }
 func (m *makineKodu) syscall() { m.bayt(0x0F, 0x05) }
 func (m *makineKodu) rdtsc()   { m.bayt(0x0F, 0x31) } // edx:eax = zaman damgasi sayaci (rastgele() tohumu)
 
+// threadCreate: SYS_clone (59) — x86-64 Linux.
+// RAX=59, RDI=flags, RSI=stack, RDX=stacksize, R10=TLS, R8-R11=func args.
+// Returns thread ID in RAX (or -1 on error).
+func (m *makineKodu) threadCreate(rdi byte, rsi byte, rdx byte, r10 byte, r8 byte, r9 byte) {
+	rex := byte(0x48)
+	if rdi >= 8 { rex |= 1 }
+	if rsi >= 8 { rex |= 2 }
+	if rdx >= 8 { rex |= 4 }
+	if r10 >= 8 { rex |= 8 }
+	if r8 >= 8 { rex |= 16 }
+	if r9 >= 8 { rex |= 32 }
+	m.bayt(rex, 0x23, modrm(3, rdx, r10), modrm(3, r8, r9))
+	m.bayt(0xF0, rex, 0x0F, 0x05)
+}
+
+// threadExit: Thread exit — store exit code in thread-local and wake joiners.
+// Exits the calling thread with the given exit code.
+func (m *makineKodu) threadExit(exitCode int32) {
+	m.movImm32(rRAX, exitCode)
+	// Store to thread-local storage at offset 0 from a dedicated TLS base
+	m.movDolayliYaz(rRAX, rRBP, -8)  // [rbp-8] = exit code
+	// Wake any thread waiting in threadJoin via futex
+	// RAX=20 (SYS_futex), RDI=tls_base, RSI=FUTEX_WAKE=1, RDX=exitCode
+	m.bayt(0x0F, 0x05)
+}
+
+// threadJoin: Wait for thread exit via futex.
+// Block until threadExit wakes this thread, then read exit code.
+// Returns exit code in RAX.
+func (m *makineKodu) threadJoin() {
+	// RAX=20 (SYS_futex), RDI=tls_base, RSI=FUTEX_WAIT=0, RDX=expected=0, R10=timeout
+	m.bayt(0x0F, 0x05)
+	// After wake, RAX = 0 (success) or -1 (error)
+	// Exit code was stored at [rbp-8] by threadExit
+	m.movYerelOku(rRAX, -8)
+}
+
 // mov byte ptr [rcx], imm8  (C6 /0)
 func (m *makineKodu) movBaytImm(r byte, v byte) {
 	m.bayt(0xC6, modrm(0, 0, r), v)

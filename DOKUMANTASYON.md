@@ -11,6 +11,7 @@
 8. [Yerleşik İşlevler](#yerleşik-i̇şlevler)
 9. [Arka Uçlar](#arka-uçlar)
 10. [Paket Yönetimi](#paket-yönetimi)
+11. [Geliştirici Araçları](#geliştirici-araçları)
 
 ---
 
@@ -319,11 +320,14 @@ TAN_OPT_RAPOR=1 tan elf program.tan çıktı
 ## Paket Yönetimi
 
 ```bash
-tan paket başlat              # tan.json oluştur
-tan paket kur <url|ad>        # modül kur
-tan paket kur                 # tan.json'daki bağımlılıkları kur
-tan paket listele             # kurulu modüller
-tan paket sil <ad>            # modülü kaldır
+tan paket yeni <ad> [sürüm]    # tan.json oluştur
+tan paket ekle <ad> "<kaynak>" # bağımlılık ekle (dosya/dizin/ad; sürüm 'v' ile)
+tan paket indir                # bağımlılıkları önbelleğe indir
+tan paket kur                  # modülleri kur
+tan paket listele              # kurulu modüller
+tan paket sil <ad>             # modülü kaldır
+tan paket doğrula              # tan.json bütünlüğünü denetle
+tan paket önbellek <ad> <yerel-yol>  # yerel modülü önbelleğe koy
 ```
 
 ### tan.json
@@ -350,6 +354,99 @@ Semver: **BÜYÜK.KÜÇÜK.YAMA**
 - **YAMA** — geriye uyumlu hata düzeltmesi
 
 Paketler git deposu olarak dağıtılır; sürümler git etiketiyle eşlenir.
+
+---
+
+## Geliştirici Araçları
+
+`tan` ikilisi (Go ile derlenen geliştirici motoru) kaynağı çalıştırmanın yanında
+şu geliştirici komutlarını sunar. Hepsi `--yardim`/`-h` ile kullanım basar;
+kullanım hatası çıkış kodu **2**, okuma/ayrıştırma hatası **1**, başarı **0**'dır.
+`--json` bayrağı komut çıktısını makine-okunur JSON'a çevirir (çıktı deterministiktir).
+
+| Komut | Görev |
+|---|---|
+| `tan test [--liste\|--json\|--ayrinti] <dosya\|dizin...>` | `test` bloğu içeren dosyaları koşar, test adlarını `işlev testXxx()` çıkarır |
+| `tan biçimlendir [--denet\|--cikti] <dosya...>` | kaynağı standart biçime getirir (`--denet`: sadece kontrol, `--cikti`: değişmez) |
+| `tan denetle [--json] <dosya...>` | statik denetçi: gölgeleme, kullanılmayan değişken, çift tanım, çağrılmayan işlev |
+| `tan derle <program.tan> [-o çıktı]` | ELF arka ucuyla native binary üretir (sıfır dış araç; `tan elf`'in sarmalayıcısı) |
+| `tan paket yeni/ekle/sil/indir/kur/doğrula/liste/önbellek` | paket yöneticisi (yukarıya bakın) |
+| `tan simgeler [--json] <dosya...>` | sembol envanteri: işlev, kayıt, alan, metot, üst-seviye değişken + konum |
+| `tan bagimlilik [--json] <dosya\|dizin...>` | `içe al` grafiği: çözümleme, ters bağımlılıklar, döngüler |
+| `tan api [--json] <dosya...>` | dışa-açık API yüzeyi: tür çıkarımıyla imzalanmış işlev/metot/kayıt/değişken listesi |
+
+### `tan simgeler` JSON şeması
+
+```json
+[{
+  "dosya": "kutuphane/Temel.tan",
+  "ozet": { "toplam": 7, "islev": 1, "kayit": 1, "metot": 1, "alan": 2, "degisken": 2 },
+  "simgeler": [
+    { "tur": "islev",   "ad": "yeniKisi", "satir": 8, "sutun": 7, "gorunurluk": "dışa",
+      "parametreler": ["ad", "yas"] },
+    { "tur": "kayit",   "ad": "Kisi", "satir": 1, "sutun": 7, "gorunurluk": "dışa",
+      "alanlar": [ { "tur": "alan", "ad": "ad", "kayit": "Kisi" },
+                   { "tur": "alan", "ad": "yas", "kayit": "Kisi" } ],
+      "metotlar": [ { "tur": "metot", "ad": "selamla", "kayit": "Kisi", "satir": 4, "sutun": 10,
+                      "parametreler": ["bu"], "gorunurluk": "dışa" } ] },
+    { "tur": "degisken", "ad": "kYas", "satir": 11, "sutun": 1, "gorunurluk": "dışa" }
+  ]
+}]
+```
+
+TAN'da `public`/`private` anahtar kelimesi yoktur; üst-seviye her sembol `"dışa"`
+olarak raporlanır. Tarama **token tabanlıdır** (AST düğümleri konum taşımaz).
+`işlev` üst seviyede ise *işlev*, `kayıt` gövdesinde ise *metot* sayılır; `kayıt`
+içindeki çıplak tanımlayıcılar *alan*, üst seviyedeki `ad = ...` ifadeleri *değişken*'dir.
+
+### `tan bagimlilik` JSON şeması
+
+```json
+{
+  "dosyalar": [
+    { "dosya": ".../ust.tan",
+      "bagimliliklar": [
+        { "ad": "orta", "hedef": ".../orta.tan", "cozuldu": true, "satir": 1, "sutun": 8 } ] }
+  ],
+  "ters": [ { "dosya": ".../taban.tan", "kullananlar": [".../orta.tan"] } ],
+  "donguler": [ [".../a.tan", ".../b.tan"] ]
+}
+```
+
+`içe al` adları derleyicinin kendi `modülAra` kurallarıyla çözülür (aynı dizin,
+`TAN_YOL`, kütüphane/..). Çözülemeyen ad `cozuldu:false` ile bildirilir ve komut
+yine **0** döner (bulgu). Dizin girişleri yinelenir ve tüm `*.tan` dosyaları tarama
+grafiğine girer. Dosya okunamazsa ya da ayrıştırılamazsa komut **1** döner.
+
+### `tan api` JSON şeması
+
+```json
+[{
+  "dosya": ".../kayit.tan",
+  "islevler": [
+    { "ad": "yeniKisi", "satir": 8, "sutun": 7,
+      "parametreler": [ { "ad": "ad", "tip": "bilinmeyen" },
+                        { "ad": "yas", "tip": "bilinmeyen" } ],
+      "donusTipi": "kayıt<Kisi>" }
+  ],
+  "kayitlar": [
+    { "ad": "Kisi", "satir": 1, "sutun": 7,
+      "alanlar": [ { "ad": "ad", "tip": "tam sayı" },
+                   { "ad": "yas", "tip": "tam sayı" } ],
+      "metotlar": [
+        { "ad": "selamla", "satir": 4, "sutun": 10,
+          "parametreler": [ { "ad": "bu", "tip": "kayıt<Kisi>" } ],
+          "donusTipi": "metin" } ] }
+  ],
+  "degiskenler": [ { "ad": "kMetin", "tip": "metin", "satir": 1, "sutun": 1 } ]
+}]
+```
+
+Tipler ELF arka ucunun sabit-nokta çıkarımından gelir: dönüşler gövdeden,
+parametreler çağrı yerlerinden, kayıt alanları `Kayıt{...}` kurulumlarından
+öğrenilir. Öğrenilmemiş parametre `"bilinmeyen"` gösterir (derleyici varsayılan
+olarak `tam sayı` kabul eder; buradaki gösterim dürüsttür). Tip adları: `tam sayı`,
+`ondalık`, `metin`, `kayıt<Ad>`, `liste<T>`, `sozluk<T>`.
 
 ---
 
