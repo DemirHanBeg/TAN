@@ -93,12 +93,14 @@ işlev simgelerAna(yol, json)
     döndür 0
 son
 
-# ---- denetle: blok dengesi linter'ı ----
+# ---- denetle: blok dengesi linter'ı + STRUCTURED DIAGNOSTICS (Kaldıraç 2) ----
+# Tanı kaydı: [kod, önem, satır(metin), mesaj, sebep, çözüm] — AI-native.
+# JSON şeması: {"tani":[{"kod","onem","satir","mesaj","sebep","cozum"}]}
 işlev denetleAna(yol, json)
     kaynak = oku(yol)
     satirlar = satiraBol(kaynak)
 
-    sorunlar = []
+    tanilar = []
     derinlik = 0
     si = 0
     iken si < uzunluk(satirlar)
@@ -111,7 +113,7 @@ işlev denetleAna(yol, json)
         değilse
             eğer metinEsit(kelime, "son") ise
                 eğer derinlik == 0 ise
-                    sorunlar = ekle(sorunlar, ["fazla_son", metin(si + 1), "eşleşen blok yok, fazladan 'son'"])
+                    tanilar = ekle(tanilar, ["TAN001", "hata", metin(si + 1), "eşleşen blok yok, fazladan 'son'", "bu satırdaki 'son' hiçbir açık bloğu (işlev/eğer/iken/her/dene) kapatmıyor", "fazladan 'son' satırını sil ya da eksik blok açıcıyı ekle"])
                 değilse
                     derinlik = derinlik - 1
                 son
@@ -121,40 +123,51 @@ işlev denetleAna(yol, json)
     son
 
     eğer derinlik > 0 ise
-        sorunlar = ekle(sorunlar, ["eksik_son", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)")])
+        tanilar = ekle(tanilar, ["TAN002", "hata", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)"), "blok açıcı (işlev/eğer/iken/her/dene) sayısı 'son' sayısından fazla", metinBirlestir(metin(derinlik), " adet 'son' anahtar kelimesi ekle")])
     son
 
     eğer json ise
-        cikti = "{\"sorunlar\":["
+        cikti = "{\"tani\":["
         si = 0
-        iken si < uzunluk(sorunlar)
-            s = sorunlar[si]
+        iken si < uzunluk(tanilar)
+            t = tanilar[si]
             eğer si > 0 ise
                 cikti = metinBirlestir(cikti, ",")
             son
-            cikti = metinBirlestir(cikti, "{\"tur\":\"")
-            cikti = metinBirlestir(cikti, s[0])
+            cikti = metinBirlestir(cikti, "{\"kod\":\"")
+            cikti = metinBirlestir(cikti, t[0])
+            cikti = metinBirlestir(cikti, "\",\"onem\":\"")
+            cikti = metinBirlestir(cikti, t[1])
             cikti = metinBirlestir(cikti, "\",\"satir\":")
-            cikti = metinBirlestir(cikti, s[1])
+            cikti = metinBirlestir(cikti, t[2])
             cikti = metinBirlestir(cikti, ",\"mesaj\":\"")
-            cikti = metinBirlestir(cikti, s[2])
+            cikti = metinBirlestir(cikti, t[3])
+            cikti = metinBirlestir(cikti, "\",\"sebep\":\"")
+            cikti = metinBirlestir(cikti, t[4])
+            cikti = metinBirlestir(cikti, "\",\"cozum\":\"")
+            cikti = metinBirlestir(cikti, t[5])
             cikti = metinBirlestir(cikti, "\"}")
             si = si + 1
         son
         cikti = metinBirlestir(cikti, "]}")
         yaz(cikti)
     değilse
-        eğer uzunluk(sorunlar) == 0 ise
-            yaz("denetim temiz — 0 sorun")
+        eğer uzunluk(tanilar) == 0 ise
+            yaz("denetim temiz — 0 tanı")
         değilse
             si = 0
-            iken si < uzunluk(sorunlar)
-                s = sorunlar[si]
-                cikti = "satır "
-                cikti = metinBirlestir(cikti, s[1])
+            iken si < uzunluk(tanilar)
+                t = tanilar[si]
+                # satır 1: [KOD] önem  satır N: mesaj
+                cikti = metinBirlestir("[", metinBirlestir(t[0], "] "))
+                cikti = metinBirlestir(cikti, t[1])
+                cikti = metinBirlestir(cikti, "  satır ")
+                cikti = metinBirlestir(cikti, t[2])
                 cikti = metinBirlestir(cikti, ": ")
-                cikti = metinBirlestir(cikti, s[2])
+                cikti = metinBirlestir(cikti, t[3])
                 yaz(cikti)
+                yaz(metinBirlestir("  sebep: ", t[4]))
+                yaz(metinBirlestir("  çözüm: ", t[5]))
                 si = si + 1
             son
         son
