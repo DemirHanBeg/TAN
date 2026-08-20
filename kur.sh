@@ -12,7 +12,11 @@ echo "TAN toolchain derleniyor (self-hosted, sıfır Go)..."
 ./TancElf tan.tan "$HEDEF/tan"
 chmod +x "$HEDEF/tan"
 
-echo "Kuruldu: $HEDEF/tan"
+echo "LSP sunucusu derleniyor..."
+./TancElf araclar/lsp.tan "$HEDEF/tanlsp"
+chmod +x "$HEDEF/tanlsp"
+
+echo "Kuruldu: $HEDEF/tan  +  $HEDEF/tanlsp (LSP)"
 echo ""
 "$HEDEF/tan" sürüm
 echo ""

@@ -41,3 +41,5 @@ web/tan.wasm
 .idea/
 *.swp
 .DS_Store
+tanlsp
+/tan
