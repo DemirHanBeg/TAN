@@ -1,0 +1,45 @@
+# tan.tan — TAN birleşik araç dispatcher'ı (tek toolchain binary — Kaldıraç 5).
+# Derle: ./TancElf tan.tan tan   →  Kullanım: ./tan <komut> <dosya.tan> [--json]
+# Go'nun tek-`go`-binary avantajını Tan'da geri getirir. Yeni araçlar buraya takılır.
+
+içe al "kutuphane/araclar.tan"
+
+eğer argsay() < 2 ise
+    yaz("TAN aracı — Kullanım: tan <komut> <dosya.tan> [--json]")
+    yaz("Komutlar:")
+    yaz("  simgeler     sembol listeleyici (işlev/değişken)")
+    yaz("  denetle      blok dengesi linter'ı")
+    yaz("  bicimlendir  kanonik formatter (bic)")
+değilse
+    komut = arg(1)
+
+    # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu
+    json = yanlış
+    yol = ""
+    ai = 2
+    iken ai < argsay()
+        a = arg(ai)
+        eğer metinEsit(a, "--json") ise
+            json = doğru
+        değilse
+            eğer uzunluk(yol) == 0 ise
+                yol = a
+            son
+        son
+        ai = ai + 1
+    son
+
+    eğer uzunluk(yol) == 0 ise
+        yaz(metinBirlestir("Hata: dosya yolu gerekli — tan ", metinBirlestir(komut, " <dosya.tan>")))
+    değilse
+        eğer metinEsit(komut, "simgeler") ise
+            d = simgelerAna(yol, json)
+        değilse eğer metinEsit(komut, "denetle") ise
+            d = denetleAna(yol, json)
+        değilse eğer metinEsit(komut, "bicimlendir") veya metinEsit(komut, "bic") ise
+            d = bicimlendirAna(yol)
+        değilse
+            yaz(metinBirlestir("Bilinmeyen komut: ", komut))
+        son
+    son
+son

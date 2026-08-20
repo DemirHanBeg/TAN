@@ -1,50 +1,11 @@
-# bicimlendir.tan — TAN kaynağını kanonik girintiyle biçimlendirir (formatter).
-# Kullanım: (tan elf ile derlenip)  ./bicimlendir <dosya.tan>
-# Biçimlenmiş kaynağı stdout'a yazar (dosyayı DEĞİŞTİRMEZ — güvenli; yönlendir).
-# TAN dilinde self-hosted tooling — Faz B / madde 6 (formatter).
-# Ortak tarama yardımcıları kutuphane/tanoku.tan'dan (DRY).
-# Kural: blok açıcı +1 girinti; 'son' -1 (önce düş sonra yaz); 'değilse'/'yakala'
-# zincir-ortası → bir seviye geri yaz, derinlik değişmez. Birim = 4 boşluk.
+# bicimlendir.tan — bağımsız kanonik formatter sarmalayıcı.
+# Çekirdek kutuphane/araclar.tan içindedir (tek kaynak). Birleşik arayüz: ./tan bic
+# Kullanım: (./TancElf araclar/bicimlendir.tan bic)  ./bic <dosya.tan>
 
-içe al "kutuphane/tanoku.tan"
-
-# --- sürücü ---
+içe al "kutuphane/araclar.tan"
 
 eğer argsay() < 2 ise
     yaz("Kullanım: bicimlendir <dosya.tan>")
 değilse
-    yol = arg(1)
-    kaynak = oku(yol)
-    satirlar = satiraBol(kaynak)
-
-    derinlik = 0
-    si = 0
-    iken si < uzunluk(satirlar)
-        icerik = kirp(satirlar[si])
-
-        eğer uzunluk(icerik) == 0 ise
-            yaz("")
-        değilse
-            ilk = kelimeAl(icerik, 0)
-
-            eğer metinEsit(ilk, "son") ise
-                eğer derinlik > 0 ise
-                    derinlik = derinlik - 1
-                son
-                yaz(metinBirlestir(girinti(derinlik), icerik))
-            değilse eğer metinEsit(ilk, "değilse") veya metinEsit(ilk, "yakala") ise
-                d2 = derinlik - 1
-                eğer d2 < 0 ise
-                    d2 = 0
-                son
-                yaz(metinBirlestir(girinti(d2), icerik))
-            değilse eğer blokAcici(ilk) ise
-                yaz(metinBirlestir(girinti(derinlik), icerik))
-                derinlik = derinlik + 1
-            değilse
-                yaz(metinBirlestir(girinti(derinlik), icerik))
-            son
-        son
-        si = si + 1
-    son
+    d = bicimlendirAna(arg(1))
 son

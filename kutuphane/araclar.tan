@@ -1,0 +1,201 @@
+# araclar.tan — TAN tooling çekirdeği (fonksiyon olarak). Hem tek `tan` binary
+# dispatcher (tan.tan) hem bağımsız araçlar (araclar/*.tan) bunu `içe al` eder.
+# Kaldıraç 5 (tek toolchain) + Kaldıraç 1 (tooling). Ortak tarama: tanoku.tan.
+
+içe al "kutuphane/tanoku.tan"
+
+# anahtar kelime mi? (simgeler'de üst-seviye değişken tespitinde eleme)
+işlev anahtarMiKelime(k)
+    anahtarlar = ["yaz", "eğer", "ise", "değilse", "iken", "işlev", "döndür", "son", "her", "içinde", "dur", "devam", "içe", "al", "doğru", "yanlış", "yok", "ve", "veya", "değil", "köprü", "dene", "yakala"]
+    her a anahtarlar içinde
+        eğer metinEsit(k, a) ise
+            döndür doğru
+        son
+    son
+    döndür yanlış
+son
+
+# ---- simgeler: sembol listeleyici ----
+işlev simgelerAna(yol, json)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+
+    simgeler = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+
+        eğer metinEsit(kelime, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kelime))
+            ad = kelimeAl(satir, adBasla)
+            acKonum = karakterBul(satir, "(", adBasla)
+            parametreler = ""
+            eğer acKonum >= 0 ise
+                parametreler = parametreAl(satir, acKonum)
+            son
+            simgeler = ekle(simgeler, ["işlev", ad, metin(si + 1), parametreler])
+        değilse
+            eğer b == 0 ise
+                esit = karakterBul(satir, "=", 0)
+                ad = kelimeAl(satir, 0)
+                eğer esit > 0 ve uzunluk(ad) > 0 ve metinAl(ad, 0) != "#" ve anahtarMiKelime(ad) == yanlış ise
+                    simgeler = ekle(simgeler, ["değişken", ad, metin(si + 1), ""])
+                son
+            son
+        son
+        si = si + 1
+    son
+
+    eğer json ise
+        cikti = "{\"simgeler\":["
+        si = 0
+        iken si < uzunluk(simgeler)
+            s = simgeler[si]
+            eğer si > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"tur\":\"")
+            cikti = metinBirlestir(cikti, s[0])
+            cikti = metinBirlestir(cikti, "\",\"ad\":\"")
+            cikti = metinBirlestir(cikti, s[1])
+            cikti = metinBirlestir(cikti, "\",\"satir\":")
+            cikti = metinBirlestir(cikti, s[2])
+            eğer metinEsit(s[0], "işlev") ise
+                cikti = metinBirlestir(cikti, ",\"parametreler\":\"")
+                cikti = metinBirlestir(cikti, s[3])
+                cikti = metinBirlestir(cikti, "\"")
+            son
+            cikti = metinBirlestir(cikti, "}")
+            si = si + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        si = 0
+        iken si < uzunluk(simgeler)
+            s = simgeler[si]
+            eğer metinEsit(s[0], "işlev") ise
+                cikti = metinBirlestir("işlev ", s[1])
+                cikti = metinBirlestir(cikti, "(")
+                cikti = metinBirlestir(cikti, s[3])
+                cikti = metinBirlestir(cikti, ")")
+            değilse
+                cikti = metinBirlestir("değişken ", s[1])
+            son
+            cikti = metinBirlestir(cikti, "  satır ")
+            cikti = metinBirlestir(cikti, s[2])
+            yaz(cikti)
+            si = si + 1
+        son
+    son
+    döndür 0
+son
+
+# ---- denetle: blok dengesi linter'ı ----
+işlev denetleAna(yol, json)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+
+    sorunlar = []
+    derinlik = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+
+        eğer blokAcici(kelime) ise
+            derinlik = derinlik + 1
+        değilse
+            eğer metinEsit(kelime, "son") ise
+                eğer derinlik == 0 ise
+                    sorunlar = ekle(sorunlar, ["fazla_son", metin(si + 1), "eşleşen blok yok, fazladan 'son'"])
+                değilse
+                    derinlik = derinlik - 1
+                son
+            son
+        son
+        si = si + 1
+    son
+
+    eğer derinlik > 0 ise
+        sorunlar = ekle(sorunlar, ["eksik_son", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)")])
+    son
+
+    eğer json ise
+        cikti = "{\"sorunlar\":["
+        si = 0
+        iken si < uzunluk(sorunlar)
+            s = sorunlar[si]
+            eğer si > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"tur\":\"")
+            cikti = metinBirlestir(cikti, s[0])
+            cikti = metinBirlestir(cikti, "\",\"satir\":")
+            cikti = metinBirlestir(cikti, s[1])
+            cikti = metinBirlestir(cikti, ",\"mesaj\":\"")
+            cikti = metinBirlestir(cikti, s[2])
+            cikti = metinBirlestir(cikti, "\"}")
+            si = si + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        eğer uzunluk(sorunlar) == 0 ise
+            yaz("denetim temiz — 0 sorun")
+        değilse
+            si = 0
+            iken si < uzunluk(sorunlar)
+                s = sorunlar[si]
+                cikti = "satır "
+                cikti = metinBirlestir(cikti, s[1])
+                cikti = metinBirlestir(cikti, ": ")
+                cikti = metinBirlestir(cikti, s[2])
+                yaz(cikti)
+                si = si + 1
+            son
+        son
+    son
+    döndür 0
+son
+
+# ---- bicimlendir: kanonik formatter ----
+işlev bicimlendirAna(yol)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+
+    derinlik = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        icerik = kirp(satirlar[si])
+
+        eğer uzunluk(icerik) == 0 ise
+            yaz("")
+        değilse
+            ilk = kelimeAl(icerik, 0)
+
+            eğer metinEsit(ilk, "son") ise
+                eğer derinlik > 0 ise
+                    derinlik = derinlik - 1
+                son
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+            değilse eğer metinEsit(ilk, "değilse") veya metinEsit(ilk, "yakala") ise
+                d2 = derinlik - 1
+                eğer d2 < 0 ise
+                    d2 = 0
+                son
+                yaz(metinBirlestir(girinti(d2), icerik))
+            değilse eğer blokAcici(ilk) ise
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+                derinlik = derinlik + 1
+            değilse
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+            son
+        son
+        si = si + 1
+    son
+    döndür 0
+son

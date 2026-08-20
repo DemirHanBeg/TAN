@@ -1,92 +1,25 @@
-# denetle.tan — TAN kaynağında blok dengesi denetimi (eksik/fazla 'son').
-# Kullanım: (tan elf ile derlenip)  ./denetle <dosya.tan> [--json]
-# TAN dilinde self-hosted tooling — Faz B / Kaldıraç 2 (linter, madde 7).
-# Ortak tarama yardımcıları kutuphane/tanoku.tan'dan (DRY).
-# 'değilse'/'yakala' zincir-ortası anahtarlardır — blok açmaz, satır-başı
-# kontrolde doğal elenir.
+# denetle.tan — bağımsız blok dengesi linter'ı sarmalayıcı.
+# Çekirdek kutuphane/araclar.tan içindedir (tek kaynak). Birleşik arayüz: ./tan denetle
+# Kullanım: (./TancElf araclar/denetle.tan denetle)  ./denetle <dosya.tan> [--json]
 
-içe al "kutuphane/tanoku.tan"
-
-# --- sürücü ---
+içe al "kutuphane/araclar.tan"
 
 eğer argsay() < 2 ise
     yaz("Kullanım: denetle <dosya.tan> [--json]")
 değilse
-    yol = arg(1)
-
     json = yanlış
+    yol = ""
     ai = 1
     iken ai < argsay()
-        eğer metinEsit(arg(ai), "--json") ise
+        a = arg(ai)
+        eğer metinEsit(a, "--json") ise
             json = doğru
+        değilse
+            eğer uzunluk(yol) == 0 ise
+                yol = a
+            son
         son
         ai = ai + 1
     son
-
-    kaynak = oku(yol)
-    satirlar = satiraBol(kaynak)
-
-    # sorunlar: her eleman [tur, satir(metin), mesaj]
-    sorunlar = []
-    derinlik = 0
-    si = 0
-    iken si < uzunluk(satirlar)
-        satir = satirlar[si]
-        b = boslukAtla(satir, 0)
-        kelime = kelimeAl(satir, b)
-
-        eğer blokAcici(kelime) ise
-            derinlik = derinlik + 1
-        değilse
-            eğer metinEsit(kelime, "son") ise
-                eğer derinlik == 0 ise
-                    sorunlar = ekle(sorunlar, ["fazla_son", metin(si + 1), "eşleşen blok yok, fazladan 'son'"])
-                değilse
-                    derinlik = derinlik - 1
-                son
-            son
-        son
-        si = si + 1
-    son
-
-    eğer derinlik > 0 ise
-        sorunlar = ekle(sorunlar, ["eksik_son", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)")])
-    son
-
-    # --- çıktı ---
-    eğer json ise
-        cikti = "{\"sorunlar\":["
-        si = 0
-        iken si < uzunluk(sorunlar)
-            s = sorunlar[si]
-            eğer si > 0 ise
-                cikti = metinBirlestir(cikti, ",")
-            son
-            cikti = metinBirlestir(cikti, "{\"tur\":\"")
-            cikti = metinBirlestir(cikti, s[0])
-            cikti = metinBirlestir(cikti, "\",\"satir\":")
-            cikti = metinBirlestir(cikti, s[1])
-            cikti = metinBirlestir(cikti, ",\"mesaj\":\"")
-            cikti = metinBirlestir(cikti, s[2])
-            cikti = metinBirlestir(cikti, "\"}")
-            si = si + 1
-        son
-        cikti = metinBirlestir(cikti, "]}")
-        yaz(cikti)
-    değilse
-        eğer uzunluk(sorunlar) == 0 ise
-            yaz("denetim temiz — 0 sorun")
-        değilse
-            si = 0
-            iken si < uzunluk(sorunlar)
-                s = sorunlar[si]
-                cikti = "satır "
-                cikti = metinBirlestir(cikti, s[1])
-                cikti = metinBirlestir(cikti, ": ")
-                cikti = metinBirlestir(cikti, s[2])
-                yaz(cikti)
-                si = si + 1
-            son
-        son
-    son
+    d = denetleAna(yol, json)
 son

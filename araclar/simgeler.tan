@@ -1,110 +1,25 @@
-# simgeler.tan — TAN kaynağındaki işlev ve değişken simgelerini listeler.
-# Kullanım: (tan elf ile derlenip)  ./simgeler <dosya.tan> [--json]
-# TAN dilinde self-hosted tooling — Faz B / Kaldıraç 1 (query-able tooling, LSP temeli).
-# Ortak tarama yardımcıları kutuphane/tanoku.tan'dan gelir (DRY).
+# simgeler.tan — bağımsız sembol listeleyici sarmalayıcı.
+# Çekirdek kutuphane/araclar.tan içindedir (tek kaynak). Birleşik arayüz: ./tan simgeler
+# Kullanım: (./TancElf araclar/simgeler.tan simgeler)  ./simgeler <dosya.tan> [--json]
 
-içe al "kutuphane/tanoku.tan"
-
-# anahtar kelime mi? (üst-seviye değişken tespitinde eğer/iken/... elenir)
-işlev anahtarMiKelime(k)
-    anahtarlar = ["yaz", "eğer", "ise", "değilse", "iken", "işlev", "döndür", "son", "her", "içinde", "dur", "devam", "içe", "al", "doğru", "yanlış", "yok", "ve", "veya", "değil", "köprü", "dene", "yakala"]
-    her a anahtarlar içinde
-        eğer metinEsit(k, a) ise
-            döndür doğru
-        son
-    son
-    döndür yanlış
-son
-
-# --- sürücü ---
+içe al "kutuphane/araclar.tan"
 
 eğer argsay() < 2 ise
     yaz("Kullanım: simgeler <dosya.tan> [--json]")
 değilse
-    yol = arg(1)
-
     json = yanlış
+    yol = ""
     ai = 1
     iken ai < argsay()
-        eğer metinEsit(arg(ai), "--json") ise
+        a = arg(ai)
+        eğer metinEsit(a, "--json") ise
             json = doğru
+        değilse
+            eğer uzunluk(yol) == 0 ise
+                yol = a
+            son
         son
         ai = ai + 1
     son
-
-    kaynak = oku(yol)
-    satirlar = satiraBol(kaynak)
-
-    # simgeler: her eleman [tur, ad, satir(metin), parametreler] — hepsi metin
-    simgeler = []
-    si = 0
-    iken si < uzunluk(satirlar)
-        satir = satirlar[si]
-        b = boslukAtla(satir, 0)
-        kelime = kelimeAl(satir, b)
-
-        eğer metinEsit(kelime, "işlev") ise
-            adBasla = boslukAtla(satir, b + uzunluk(kelime))
-            ad = kelimeAl(satir, adBasla)
-            acKonum = karakterBul(satir, "(", adBasla)
-            parametreler = ""
-            eğer acKonum >= 0 ise
-                parametreler = parametreAl(satir, acKonum)
-            son
-            simgeler = ekle(simgeler, ["işlev", ad, metin(si + 1), parametreler])
-        değilse
-            eğer b == 0 ise
-                esit = karakterBul(satir, "=", 0)
-                ad = kelimeAl(satir, 0)
-                eğer esit > 0 ve uzunluk(ad) > 0 ve metinAl(ad, 0) != "#" ve anahtarMiKelime(ad) == yanlış ise
-                    simgeler = ekle(simgeler, ["değişken", ad, metin(si + 1), ""])
-                son
-            son
-        son
-        si = si + 1
-    son
-
-    # --- çıktı ---
-    eğer json ise
-        cikti = "{\"simgeler\":["
-        si = 0
-        iken si < uzunluk(simgeler)
-            s = simgeler[si]
-            eğer si > 0 ise
-                cikti = metinBirlestir(cikti, ",")
-            son
-            cikti = metinBirlestir(cikti, "{\"tur\":\"")
-            cikti = metinBirlestir(cikti, s[0])
-            cikti = metinBirlestir(cikti, "\",\"ad\":\"")
-            cikti = metinBirlestir(cikti, s[1])
-            cikti = metinBirlestir(cikti, "\",\"satir\":")
-            cikti = metinBirlestir(cikti, s[2])
-            eğer metinEsit(s[0], "işlev") ise
-                cikti = metinBirlestir(cikti, ",\"parametreler\":\"")
-                cikti = metinBirlestir(cikti, s[3])
-                cikti = metinBirlestir(cikti, "\"")
-            son
-            cikti = metinBirlestir(cikti, "}")
-            si = si + 1
-        son
-        cikti = metinBirlestir(cikti, "]}")
-        yaz(cikti)
-    değilse
-        si = 0
-        iken si < uzunluk(simgeler)
-            s = simgeler[si]
-            eğer metinEsit(s[0], "işlev") ise
-                cikti = metinBirlestir("işlev ", s[1])
-                cikti = metinBirlestir(cikti, "(")
-                cikti = metinBirlestir(cikti, s[3])
-                cikti = metinBirlestir(cikti, ")")
-            değilse
-                cikti = metinBirlestir("değişken ", s[1])
-            son
-            cikti = metinBirlestir(cikti, "  satır ")
-            cikti = metinBirlestir(cikti, s[2])
-            yaz(cikti)
-            si = si + 1
-        son
-    son
+    d = simgelerAna(yol, json)
 son
