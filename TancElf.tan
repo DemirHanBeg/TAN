@@ -2763,6 +2763,30 @@ işlev girdiOkuBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# girdiOkuN(rdi=n) -> stdin'den EN FAZLA n bayt okur (tek read syscall). LSP
+# çerçeveleme (header bayt-bayt, sonra N-bayt gövde) için. Kısmi dönebilir.
+işlev girdiOkuNBant()
+    b = [bcEtiket("f_girdiOkuN")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 16))
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 7))    # [-16] = n
+    b = listeBirlestir(b, addImm32(7, 16))           # rdi = n+16
+    b = listeBirlestir(b, callBant("f_tan_ayir"))    # rax = tampon
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))     # [-8] = tampon
+    b = listeBirlestir(b, xorKayit(7, 7))            # rdi = 0 (stdin)
+    b = listeBirlestir(b, movYerelOku(6, 0 - 8))
+    b = listeBirlestir(b, leaDolayli(6, 6, 8))       # rsi = tampon+8
+    b = listeBirlestir(b, movYerelOku(2, 0 - 16))    # rdx = n
+    b = listeBirlestir(b, xorKayit(0, 0))            # sys_read = 0
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelOku(1, 0 - 8))
+    b = listeBirlestir(b, movPtrYaz(1, 0))           # uzunluk = okunan
+    b = listeBirlestir(b, movYerelOku(0, 0 - 8))
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
 # dosyaVarMi(rdi=yol metni) -> rax=1/0 — oku() ÖNCESİ varlık kontrolü için
 # (oku() eksik dosyada hata denetimi yapmadan çöp uzunluk üretir). Mantık
 # DerleElf.go'nun f_dosya_var_mi'siyle BİREBİR aynı (open+close syscall,
@@ -4411,8 +4435,8 @@ degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
 
 # --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
-yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_oku", "f_girdiOku", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
-yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), okuBant(), girdiOkuBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_oku", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), okuBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
 kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
 gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 
