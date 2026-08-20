@@ -1,33 +1,75 @@
-# tandbg.tan — TAN debugger (ptrace tabanlı, AYRI araç). Hedef programı ptrace
-# ile izler, tek-adım (single-step) ile çalıştırıp yürütülen komut (instruction)
-# sayısını raporlar. Kaldıraç 5 (debugger) — self-hosting'e DOKUNMADAN (TancElf
-# codegen'i değişmedi, sadece ptrace builtin'leri eklendi).
-# Derle: ./TancElf araclar/tandbg.tan tandbg
-# Çalıştır: ./tandbg <hedef-binary>
-# NOT: adres-seviyesi (kaynak-satır için DWARF gerekir — ayrı iş). Bu, gerçek
-# dinamik izleme: fork+PTRACE_TRACEME+execve, sonra PTRACE_SINGLESTEP döngüsü.
+# tandbg.tan — TAN debugger (ptrace, AYRI araç; self-hosting'e DOKUNMAZ).
+# Modlar:
+#   ./tandbg <hedef>              → tek-adım komut sayacı + çıkış kodu
+#   ./tandbg <hedef> --syscall    → syscall izleyici (strace-lite)
+# fork+PTRACE_TRACEME+execve; SINGLESTEP ya da SYSCALL döngüsü.
+# Syscall no'ları: 0=read 1=write 2=open 3=close 9=mmap 12=brk 60=exit 231=exit_group.
+# NOT: adres-seviyesi (kaynak-satır DWARF ister — ayrı iş). TancElf codegen aynı.
+
+# register buffer'dan offset'teki 8-baytlık değeri oku (little-endian)
+işlev qwordOku(s, ofs)
+    r = 0
+    i = 0
+    iken i < 8
+        r = r | (kod(metinAl(s, ofs + i)) << (8 * i))
+        i = i + 1
+    son
+    döndür r
+son
 
 hedef = arg(1)
+syscallMod = yanlış
+eğer argsay() >= 3 ise
+    eğer metinEsit(arg(2), "--syscall") ise
+        syscallMod = doğru
+    son
+son
+
 pid = catal()
 
 eğer pid == 0 ise
-    # çocuk: kendini izlemeye aç, hedefi çalıştır
     d = izle(0, 0, 0, 0)          # PTRACE_TRACEME
     d = calistir(hedef)
     yaz("HATA: execve başarısız")
 değilse
     yaz(metinBirlestir("izleniyor: ", metinBirlestir(hedef, metinBirlestir(" (pid ", metinBirlestir(metin(pid), ")")))))
-    adim = 0
-    durum = bekle()              # execve sonrası ilk durak (SIGTRAP)
-    iken 1 < 2
-        eğer (durum & 127) == 0 ise    # WIFEXITED: düşük 7 bit 0 → çıktı
-            dur
+    durum = bekle()              # execve sonrası ilk durak
+
+    eğer syscallMod ise
+        girisMi = doğru
+        iken 1 < 2
+            eğer (durum & 127) == 0 ise
+                dur
+            son
+            d = izle(24, pid, 0, 0)   # PTRACE_SYSCALL
+            durum = bekle()
+            eğer (durum & 127) == 0 ise
+                dur
+            son
+            eğer girisMi ise
+                regs = izleRegs(pid)
+                sysno = qwordOku(regs, 120)   # orig_rax
+                yaz(metinBirlestir("  syscall ", metin(sysno)))
+            son
+            eğer girisMi ise
+                girisMi = yanlış
+            değilse
+                girisMi = doğru
+            son
         son
-        adim = adim + 1
-        d = izle(9, pid, 0, 0)   # PTRACE_SINGLESTEP
-        durum = bekle()
+        yaz("izleme bitti")
+    değilse
+        adim = 0
+        iken 1 < 2
+            eğer (durum & 127) == 0 ise
+                dur
+            son
+            adim = adim + 1
+            d = izle(9, pid, 0, 0)   # PTRACE_SINGLESTEP
+            durum = bekle()
+        son
+        cikisKodu = (durum >> 8) & 255
+        yaz(metinBirlestir("yürütülen komut sayısı: ", metin(adim)))
+        yaz(metinBirlestir("hedef çıkış kodu: ", metin(cikisKodu)))
     son
-    cikisKodu = (durum >> 8) & 255
-    yaz(metinBirlestir("yürütülen komut sayısı: ", metin(adim)))
-    yaz(metinBirlestir("hedef çıkış kodu: ", metin(cikisKodu)))
 son

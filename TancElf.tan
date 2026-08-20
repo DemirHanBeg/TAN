@@ -3013,6 +3013,33 @@ işlev calistirBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# izleRegs(pid) -> PTRACE_GETREGS, 216 baytlık register struct'ı metin döndürür.
+# orig_rax offset 120 (syscall no), rip offset 128.
+işlev izleRegsBant()
+    b = [bcEtiket("f_izleRegs")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 16))
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 7))    # [-16] = pid
+    b = listeBirlestir(b, movImm32(7, 256))
+    b = listeBirlestir(b, callBant("f_tan_ayir"))    # rax = tampon
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))     # [-8] = tampon
+    b = listeBirlestir(b, movImm32(7, 12))           # rdi = PTRACE_GETREGS
+    b = listeBirlestir(b, movYerelOku(6, 0 - 16))    # rsi = pid
+    b = listeBirlestir(b, xorKayit(2, 2))            # rdx = 0
+    b = listeBirlestir(b, movYerelOku(1, 0 - 8))
+    b = listeBirlestir(b, addImm32(1, 8))            # rcx = tampon+8
+    b = listeBirlestir(b, movKayit(10, 1))           # r10 = tampon+8
+    b = listeBirlestir(b, movImm32(0, 101))          # sys_ptrace
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelOku(1, 0 - 8))
+    b = listeBirlestir(b, movImm32(0, 216))
+    b = listeBirlestir(b, movPtrYaz(1, 0))           # tampon.uzunluk = 216
+    b = listeBirlestir(b, movYerelOku(0, 0 - 8))     # rax = tampon
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
 # bekle() -> wait4(-1, &status, 0, 0), status döndürür
 işlev bekleBant()
     b = [bcEtiket("f_bekle")]
@@ -4612,6 +4639,8 @@ işlev yardimciBagimliliklari(ad)
         döndür ["f_tan_ayir", "f_bellek_kopyala"]
     değilse eğer metinEsit(ad, "f_calistir") ise
         döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_izleRegs") ise
+        döndür ["f_tan_ayir"]
     son
     döndür []
 son
@@ -4688,8 +4717,8 @@ degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
 
 # --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
-yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_soketDinle", "f_soketKabul", "f_catal", "f_izle", "f_calistir", "f_bekle", "f_oku", "f_yazDosya", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
-yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), soketDinleBant(), soketKabulBant(), catalBant(), izleBant(), calistirBant(), bekleBant(), okuBant(), yazDosyaBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_soketDinle", "f_soketKabul", "f_catal", "f_izle", "f_calistir", "f_bekle", "f_izleRegs", "f_oku", "f_yazDosya", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), soketDinleBant(), soketKabulBant(), catalBant(), izleBant(), calistirBant(), bekleBant(), izleRegsBant(), okuBant(), yazDosyaBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
 kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
 gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 
