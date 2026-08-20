@@ -491,6 +491,86 @@ işlev astAna(yol, json)
     döndür 0
 son
 
+# ---- olcum: kod metrikleri (satır/işlev/derinlik) — K5/gözlemlenebilirlik ----
+işlev olcumAna(yol, json)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+    toplamSatir = uzunluk(satirlar)
+    doluSatir = 0
+    yorumSatir = 0
+    islevSayisi = 0
+    maksDerinlik = 0
+    derinlik = 0
+    enUzunIslev = 0
+    aktifIslevSatir = 0
+    islevIcinde = yanlış
+
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        icerik = kirp(satir)
+        eğer uzunluk(icerik) > 0 ise
+            doluSatir = doluSatir + 1
+            eğer metinAl(icerik, 0) == "#" ise
+                yorumSatir = yorumSatir + 1
+            son
+            kelime = kelimeAl(satir, b)
+            eğer metinEsit(kelime, "işlev") ise
+                islevSayisi = islevSayisi + 1
+                islevIcinde = doğru
+                aktifIslevSatir = 0
+            son
+            eğer islevIcinde ise
+                aktifIslevSatir = aktifIslevSatir + 1
+            son
+            eğer blokAcici(kelime) ise
+                derinlik = derinlik + 1
+                eğer derinlik > maksDerinlik ise
+                    maksDerinlik = derinlik
+                son
+            son
+            eğer metinEsit(kelime, "son") ise
+                eğer derinlik > 0 ise
+                    derinlik = derinlik - 1
+                son
+                eğer derinlik == 0 ve islevIcinde ise
+                    eğer aktifIslevSatir > enUzunIslev ise
+                        enUzunIslev = aktifIslevSatir
+                    son
+                    islevIcinde = yanlış
+                son
+            son
+        son
+        si = si + 1
+    son
+
+    eğer json ise
+        cikti = "{\"toplamSatir\":"
+        cikti = metinBirlestir(cikti, metin(toplamSatir))
+        cikti = metinBirlestir(cikti, ",\"doluSatir\":")
+        cikti = metinBirlestir(cikti, metin(doluSatir))
+        cikti = metinBirlestir(cikti, ",\"yorumSatir\":")
+        cikti = metinBirlestir(cikti, metin(yorumSatir))
+        cikti = metinBirlestir(cikti, ",\"islevSayisi\":")
+        cikti = metinBirlestir(cikti, metin(islevSayisi))
+        cikti = metinBirlestir(cikti, ",\"maksDerinlik\":")
+        cikti = metinBirlestir(cikti, metin(maksDerinlik))
+        cikti = metinBirlestir(cikti, ",\"enUzunIslev\":")
+        cikti = metinBirlestir(cikti, metin(enUzunIslev))
+        cikti = metinBirlestir(cikti, "}")
+        yaz(cikti)
+    değilse
+        yaz(metinBirlestir("toplam satır : ", metin(toplamSatir)))
+        yaz(metinBirlestir("dolu satır   : ", metin(doluSatir)))
+        yaz(metinBirlestir("yorum satır  : ", metin(yorumSatir)))
+        yaz(metinBirlestir("işlev sayısı : ", metin(islevSayisi)))
+        yaz(metinBirlestir("maks derinlik: ", metin(maksDerinlik)))
+        yaz(metinBirlestir("en uzun işlev: ", metinBirlestir(metin(enUzunIslev), " satır")))
+    son
+    döndür 0
+son
+
 # ---- imzala: dosyayı HMAC-SHA256 ile imzala (Kaldıraç 4: imzalı registry) ----
 işlev imzalaAna(yol, anahtar)
     yaz(metinBirlestir("", hmacSha256(anahtar, oku(yol))))

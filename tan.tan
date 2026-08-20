@@ -11,6 +11,7 @@ eğer argsay() < 2 ise
     yaz("  api          dışa-açık işlev imzaları")
     yaz("  bagimlilik   içe al grafiği")
     yaz("  ast          yapısal ayrıştırma ağacı")
+    yaz("  olcum        kod metrikleri (satır/işlev/derinlik)")
     yaz("  denetle      blok dengesi linter'ı + tanı")
     yaz("  bicimlendir  kanonik formatter (bic)")
     yaz("  kilit        içerik-adresli lockfile (SHA-256, transitive)")
@@ -63,6 +64,8 @@ değilse
                 d = bagimlilikAna(yol, json)
             değilse eğer metinEsit(komut, "ast") ise
                 d = astAna(yol, json)
+            değilse eğer metinEsit(komut, "olcum") ise
+                d = olcumAna(yol, json)
             değilse eğer metinEsit(komut, "denetle") ise
                 d = denetleAna(yol, json)
             değilse eğer metinEsit(komut, "bicimlendir") veya metinEsit(komut, "bic") ise
