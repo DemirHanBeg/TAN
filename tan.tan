@@ -10,48 +10,56 @@ eğer argsay() < 2 ise
     yaz("  simgeler     sembol listeleyici (işlev/değişken)")
     yaz("  api          dışa-açık işlev imzaları")
     yaz("  bagimlilik   içe al grafiği")
+    yaz("  ast          yapısal ayrıştırma ağacı")
     yaz("  denetle      blok dengesi linter'ı + tanı")
     yaz("  bicimlendir  kanonik formatter (bic)")
-    yaz("  kilit        içerik-adresli lockfile (transitive özet)")
+    yaz("  kilit        içerik-adresli lockfile (SHA-256, transitive)")
     yaz("  dogrula      lockfile'a karşı bütünlük kontrolü")
+    yaz("  sürüm        toolchain bilgisi")
 değilse
     komut = arg(1)
 
-    # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu
-    json = yanlış
-    yol = ""
-    ai = 2
-    iken ai < argsay()
-        a = arg(ai)
-        eğer metinEsit(a, "--json") ise
-            json = doğru
-        değilse
-            eğer uzunluk(yol) == 0 ise
-                yol = a
-            son
-        son
-        ai = ai + 1
-    son
-
-    eğer uzunluk(yol) == 0 ise
-        yaz(metinBirlestir("Hata: dosya yolu gerekli — tan ", metinBirlestir(komut, " <dosya.tan>")))
+    eğer metinEsit(komut, "sürüm") veya metinEsit(komut, "surum") ise
+        d = surumAna()
     değilse
-        eğer metinEsit(komut, "simgeler") ise
-            d = simgelerAna(yol, json)
-        değilse eğer metinEsit(komut, "api") ise
-            d = apiAna(yol, json)
-        değilse eğer metinEsit(komut, "bagimlilik") ise
-            d = bagimlilikAna(yol, json)
-        değilse eğer metinEsit(komut, "denetle") ise
-            d = denetleAna(yol, json)
-        değilse eğer metinEsit(komut, "bicimlendir") veya metinEsit(komut, "bic") ise
-            d = bicimlendirAna(yol)
-        değilse eğer metinEsit(komut, "kilit") ise
-            d = kilitAna(yol, json)
-        değilse eğer metinEsit(komut, "dogrula") ise
-            d = dogrulaAna(yol)
+        # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu
+        json = yanlış
+        yol = ""
+        ai = 2
+        iken ai < argsay()
+            a = arg(ai)
+            eğer metinEsit(a, "--json") ise
+                json = doğru
+            değilse
+                eğer uzunluk(yol) == 0 ise
+                    yol = a
+                son
+            son
+            ai = ai + 1
+        son
+
+        eğer uzunluk(yol) == 0 ise
+            yaz(metinBirlestir("Hata: dosya yolu gerekli — tan ", metinBirlestir(komut, " <dosya.tan>")))
         değilse
-            yaz(metinBirlestir("Bilinmeyen komut: ", komut))
+            eğer metinEsit(komut, "simgeler") ise
+                d = simgelerAna(yol, json)
+            değilse eğer metinEsit(komut, "api") ise
+                d = apiAna(yol, json)
+            değilse eğer metinEsit(komut, "bagimlilik") ise
+                d = bagimlilikAna(yol, json)
+            değilse eğer metinEsit(komut, "ast") ise
+                d = astAna(yol, json)
+            değilse eğer metinEsit(komut, "denetle") ise
+                d = denetleAna(yol, json)
+            değilse eğer metinEsit(komut, "bicimlendir") veya metinEsit(komut, "bic") ise
+                d = bicimlendirAna(yol)
+            değilse eğer metinEsit(komut, "kilit") ise
+                d = kilitAna(yol, json)
+            değilse eğer metinEsit(komut, "dogrula") ise
+                d = dogrulaAna(yol)
+            değilse
+                yaz(metinBirlestir("Bilinmeyen komut: ", komut))
+            son
         son
     son
 son

@@ -166,6 +166,19 @@ işlev denetleAna(yol, json)
         eğer nsatir > 0 ve bosMuk(metinAl(satir, nsatir - 1)) ise
             tanilar = ekle(tanilar, ["TAN003", "uyarı", metin(si + 1), "satır sonunda gereksiz boşluk", "satır sonu boşluk/tab diff gürültüsü ve tutarsızlık yaratır", "satır sonu boşluklarını sil (bicimlendir otomatik yapar)"])
         son
+
+        # TAN004: girintide tab (uyarı — TAN 4-boşluk kullanır)
+        ti = 0
+        tabVar = yanlış
+        iken ti < b
+            eğer metinAl(satir, ti) == karakter(9) ise
+                tabVar = doğru
+            son
+            ti = ti + 1
+        son
+        eğer tabVar ise
+            tanilar = ekle(tanilar, ["TAN004", "uyarı", metin(si + 1), "girintide tab karakteri", "TAN kanonik girintisi 4 boşluktur; tab tutarsız hizalama yaratır", "tab'ları 4 boşlukla değiştir (bicimlendir otomatik yapar)"])
+        son
         si = si + 1
     son
 
@@ -399,6 +412,90 @@ işlev dogrulaAna(kilitYol)
     değilse
         yaz(metinBirlestir("BÜTÜNLÜK BOZUK: ", metinBirlestir(metin(toplam - tamam), " dosya değişmiş")))
     son
+    döndür 0
+son
+
+# ---- ast: yapısal ayrıştırma ağacı (Kaldıraç 1) ----
+işlev astTur(kelime, satir, b)
+    eğer blokAcici(kelime) ise
+        döndür kelime
+    son
+    eğer metinEsit(kelime, "son") veya metinEsit(kelime, "değilse") veya metinEsit(kelime, "döndür") veya metinEsit(kelime, "yaz") veya metinEsit(kelime, "dur") veya metinEsit(kelime, "devam") veya metinEsit(kelime, "yakala") veya metinEsit(kelime, "içe") ise
+        döndür kelime
+    son
+    eğer b == 0 ve karakterBul(satir, "=", 0) > 0 ise
+        döndür "atama"
+    son
+    döndür "ifade"
+son
+
+işlev astAna(yol, json)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+    dugumler = []
+    derinlik = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        icerik = kirp(satir)
+        eğer uzunluk(icerik) > 0 ve metinAl(icerik, 0) != "#" ise
+            kelime = kelimeAl(satir, b)
+            d = derinlik
+            eğer metinEsit(kelime, "son") veya metinEsit(kelime, "değilse") veya metinEsit(kelime, "yakala") ise
+                eğer d > 0 ise
+                    d = d - 1
+                son
+            son
+            tur = astTur(kelime, satir, b)
+            dugumler = ekle(dugumler, [d, tur, si + 1])
+            eğer blokAcici(kelime) ise
+                derinlik = derinlik + 1
+            son
+            eğer metinEsit(kelime, "son") ise
+                eğer derinlik > 0 ise
+                    derinlik = derinlik - 1
+                son
+            son
+        son
+        si = si + 1
+    son
+
+    eğer json ise
+        cikti = "{\"ast\":["
+        i = 0
+        iken i < uzunluk(dugumler)
+            dg = dugumler[i]
+            eğer i > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"derinlik\":")
+            cikti = metinBirlestir(cikti, metin(dg[0]))
+            cikti = metinBirlestir(cikti, ",\"tur\":\"")
+            cikti = metinBirlestir(cikti, dg[1])
+            cikti = metinBirlestir(cikti, "\",\"satir\":")
+            cikti = metinBirlestir(cikti, metin(dg[2]))
+            cikti = metinBirlestir(cikti, "}")
+            i = i + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        i = 0
+        iken i < uzunluk(dugumler)
+            dg = dugumler[i]
+            yaz(metinBirlestir(girinti(dg[0]), dg[1]))
+            i = i + 1
+        son
+    son
+    döndür 0
+son
+
+# ---- sürüm ----
+işlev surumAna()
+    yaz("TAN toolchain — self-hosted (sıfır Go)")
+    yaz("araçlar: simgeler api bagimlilik ast denetle bicimlendir kilit dogrula")
+    yaz("özet: SHA-256 (kriptografik)")
     döndür 0
 son
 
