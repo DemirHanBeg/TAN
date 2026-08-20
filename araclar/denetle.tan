@@ -1,65 +1,11 @@
 # denetle.tan — TAN kaynağında blok dengesi denetimi (eksik/fazla 'son').
 # Kullanım: (tan elf ile derlenip)  ./denetle <dosya.tan> [--json]
 # TAN dilinde self-hosted tooling — Faz B / Kaldıraç 2 (linter, madde 7).
-# Blok açıcılar (işlev/eğer/iken/her/dene) ile 'son' sayısını dengeler.
-# Not: 'değilse' ve 'yakala' zincir-ortası anahtarlardır — blok AÇMAZ, 'son'
-# GEREKTİRMEZ, satır-başı kontrolde doğal olarak elenirler.
+# Ortak tarama yardımcıları kutuphane/tanoku.tan'dan (DRY).
+# 'değilse'/'yakala' zincir-ortası anahtarlardır — blok açmaz, satır-başı
+# kontrolde doğal elenir.
 
-# --- yardımcılar (simgeler.tan ile aynı; ileride kutuphane/ modülüne çıkacak) ---
-
-işlev bosMuk(c)
-    döndür c == " " veya c == karakter(9)
-son
-
-işlev satiraBol(kaynak)
-    satirlar = []
-    gecerli = ""
-    n = uzunluk(kaynak)
-    i = 0
-    iken i < n
-        c = metinAl(kaynak, i)
-        eğer c == "\n" ise
-            satirlar = ekle(satirlar, gecerli)
-            gecerli = ""
-        değilse
-            gecerli = metinBirlestir(gecerli, c)
-        son
-        i = i + 1
-    son
-    eğer uzunluk(gecerli) > 0 ise
-        satirlar = ekle(satirlar, gecerli)
-    son
-    döndür satirlar
-son
-
-işlev boslukAtla(satir, basla)
-    n = uzunluk(satir)
-    i = basla
-    iken i < n ve bosMuk(metinAl(satir, i))
-        i = i + 1
-    son
-    döndür i
-son
-
-işlev kelimeAl(satir, basla)
-    n = uzunluk(satir)
-    kelime = ""
-    i = basla
-    iken i < n
-        c = metinAl(satir, i)
-        eğer bosMuk(c) veya c == "(" ise
-            dur
-        son
-        kelime = metinBirlestir(kelime, c)
-        i = i + 1
-    son
-    döndür kelime
-son
-
-# ilk kelime blok açıcı mı? (son gerektiren)
-işlev blokAcici(k)
-    döndür metinEsit(k, "işlev") veya metinEsit(k, "eğer") veya metinEsit(k, "iken") veya metinEsit(k, "her") veya metinEsit(k, "dene")
-son
+içe al "kutuphane/tanoku.tan"
 
 # --- sürücü ---
 
@@ -103,7 +49,6 @@ değilse
         si = si + 1
     son
 
-    # dosya sonunda kapatılmamış bloklar
     eğer derinlik > 0 ise
         sorunlar = ekle(sorunlar, ["eksik_son", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)")])
     son

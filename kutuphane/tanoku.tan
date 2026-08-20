@@ -1,0 +1,119 @@
+# tanoku.tan — TAN kaynak-tarama ortak yardımcıları (tooling paylaşımlı modülü).
+# simgeler / denetle / bicimlendir ve gelecekteki LSP bunu `içe al` ile kullanır.
+# DRY: tek tokenizer/tarama çekirdeği (Go'da her araç kendi parser'ını yazıyordu).
+# Doğrulanmış yerleşikler: uzunluk, metinAl, metinBirlestir, karakter, metinEsit, ekle.
+
+# boşluk/tab mı?
+işlev bosMuk(c)
+    döndür c == " " veya c == karakter(9)
+son
+
+# kaynağı "\n" ile satırlara böler
+işlev satiraBol(kaynak)
+    satirlar = []
+    gecerli = ""
+    n = uzunluk(kaynak)
+    i = 0
+    iken i < n
+        c = metinAl(kaynak, i)
+        eğer c == "\n" ise
+            satirlar = ekle(satirlar, gecerli)
+            gecerli = ""
+        değilse
+            gecerli = metinBirlestir(gecerli, c)
+        son
+        i = i + 1
+    son
+    eğer uzunluk(gecerli) > 0 ise
+        satirlar = ekle(satirlar, gecerli)
+    son
+    döndür satirlar
+son
+
+# basla'dan ilk boş olmayan indeksi döndürür
+işlev boslukAtla(satir, basla)
+    n = uzunluk(satir)
+    i = basla
+    iken i < n ve bosMuk(metinAl(satir, i))
+        i = i + 1
+    son
+    döndür i
+son
+
+# basla'dan durucuya (boşluk, "(", "=") kadar kelime okur
+işlev kelimeAl(satir, basla)
+    n = uzunluk(satir)
+    kelime = ""
+    i = basla
+    iken i < n
+        c = metinAl(satir, i)
+        eğer bosMuk(c) veya c == "(" veya c == "=" ise
+            dur
+        son
+        kelime = metinBirlestir(kelime, c)
+        i = i + 1
+    son
+    döndür kelime
+son
+
+# "(" indeksinden ")" e kadar parametre metni
+işlev parametreAl(satir, acKonum)
+    n = uzunluk(satir)
+    icerik = ""
+    i = acKonum + 1
+    iken i < n
+        c = metinAl(satir, i)
+        eğer c == ")" ise
+            dur
+        son
+        icerik = metinBirlestir(icerik, c)
+        i = i + 1
+    son
+    döndür icerik
+son
+
+# satirda hedef karakteri basla'dan arar, indeks veya -1
+işlev karakterBul(satir, hedef, basla)
+    n = uzunluk(satir)
+    i = basla
+    iken i < n
+        eğer metinAl(satir, i) == hedef ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# ilk kelime blok açıcı mı? (son gerektiren)
+işlev blokAcici(k)
+    döndür metinEsit(k, "işlev") veya metinEsit(k, "eğer") veya metinEsit(k, "iken") veya metinEsit(k, "her") veya metinEsit(k, "dene")
+son
+
+# baştaki/sondaki boşlukları kırpar
+işlev kirp(satir)
+    n = uzunluk(satir)
+    bas = boslukAtla(satir, 0)
+    ucu = n
+    iken ucu > bas ve bosMuk(metinAl(satir, ucu - 1))
+        ucu = ucu - 1
+    son
+    sonuc = ""
+    i = bas
+    iken i < ucu
+        sonuc = metinBirlestir(sonuc, metinAl(satir, i))
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# n seviye girinti (4 boşluk/seviye)
+işlev girinti(n)
+    s = ""
+    i = 0
+    iken i < n
+        s = metinBirlestir(s, "    ")
+        i = i + 1
+    son
+    döndür s
+son
