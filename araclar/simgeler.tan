@@ -1,0 +1,194 @@
+# simgeler.tan — TAN kaynağındaki işlev ve değişken simgelerini listeler.
+# Kullanım: (tan elf ile derlenip)  ./simgeler <dosya.tan> [--json]
+# TAN dilinde yazılmıştır (self-hosted tooling — LSP temeli, Faz B / Kaldıraç 1).
+# Sadece doğrulanmış yerleşikler kullanılır: oku, arg, argSay, uzunluk, metinAl,
+# metinBirlestir, metin, karakter, kod, ekle, yaz, metinEsit.
+
+# --- yardımcı işlevler ---
+
+işlev bosMuk(c)
+    döndür c == " " veya c == karakter(9)
+son
+
+# anahtar kelime mi? (üst-seviye değişken tespitinde eğer/iken/... elenir)
+işlev anahtarMiKelime(k)
+    anahtarlar = ["yaz", "eğer", "ise", "değilse", "iken", "işlev", "döndür", "son", "her", "içinde", "dur", "devam", "içe", "al", "doğru", "yanlış", "yok", "ve", "veya", "değil", "köprü", "dene", "yakala"]
+    her a anahtarlar içinde
+        eğer metinEsit(k, a) ise
+            döndür doğru
+        son
+    son
+    döndür yanlış
+son
+
+# kaynağı "\n" ile satırlara böler, satır listesi döndürür
+işlev satiraBol(kaynak)
+    satirlar = []
+    gecerli = ""
+    n = uzunluk(kaynak)
+    i = 0
+    iken i < n
+        c = metinAl(kaynak, i)
+        eğer c == "\n" ise
+            satirlar = ekle(satirlar, gecerli)
+            gecerli = ""
+        değilse
+            gecerli = metinBirlestir(gecerli, c)
+        son
+        i = i + 1
+    son
+    eğer uzunluk(gecerli) > 0 ise
+        satirlar = ekle(satirlar, gecerli)
+    son
+    döndür satirlar
+son
+
+# basla'dan ilk boş olmayan indeksi döndürür
+işlev boslukAtla(satir, basla)
+    n = uzunluk(satir)
+    i = basla
+    iken i < n ve bosMuk(metinAl(satir, i))
+        i = i + 1
+    son
+    döndür i
+son
+
+# basla'dan itibaren durucuya (boşluk, "(", "=") kadar kelime okur
+işlev kelimeAl(satir, basla)
+    n = uzunluk(satir)
+    kelime = ""
+    i = basla
+    iken i < n
+        c = metinAl(satir, i)
+        eğer bosMuk(c) veya c == "(" veya c == "=" ise
+            dur
+        son
+        kelime = metinBirlestir(kelime, c)
+        i = i + 1
+    son
+    döndür kelime
+son
+
+# "(" indeksinden ")" e kadar parametre metnini döndürür
+işlev parametreAl(satir, acKonum)
+    n = uzunluk(satir)
+    icerik = ""
+    i = acKonum + 1
+    iken i < n
+        c = metinAl(satir, i)
+        eğer c == ")" ise
+            dur
+        son
+        icerik = metinBirlestir(icerik, c)
+        i = i + 1
+    son
+    döndür icerik
+son
+
+# satirda hedef karakteri basla'dan itibaren arar, indeks veya -1 döndürür
+işlev karakterBul(satir, hedef, basla)
+    n = uzunluk(satir)
+    i = basla
+    iken i < n
+        eğer metinAl(satir, i) == hedef ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# --- sürücü ---
+
+eğer argsay() < 2 ise
+    yaz("Kullanım: simgeler <dosya.tan> [--json]")
+değilse
+    yol = arg(1)
+
+    # --json bayrağı var mı? (argsay argc'dir: argv[0]=program adı dahil)
+    json = yanlış
+    ai = 1
+    iken ai < argsay()
+        eğer metinEsit(arg(ai), "--json") ise
+            json = doğru
+        son
+        ai = ai + 1
+    son
+
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+
+    # simgeler: her eleman [tur, ad, satir(metin), parametreler] — hepsi metin
+    simgeler = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+
+        eğer metinEsit(kelime, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kelime))
+            ad = kelimeAl(satir, adBasla)
+            acKonum = karakterBul(satir, "(", adBasla)
+            parametreler = ""
+            eğer acKonum >= 0 ise
+                parametreler = parametreAl(satir, acKonum)
+            son
+            simgeler = ekle(simgeler, ["işlev", ad, metin(si + 1), parametreler])
+        değilse
+            # üst-seviye değişken: girintisiz (b == 0), "=" içeriyor, anahtar değil
+            eğer b == 0 ise
+                esit = karakterBul(satir, "=", 0)
+                ad = kelimeAl(satir, 0)
+                eğer esit > 0 ve uzunluk(ad) > 0 ve metinAl(ad, 0) != "#" ve anahtarMiKelime(ad) == yanlış ise
+                    simgeler = ekle(simgeler, ["değişken", ad, metin(si + 1), ""])
+                son
+            son
+        son
+        si = si + 1
+    son
+
+    # --- çıktı ---
+    eğer json ise
+        cikti = "{\"simgeler\":["
+        si = 0
+        iken si < uzunluk(simgeler)
+            s = simgeler[si]
+            eğer si > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"tur\":\"")
+            cikti = metinBirlestir(cikti, s[0])
+            cikti = metinBirlestir(cikti, "\",\"ad\":\"")
+            cikti = metinBirlestir(cikti, s[1])
+            cikti = metinBirlestir(cikti, "\",\"satir\":")
+            cikti = metinBirlestir(cikti, s[2])
+            eğer metinEsit(s[0], "işlev") ise
+                cikti = metinBirlestir(cikti, ",\"parametreler\":\"")
+                cikti = metinBirlestir(cikti, s[3])
+                cikti = metinBirlestir(cikti, "\"")
+            son
+            cikti = metinBirlestir(cikti, "}")
+            si = si + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        si = 0
+        iken si < uzunluk(simgeler)
+            s = simgeler[si]
+            eğer metinEsit(s[0], "işlev") ise
+                cikti = metinBirlestir("işlev ", s[1])
+                cikti = metinBirlestir(cikti, "(")
+                cikti = metinBirlestir(cikti, s[3])
+                cikti = metinBirlestir(cikti, ")")
+            değilse
+                cikti = metinBirlestir("değişken ", s[1])
+            son
+            cikti = metinBirlestir(cikti, "  satır ")
+            cikti = metinBirlestir(cikti, s[2])
+            yaz(cikti)
+            si = si + 1
+        son
+    son
+son
