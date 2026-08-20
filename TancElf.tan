@@ -2888,6 +2888,36 @@ işlev soketKapatBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# soketDinle(rdi=fd, rsi=sockaddr16) -> bind + listen (sunucu için)
+işlev soketDinleBant()
+    b = [bcEtiket("f_soketDinle")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 16))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 7))     # [-8] = fd
+    b = listeBirlestir(b, leaDolayli(6, 6, 8))       # rsi = addr+8
+    b = listeBirlestir(b, movImm32(2, 16))
+    b = listeBirlestir(b, movImm32(0, 49))           # sys_bind
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelOku(7, 0 - 8))     # rdi = fd
+    b = listeBirlestir(b, movImm32(6, 16))           # rsi = backlog
+    b = listeBirlestir(b, movImm32(0, 50))           # sys_listen
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelOku(0, 0 - 8))     # rax = fd
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
+# soketKabul(rdi=fd) -> accept, istemci fd
+işlev soketKabulBant()
+    b = [bcEtiket("f_soketKabul")]
+    b = listeBirlestir(b, xorKayit(6, 6))        # rsi = 0
+    b = listeBirlestir(b, xorKayit(2, 2))        # rdx = 0
+    b = listeBirlestir(b, movImm32(0, 43))       # sys_accept
+    b = listeBirlestir(b, syscallEmit())
+    döndür listeBirlestir(b, retBant())
+son
+
 # dosyaVarMi(rdi=yol metni) -> rax=1/0 — oku() ÖNCESİ varlık kontrolü için
 # (oku() eksik dosyada hata denetimi yapmadan çöp uzunluk üretir). Mantık
 # DerleElf.go'nun f_dosya_var_mi'siyle BİREBİR aynı (open+close syscall,
@@ -4536,8 +4566,8 @@ degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
 
 # --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
-yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_oku", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
-yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), okuBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_soketDinle", "f_soketKabul", "f_oku", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), soketDinleBant(), soketKabulBant(), okuBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
 kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
 gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 

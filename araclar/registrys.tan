@@ -1,0 +1,63 @@
+# registrys.tan — TAN paket registry SUNUCUSU (HTTP/1.0, plain TCP).
+# Kaldıraç 4: tam self-hosted registry (client=tan cek, server=bu). cwd'deki
+# dosyaları HTTP üzerinden servis eder. Bütünlük: istemci SHA-256 ile doğrular.
+# Derle: ./TancElf araclar/registrys.tan registrys
+# Çalıştır: ./registrys <port>   (cwd = paket dizini)
+# NOT: TLS yok (plain HTTP, LAN/yerel). TLS = ayrı büyük iş (handshake).
+
+içe al "kutuphane/ag.tan"
+
+işlev syToInt(s)
+    n = uzunluk(s)
+    r = 0
+    i = 0
+    iken i < n
+        k = kod(metinAl(s, i))
+        eğer k >= 48 ve k <= 57 ise
+            r = r * 10 + (k - 48)
+        son
+        i = i + 1
+    son
+    döndür r
+son
+
+# "GET /yol HTTP/1.0..." → "yol" (baştaki / atılmış)
+işlev istekYolu(istek)
+    n = uzunluk(istek)
+    # "GET " sonrası
+    i = 4
+    # baştaki / atla
+    iken i < n ve metinAl(istek, i) == "/"
+        i = i + 1
+    son
+    yol = ""
+    iken i < n ve metinAl(istek, i) != " "
+        yol = metinBirlestir(yol, metinAl(istek, i))
+        i = i + 1
+    son
+    döndür yol
+son
+
+port = syToInt(arg(1))
+fd = soketAc()
+addr = sockaddrYap(0, 0, 0, 0, port)
+d = soketDinle(fd, addr)
+yaz(metinBirlestir("TAN registry dinliyor — port ", metin(port)))
+
+iken 1 < 2
+    istemci = soketKabul(fd)
+    eğer istemci >= 0 ise
+        istek = soketOku(istemci, 8192)
+        yol = istekYolu(istek)
+        eğer dosyaVarMi(yol) ise
+            govde = oku(yol)
+            uzun = uzunluk(govde)
+            baslik = metinBirlestir("HTTP/1.0 200 OK\r\nContent-Length: ", metinBirlestir(metin(uzun), "\r\nConnection: close\r\n\r\n"))
+            d = soketYaz(istemci, baslik)
+            d = soketYaz(istemci, metinBirlestir("", govde))
+        değilse
+            d = soketYaz(istemci, "HTTP/1.0 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nbulunamadı")
+        son
+        d = soketKapat(istemci)
+    son
+son
