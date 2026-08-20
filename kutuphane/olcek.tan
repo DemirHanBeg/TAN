@@ -1,0 +1,24 @@
+# olcek.tan — TAN benchmark/profiling yardımcıları (zaman() builtin üzerine).
+# Manuel enstrümantasyon (Go testing.B tarzı). Otomatik per-işlev profiling
+# derleyici enstrümantasyonu ister (ayrı büyük iş) — bu, ölçüm primitifidir.
+
+# ölçüme başla → başlangıç ns
+işlev olcekBasla()
+    döndür zaman()
+son
+
+# ölçümü bitir, geçen ns'yi yazdır ve döndür
+işlev olcekBitir(baslangic, ad)
+    gecen = zaman() - baslangic
+    yaz(metinBirlestir(ad, metinBirlestir(": ", metinBirlestir(metin(gecen), " ns"))))
+    döndür gecen
+son
+
+# ns → okunabilir (µs/ms yaklaşık, tamsayı bölme)
+işlev olcekMs(ns)
+    döndür tamBol(ns, 1000000)
+son
+
+işlev olcekUs(ns)
+    döndür tamBol(ns, 1000)
+son

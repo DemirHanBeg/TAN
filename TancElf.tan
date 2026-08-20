@@ -2741,6 +2741,26 @@ işlev okuBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# zaman() -> monoton saat, nanosaniye (clock_gettime CLOCK_MONOTONIC).
+# Profiling/benchmark için. tv_sec*1e9 + tv_nsec.
+işlev zamanBant()
+    b = [bcEtiket("f_zaman")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 32))
+    b = listeBirlestir(b, movImm32(7, 1))            # rdi = CLOCK_MONOTONIC
+    b = listeBirlestir(b, leaRbp(6, 0 - 16))         # rsi = &timespec (rbp-16)
+    b = listeBirlestir(b, movImm32(0, 228))          # sys_clock_gettime
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelOku(0, 0 - 16))    # rax = tv_sec
+    b = listeBirlestir(b, movImm32(1, 1000000000))   # rcx = 1e9
+    b = listeBirlestir(b, imulKayit(0, 1))           # rax *= 1e9
+    b = listeBirlestir(b, movYerelOku(1, 0 - 8))     # rcx = tv_nsec
+    b = listeBirlestir(b, addKayit(0, 1))            # rax += nsec
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())
+son
+
 # yazHam(metin) -> stdout'a YENİ SATIR EKLEMEDEN yazar. LSP çerçeveleme
 # (Content-Length + gövde) ve ham çıktı için (yaz() daima \n ekler).
 işlev yazHamBant()
@@ -4451,8 +4471,8 @@ degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
 
 # --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
-yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_oku", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
-yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), okuBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_oku", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), okuBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
 kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
 gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 
