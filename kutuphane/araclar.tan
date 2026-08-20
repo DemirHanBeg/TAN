@@ -3,7 +3,7 @@
 # Kaldıraç 5 (tek toolchain) + Kaldıraç 1 (tooling). Ortak tarama: tanoku.tan.
 
 içe al "kutuphane/tanoku.tan"
-içe al "kutuphane/ozet.tan"
+içe al "kutuphane/sha256.tan"
 
 # bir kaynaktaki tüm `içe al "yol"` bağımlılıklarını liste olarak döndürür
 işlev iceAlleriBul(kaynak)
@@ -322,7 +322,7 @@ işlev kilitAna(yol, json)
         eğer metinListedeVarMi(gorulen, aktif) == yanlış ise
             gorulen = ekle(gorulen, aktif)
             kaynak = oku(aktif)
-            kayitlar = ekle(kayitlar, [aktif, metin(ozet(kaynak))])
+            kayitlar = ekle(kayitlar, [aktif, metinBirlestir("", sha256(kaynak))])
             depler = iceAlleriBul(kaynak)
             di = 0
             iken di < uzunluk(depler)
@@ -380,7 +380,7 @@ işlev dogrulaAna(kilitYol)
                 dyol = metinBirlestir(dyol, metinAl(satir, j))
                 j = j + 1
             son
-            gercekOzet = metin(ozet(oku(dyol)))
+            gercekOzet = metinBirlestir("", sha256(oku(dyol)))
             toplam = toplam + 1
             eğer metinEsit(beklenenOzet, gercekOzet) ise
                 tamam = tamam + 1
