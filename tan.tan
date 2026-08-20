@@ -81,6 +81,8 @@ değilse
                 d = bicimlendirAna(yol)
             değilse eğer metinEsit(komut, "kilit") ise
                 d = kilitAna(yol, json)
+            değilse eğer metinEsit(komut, "kilityaz") ise
+                d = kilitYazAna(yol)
             değilse eğer metinEsit(komut, "dogrula") ise
                 d = dogrulaAna(yol)
             değilse

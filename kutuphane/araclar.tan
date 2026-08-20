@@ -442,6 +442,40 @@ işlev kilitAna(yol, json)
     döndür 0
 son
 
+# lockfile içeriğini (düz "sha  yol\n"...) metin olarak üretir
+işlev kilitIcerik(yol)
+    kuyruk = [yol]
+    gorulen = []
+    icerik = ""
+    ki = 0
+    iken ki < uzunluk(kuyruk)
+        aktif = kuyruk[ki]
+        ki = ki + 1
+        eğer metinListedeVarMi(gorulen, aktif) == yanlış ise
+            gorulen = ekle(gorulen, aktif)
+            kaynak = oku(aktif)
+            satirBir = metinBirlestir(metinBirlestir("", sha256(kaynak)), metinBirlestir("  ", metinBirlestir(aktif, karakter(10))))
+            icerik = metinBirlestir(icerik, satirBir)
+            depler = iceAlleriBul(kaynak)
+            di = 0
+            iken di < uzunluk(depler)
+                kuyruk = ekle(kuyruk, depler[di])
+                di = di + 1
+            son
+        son
+    son
+    döndür icerik
+son
+
+# ---- kilityaz: lockfile'ı <yol>.kilit dosyasına yaz (Kaldıraç 3) ----
+işlev kilitYazAna(yol)
+    icerik = kilitIcerik(yol)
+    hedef = metinBirlestir(yol, ".kilit")
+    d = yazDosya(hedef, icerik)
+    yaz(metinBirlestir("lockfile yazıldı: ", hedef))
+    döndür 0
+son
+
 # ---- dogrula: lockfile'a karşı bütünlük kontrolü (Kaldıraç 4) ----
 # `tan kilit X > X.kilit` ile üretilen düz lockfile'ı okur, her dosyayı yeniden
 # hash'ler, beklenen==gerçek karşılaştırır. Tampering/drift tespiti (madde 29).
