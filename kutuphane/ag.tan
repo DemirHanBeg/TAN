@@ -1,0 +1,73 @@
+# ag.tan — TAN ağ (TCP/HTTP) kütüphanesi. Soket yerleşikleri üzerine
+# (soketAc/Bagla/Yaz/Oku/Kapat). Kaldıraç 4: uzak registry (plain TCP/HTTP).
+# NOT: TLS/HTTPS ve DNS YOK — düz HTTP + nokta-IP (LAN/yerel registry). Gerçek
+# public registry HTTPS ister (ayrı büyük iş: TLS handshake). Bütünlük mevcut
+# SHA-256/HMAC ile sağlanır (indirilen paket dogrula ile doğrulanır).
+
+# 16 baytlık sockaddr_in metni (AF_INET, port big-endian, IPv4)
+işlev sockaddrYap(ip1, ip2, ip3, ip4, port)
+    s = metinBirlestir(karakter(2), karakter(0))            # AF_INET (little)
+    s = metinBirlestir(s, karakter((port >> 8) & 255))      # port hi (big-endian)
+    s = metinBirlestir(s, karakter(port & 255))             # port lo
+    s = metinBirlestir(s, karakter(ip1 & 255))
+    s = metinBirlestir(s, karakter(ip2 & 255))
+    s = metinBirlestir(s, karakter(ip3 & 255))
+    s = metinBirlestir(s, karakter(ip4 & 255))
+    i = 0
+    iken i < 8
+        s = metinBirlestir(s, karakter(0))
+        i = i + 1
+    son
+    döndür s
+son
+
+# tüm yanıtı oku (bağlantı kapanana/veri bitene kadar)
+işlev soketTumunuOku(fd)
+    tumu = ""
+    iken 1 < 2
+        parca = soketOku(fd, 65536)
+        eğer uzunluk(parca) == 0 ise
+            döndür tumu
+        son
+        tumu = metinBirlestir(tumu, parca)
+    son
+    döndür tumu
+son
+
+# HTTP/1.0 GET — ip (4 sayı), port, yol → ham yanıt (header+gövde)
+işlev httpGet(ip1, ip2, ip3, ip4, port, yol)
+    fd = soketAc()
+    eğer fd < 0 ise
+        döndür ""
+    son
+    addr = sockaddrYap(ip1, ip2, ip3, ip4, port)
+    r = soketBagla(fd, addr)
+    eğer r < 0 ise
+        d = soketKapat(fd)
+        döndür ""
+    son
+    istek = metinBirlestir("GET ", metinBirlestir(yol, " HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+    d = soketYaz(fd, istek)
+    yanit = soketTumunuOku(fd)
+    d = soketKapat(fd)
+    döndür yanit
+son
+
+# HTTP yanıtından gövdeyi ayır (ilk \r\n\r\n sonrası)
+işlev httpGovde(yanit)
+    n = uzunluk(yanit)
+    i = 0
+    iken i + 3 < n
+        eğer metinAl(yanit, i) == karakter(13) ve metinAl(yanit, i + 1) == karakter(10) ve metinAl(yanit, i + 2) == karakter(13) ve metinAl(yanit, i + 3) == karakter(10) ise
+            govde = ""
+            j = i + 4
+            iken j < n
+                govde = metinBirlestir(govde, metinAl(yanit, j))
+                j = j + 1
+            son
+            döndür govde
+        son
+        i = i + 1
+    son
+    döndür yanit
+son
