@@ -33,6 +33,14 @@ işlev iceAlleriBul(kaynak)
     döndür baglar
 son
 
+# kaynak oku: yol "-" ise stdin'den, değilse dosyadan (pipe/editör desteği)
+işlev kaynakOku(yol)
+    eğer metinEsit(yol, "-") ise
+        döndür girdiOku()
+    son
+    döndür oku(yol)
+son
+
 # metin listede var mı? (metinEsit ile)
 işlev metinListedeVarMi(liste, hedef)
     i = 0
@@ -58,7 +66,7 @@ son
 
 # ---- simgeler: sembol listeleyici ----
 işlev simgelerAna(yol, json)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
 
     simgeler = []
@@ -138,7 +146,7 @@ son
 # Tanı kaydı: [kod, önem, satır(metin), mesaj, sebep, çözüm] — AI-native.
 # JSON şeması: {"tani":[{"kod","onem","satir","mesaj","sebep","cozum"}]}
 işlev denetleAna(yol, json)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
 
     tanilar = []
@@ -237,7 +245,7 @@ son
 
 # ---- api: dışa-açık işlev imzaları (Kaldıraç 1) ----
 işlev apiAna(yol, json)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
     imzalar = []
     si = 0
@@ -430,7 +438,7 @@ işlev astTur(kelime, satir, b)
 son
 
 işlev astAna(yol, json)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
     dugumler = []
     derinlik = 0
@@ -493,7 +501,7 @@ son
 
 # ---- olcum: kod metrikleri (satır/işlev/derinlik) — K5/gözlemlenebilirlik ----
 işlev olcumAna(yol, json)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
     toplamSatir = uzunluk(satirlar)
     doluSatir = 0
@@ -600,7 +608,7 @@ son
 
 # ---- bicimlendir: kanonik formatter ----
 işlev bicimlendirAna(yol)
-    kaynak = oku(yol)
+    kaynak = kaynakOku(yol)
     satirlar = satiraBol(kaynak)
 
     derinlik = 0
