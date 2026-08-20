@@ -1,0 +1,254 @@
+# lsp.tan — TAN için minimal LSP (Language Server Protocol) sunucusu.
+# stdio üzerinden: initialize, textDocument/documentSymbol, shutdown, exit.
+# Kaldıraç 1'i tamamlar: gerçek editör entegrasyonu (VS Code vb.).
+# Derle: ./TancElf araclar/lsp.tan tanlsp   →  editör "tanlsp" komutunu çalıştırır.
+# Builtin: girdiOkuN (n bayt), yazHam (ham stdout). Ortak: tanoku.tan.
+
+içe al "kutuphane/tanoku.tan"
+
+# ---- LSP transport ----
+
+# başlığı \r\n\r\n görene kadar bayt-bayt oku
+işlev lspBaslikOku()
+    h = ""
+    iken 1 < 2
+        c = girdiOkuN(1)
+        eğer uzunluk(c) == 0 ise
+            döndür ""
+        son
+        h = metinBirlestir(h, c)
+        n = uzunluk(h)
+        eğer n >= 4 ve metinAl(h, n - 4) == karakter(13) ve metinAl(h, n - 3) == karakter(10) ve metinAl(h, n - 2) == karakter(13) ve metinAl(h, n - 1) == karakter(10) ise
+            döndür h
+        son
+    son
+    döndür h
+son
+
+# alt metni ara, başlangıç indeksi veya -1
+işlev altMetinBul(s, alt)
+    ns = uzunluk(s)
+    na = uzunluk(alt)
+    i = 0
+    iken i + na <= ns
+        j = 0
+        eslesme = doğru
+        iken j < na
+            eğer metinAl(s, i + j) != metinAl(alt, j) ise
+                eslesme = yanlış
+            son
+            j = j + 1
+        son
+        eğer eslesme ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+# indeks bas'tan itibaren rakamları tam sayıya çevir
+işlev metinRakamlari(s, bas)
+    n = uzunluk(s)
+    i = bas
+    iken i < n ve metinAl(s, i) == " "
+        i = i + 1
+    son
+    sonuc = 0
+    iken i < n
+        c = metinAl(s, i)
+        k = kod(c)
+        eğer k >= 48 ve k <= 57 ise
+            sonuc = sonuc * 10 + (k - 48)
+        değilse
+            i = n
+        son
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# başlıktan Content-Length değeri
+işlev lspUzunluk(baslik)
+    idx = altMetinBul(baslik, "Content-Length:")
+    eğer idx < 0 ise
+        döndür 0
+    son
+    döndür metinRakamlari(baslik, idx + 15)
+son
+
+# gövdeyi tam n bayt oku (kısmi dönüşleri topla)
+işlev lspGovdeOku(n)
+    govde = ""
+    iken uzunluk(govde) < n
+        kalan = n - uzunluk(govde)
+        parca = girdiOkuN(kalan)
+        eğer uzunluk(parca) == 0 ise
+            döndür govde
+        son
+        govde = metinBirlestir(govde, parca)
+    son
+    döndür govde
+son
+
+# yanıtı çerçeveleyip yaz
+işlev lspYaz(govde)
+    yazHam(metinBirlestir("Content-Length: ", metinBirlestir(metin(uzunluk(govde)), metinBirlestir(karakter(13), metinBirlestir(karakter(10), metinBirlestir(karakter(13), karakter(10)))))))
+    yazHam(govde)
+son
+
+# ---- JSON ayıklama (kaba string-tarama, iyi biçimli LSP için yeterli) ----
+
+# "anahtar":"deger" → deger (metin)
+işlev jsonMetin(s, anahtar)
+    ara = metinBirlestir("\"", metinBirlestir(anahtar, "\""))
+    idx = altMetinBul(s, ara)
+    eğer idx < 0 ise
+        döndür ""
+    son
+    # anahtar sonrası ilk çift tırnak (değerin başı)
+    i = idx + uzunluk(ara)
+    n = uzunluk(s)
+    iken i < n ve metinAl(s, i) != "\""
+        i = i + 1
+    son
+    i = i + 1
+    deger = ""
+    iken i < n ve metinAl(s, i) != "\""
+        deger = metinBirlestir(deger, metinAl(s, i))
+        i = i + 1
+    son
+    döndür deger
+son
+
+# "anahtar":TOKEN → ham token (sayı/id için, virgüle/süse kadar)
+işlev jsonHam(s, anahtar)
+    ara = metinBirlestir("\"", metinBirlestir(anahtar, "\":"))
+    idx = altMetinBul(s, ara)
+    eğer idx < 0 ise
+        döndür "0"
+    son
+    i = idx + uzunluk(ara)
+    n = uzunluk(s)
+    iken i < n ve metinAl(s, i) == " "
+        i = i + 1
+    son
+    tok = ""
+    iken i < n
+        c = metinAl(s, i)
+        eğer c == "," veya c == "}" veya c == " " ise
+            i = n
+        değilse
+            tok = metinBirlestir(tok, c)
+            i = i + 1
+        son
+    son
+    döndür tok
+son
+
+# uri (file:///yol) → dosya yolu
+işlev uriYol(uri)
+    on = "file://"
+    idx = altMetinBul(uri, on)
+    eğer idx < 0 ise
+        döndür uri
+    son
+    yol = ""
+    i = idx + uzunluk(on)
+    n = uzunluk(uri)
+    iken i < n
+        yol = metinBirlestir(yol, metinAl(uri, i))
+        i = i + 1
+    son
+    # Windows /C:/... → C:/... (baştaki tek / kaldır)
+    eğer uzunluk(yol) >= 3 ve metinAl(yol, 0) == "/" ve metinAl(yol, 2) == ":" ise
+        kesik = ""
+        j = 1
+        iken j < uzunluk(yol)
+            kesik = metinBirlestir(kesik, metinAl(yol, j))
+            j = j + 1
+        son
+        döndür kesik
+    son
+    döndür yol
+son
+
+# ---- documentSymbol: kaynaktan sembol listesi [ad, kind, satir] ----
+işlev lspSimgeler(kaynak)
+    satirlar = satiraBol(kaynak)
+    liste = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer metinEsit(kelime, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kelime))
+            ad = kelimeAl(satir, adBasla)
+            liste = ekle(liste, [ad, 12, si])
+        son
+        si = si + 1
+    son
+    döndür liste
+son
+
+# documentSymbol yanıtı yaz (id, kaynak)
+işlev lspDocumentSymbol(id, kaynak)
+    simgeler = lspSimgeler(kaynak)
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":["))
+    i = 0
+    iken i < uzunluk(simgeler)
+        sm = simgeler[i]
+        eğer i > 0 ise
+            govde = metinBirlestir(govde, ",")
+        son
+        satirNo = metin(sm[2])
+        aralik = metinBirlestir("{\"start\":{\"line\":", metinBirlestir(satirNo, ",\"character\":0},\"end\":{\"line\":"))
+        aralik = metinBirlestir(aralik, metinBirlestir(satirNo, ",\"character\":0}}"))
+        govde = metinBirlestir(govde, metinBirlestir("{\"name\":\"", sm[0]))
+        govde = metinBirlestir(govde, metinBirlestir("\",\"kind\":", metin(sm[1])))
+        govde = metinBirlestir(govde, metinBirlestir(",\"range\":", aralik))
+        govde = metinBirlestir(govde, metinBirlestir(",\"selectionRange\":", aralik))
+        govde = metinBirlestir(govde, "}")
+        i = i + 1
+    son
+    govde = metinBirlestir(govde, "]}")
+    lspYaz(govde)
+    döndür 0
+son
+
+# initialize yanıtı
+işlev lspInitialize(id)
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true}}}"))
+    lspYaz(govde)
+    döndür 0
+son
+
+# ---- ana döngü ----
+işlev lspCalis()
+    iken 1 < 2
+        baslik = lspBaslikOku()
+        eğer uzunluk(baslik) == 0 ise
+            döndür 0
+        son
+        n = lspUzunluk(baslik)
+        govde = lspGovdeOku(n)
+        yontem = jsonMetin(govde, "method")
+        id = jsonHam(govde, "id")
+
+        eğer metinEsit(yontem, "initialize") ise
+            d = lspInitialize(id)
+        değilse eğer metinEsit(yontem, "textDocument/documentSymbol") ise
+            uri = jsonMetin(govde, "uri")
+            yol = uriYol(uri)
+            d = lspDocumentSymbol(id, oku(yol))
+        değilse eğer metinEsit(yontem, "shutdown") ise
+            lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
+        değilse eğer metinEsit(yontem, "exit") ise
+            döndür 0
+        son
+    son
+    döndür 0
+son
+
+d = lspCalis()
