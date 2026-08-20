@@ -1,0 +1,11 @@
+# test_error.tan — VETA error library smoke test
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Kural: mevcut TancElf binary'sini kullan; bootstrap yenilenmediği sürece QEMU throttle engelliyorum.
+
+# hata fırlatma ve mesajı
+içe al "../source/error/source/hata.tan"
+
+yaz("hata testi: ")
+yaz(hataMesajı(hataOlustur("test hatası")))
+yaz("\n")

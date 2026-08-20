@@ -1,0 +1,195 @@
+# metin.tan — string/char foundation library (karakter/byte katmanı)
+# TAN-native, self-hosted derleyici (TancElf.tan) ile derlenir.
+# Yalnızca tip-bağımsız yerleşikler (metinAl, metinEsit, metinBirlestir,
+# uzunluk, kod, karakter) kullanır. Parametre/dönüş tip-çıkarımı
+# sınırlı kalıplarla çalışır (TAN_CAPABILITY_AUDIT.md §7).
+#
+# KULLANIM KISITLARI:
+# - String döndüren işlevlerliteral veya bilinen yerleşik zincirleriyle dönmeli;
+#   değişken dönüşü çağıranda "tam" görünür (tip-çıkarımı sınırı).
+# - Bu kütüphane predicate (tam döndüren) fonksiyonlara odaklanır.
+# - Tek karakter dönüşleri (kucukHarf, buyukHarf) döndür ... karakter(...)
+#   kalıbıyla metin tipinde çalışır.
+
+# --- KARAKTER/BAYT SINIFLANDIRMALARI ---
+# Bu fonksiyonlar tam (byte kodu) alır, tam (0/1) döner.
+
+# harfMi: ASCII harf mi? (A-Z veya a-z → 65-90 veya 97-122)
+işlev harfMi(k)
+    eğer (k >= 65 ve k <= 90) veya (k >= 97 ve k <= 122) ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# rakamMi: ASCII rakam mı? (0-9 → 48-57)
+işlev rakamMi(k)
+    eğer k >= 48 ve k <= 57 ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# bosMu: Boşluk karakteri mi? (32 = space)
+işlev bosMu(k)
+    eğer k == 32 ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# buyukHarfMi: A-Z (65-90) aralığında mı?
+işlev buyukHarfMi(k)
+    eğer k >= 65 ve k <= 90 ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# kucukHarfMi: a-z (97-122) aralığında mı?
+işlev kucukHarfMi(k)
+    eğer k >= 97 ve k <= 122 ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# --- KARAKTER DÖNÜŞÜMÜ ---
+# Bu fonksiyonlar tam (byte kodu) alır, tek karakterlik metin döner.
+# Dönüş tipi "metin" — döndür ... karakter(...) kalıbı sayesinde.
+
+# kucukHarf: Buyuk harfi küçüğe çevir. Diğerleri aynen döner.
+işlev kucukHarf(k)
+    eğer buyukHarfMi(k) == 1 ise
+        döndür karakter(k + 32)
+    değilse
+        döndür karakter(k)
+    son
+son
+
+# buyukHarf: Kucuk harfi büyüğe çevir. Diğerleri aynen döner.
+işlev buyukHarf(k)
+    eğer kucukHarfMi(k) == 1 ise
+        döndür karakter(k - 32)
+    değilse
+        döndür karakter(k)
+    son
+son
+
+# --- METİN DURUM TESİSLERİ ---
+
+# metinSayiMi: Metnin tüm karakterleri rakam (0-9) mı?
+işlev metinSayiMi(s)
+    u = uzunluk(s)
+    eğer u == 0 ise
+        döndür 0
+    son
+    i = 0
+    iken i < u
+        k = kod(metinAl(s, i))
+        eğer k < 48 veya k > 57 ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son
+
+# metinBosMu: Metnin tüm karakterleri boşluk mu?
+işlev metinBosMu(s)
+    u = uzunluk(s)
+    i = 0
+    iken i < u
+        eğer bosMu(kod(metinAl(s, i))) == 0 ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son
+
+# metinTumuHarfMi: Tüm karakterler harf mi?
+işlev metinTumuHarfMi(s)
+    u = uzunluk(s)
+    eğer u == 0 ise
+        döndür 0
+    son
+    i = 0
+    iken i < u
+        eğer harfMi(kod(metinAl(s, i))) == 0 ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son
+
+# metinIcerirMi: s içinde alt dizesi var mı? (basit tarama)
+işlev metinIcerirMi(s, alt)
+    sUzun = uzunluk(s)
+    altUzun = uzunluk(alt)
+    eğer altUzun == 0 ise
+        döndür 1
+    son
+    eğer altUzun > sUzun ise
+        döndür 0
+    son
+    i = 0
+    iken i <= sUzun - altUzun
+        eslesme = 1
+        j = 0
+        iken j < altUzun
+            eğer kod(metinAl(s, i + j)) != kod(metinAl(alt, j)) ise
+                eslesme = 0
+                j = altUzun   # döngüyü kır
+            değilse
+                j = j + 1
+            son
+        son
+        eğer eslesme == 1 ise
+            döndür 1
+        son
+        i = i + 1
+    son
+    döndür 0
+son
+
+# metinBaslaMi: s, alt ile başlıyor mu?
+işlev metinBaslaMi(s, alt)
+    sUzun = uzunluk(s)
+    altUzun = uzunluk(alt)
+    eğer altUzun > sUzun ise
+        döndür 0
+    son
+    i = 0
+    iken i < altUzun
+        eğer kod(metinAl(s, i)) != kod(metinAl(alt, i)) ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son
+
+# metinBitirMi: s, alt ile bitiyor mu?
+işlev metinBitirMi(s, alt)
+    sUzun = uzunluk(s)
+    altUzun = uzunluk(alt)
+    eğer altUzun > sUzun ise
+        döndür 0
+    son
+    basPoz = sUzun - altUzun
+    i = 0
+    iken i < altUzun
+        eğer kod(metinAl(s, basPoz + i)) != kod(metinAl(alt, i)) ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son

@@ -1,0 +1,69 @@
+# page_manager.tan — VETA Storage Page Manager
+# TAN-native, self-hosted page management for disk-based storage
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 5 (2B) dosya syscall'larından faydalanır
+
+# Sayfa boyutu: 4096 bayt (4 KB)
+# PAGE_SIZE sabiti - TancElf içinde SabitTam gibi tanımlanır
+# (bkz. TanDurum.md "Sabit genişlik tamsayı" konusu)
+
+# page_tip: Sayfa türü bayrağı
+# 0 = BOŞ sayfa
+# 1 = Kullanılıyor (data page)
+# 2 = WAL girişi
+# 3 = Index sayfa
+
+# Sayfa başlığı yapısı (ilk 8 bayt)
+# Bayt 0-1: sayfa tipi
+# Bayt 2-3: önceki sayfa fd
+# Bayt 4-7: sonraki sayfa fd
+
+# TAN içinde SabitTam/SabitKar gibiSabit sabitler tanımlanmalı:
+# PAGE_SIZE = 4096
+# PAGE_TYPE_NONE = 0
+# PAGE_TYPE_DATA = 1
+# PAGE_TYPE_WAL = 2
+# PAGE_TYPE_INDEX = 3
+
+# page_baslik_oku: Sayfa başlığından alanlar okur
+# page_baslik_yaz: Sayfa başlığını yazar
+# page_tur_belirle: Sayfa tipini belirler
+# page_prev_fd: Önceki sayfa dosya tanımlayıcısı
+# page_next_fd: Sonraki sayfa dosya tanımlayıcısı
+
+# PageManager: Sayfa havuzu ve disk I/O yöneticisi
+# - Sayfaları disk üzerinde cache et
+# - Sayfa al/serbest bırak
+# - WAL (Write-Ahead Logging) desteği
+# - Sayfa kararlılık (pinning/unpinning)
+
+# PAGE_SIZE 4096 bayt olarak tanımlanır;
+# Bu, TAN'nın int64 ve float64 aritmetiğinin çalışacağı standart boyuttur.
+# Sayfa başlığı (8 bayt) sayfa türü ve linked list işaretçileri içerebilir.
+# Kalan 4088 bayt data için ayrılır.
+
+# PAGE_TYPE_NONE = 0
+# PAGE_TYPE_DATA = 1
+# PAGE_TYPE_WAL = 2
+# PAGE_TYPE_INDEX = 3
+
+# işlem page_tur(tur)
+#     eğer tur == 0 ise
+#         döndür "NONE"
+#     eğer tur == 1 ise
+#         döndür "DATA"
+#     eğer tur == 2 ise
+#         döndür "WAL"
+#     eğer tur == 3 ise
+#         döndür "INDEX"
+#     değilse
+#         döndür "BELGELEMEDİ"
+#     son
+# son
+
+# PAGE_SIZE sabini TAN sabiti olarak dışa aktar
+sabit PAGE_SIZE = 4096
+sabit PAGE_TYPE_NONE = 0
+sabit PAGE_TYPE_DATA = 1
+sabit PAGE_TYPE_WAL = 2
+sabit PAGE_TYPE_INDEX = 3

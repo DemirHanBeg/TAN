@@ -1,0 +1,47 @@
+# transaction_detail.tan — VETA Transaction Detayları
+# ACID özelliklerinin detaylı implementasyonu
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 6 zemini (Storage + Query hazır); QEMU throttle toleranı
+
+# Transaction ACID Properties:
+# - Atomicity: Tüm ya da hiçbir değişiklik yok
+# - Consistency: Veri bütünlüğü kuralları
+# - Isolation: İşlemler birbirinden izole edilir
+# - Durability: Commit sonrası kaybedilmez
+
+# Transaction Durum Geçişleri:
+# AKTİF --(Commit)--> KOMIT EDILDI
+# AKTİF --(Rollback)--> ROLLEDBACK
+# AKTİF --(Abort)--> İPTAL EDİLDI
+
+# TransactionCommitDetay():
+# - Tüm WAL entries'in fiziksel olarak disk'e yazılmasını sağlar
+# - fsync benzeri disk tamponu temizleme
+# - Commit zaman damgası (commit_timestamp) atar
+# - Transaction durumunu KOMIT EDILDI yapar
+# - WAL entries'ini arşivler veya siler
+
+# TransactionRollbackDetay():
+# - Tüm değişiklikleri geri almak için WAL entries'ini okur
+# - Before image'ları uygular (geri qayarma)
+# - Transaction durumunu ROLLEDBACK yapar
+# - Diskteki geçici değişiklikler silinir
+# - Rollback zaman damgası (rollback_timestamp) atar
+
+# TransactionAbortDetay():
+# - Belirtilmedikse Commit/Rollback yapmadan iptal
+# - WAL entries'ini silerek kaynak serbest býr
+# - Transaction durumunu İPTAL EDİLDI yapar
+# - Diskteki değişiklikler preserved (rollback-only changes)
+
+# IsolationLevel:
+# - READ_UNCOMMITTED: Tüm veri visibility
+# - READ_COMMITTED: Sadece commit edilmiş veri visibility
+# - REPEATABLE_READ: Transaction başlarığında görülen veri visibility
+# - SERIALIZABLE: Tam izolasyon, conflict detection
+
+# ConflictDetection():
+# - Concurrent Transaction'lar arasında conflict var mı kontrol eder
+# - Write-write conflict'ları tespit eder
+# - Optimistic concurrency control protokolü
+# - Pessimistic locking alternatives

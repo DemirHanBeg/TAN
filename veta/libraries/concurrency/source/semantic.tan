@@ -1,0 +1,59 @@
+# semantic.tan — VETA Semantic Sistemi
+# Significance, meaning, and ontology for TAN data
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 6 zemini (Storage + Query + Transaction + Event + Graph + Semantic hazır); QEMU throttle toleranı
+
+# Semantic Kavramlar:
+# - anlam: Verinin yorumlanması ve significance'nin belirlenmesi
+# - ontoloji: Veri kategorileri ve ilişkilerin yapısı
+# - vekiler: Kavramların hierarşik yapısı
+# - ilgi: Verilerin kullanıcılar veya sistemler tarafından ilgilenilme durumu
+
+# Kavram (Concept) Yapısı:
+# - kavram_id: Benzersiz kavram kimliği
+# - baslik: Kavram başlığı (string)
+# - tanım: Kavram tanımı (string)
+# - hierarşi: Üst kavram kimliği (optional)
+# - alt_kavramlar: Alt kavram kimliği listesi
+# - ilgi_durumu: Ilgi durumu (0=Ilgiyenı, 1=Ilgili, 2=Çok Ilgili)
+
+# Ontoloji (Ontology) Yapısı:
+# - konu_konu_ilgisi: Kavramlar arasındaki ilişkiler
+# - alt_kavram_hierarşi: Kavram hierarşisi
+# - konu_ile_ilgili_dugular: Kavram ile ilgili ilişkiler
+
+# KavramYap():
+# - Yeni bir kavram yaratma
+# - kavram_id ataması
+# - tanım ve hierarşi ayarlama
+
+# OntolojiYap():
+# - Yeni bir ontoloji yaratma
+# - Kavramlar arasındaki ilişkileri ayarlama
+
+# KavramEkle(kavram_id, baslik, tanım):
+# - Yeni bir kavram sisteme ekleme
+# - Zaten var olup olmadığını kontrol etme
+
+# KavramKaldir(kavram_id):
+# - Sistemden kavramı kaldırma
+# - Bağlı ilişkileri de kaldırma
+
+# IlgiGuncelle(kavram_id, ilgi_durumu):
+# - Bir kavramın ilgi durumunu güncelleme
+# - 0=Ilgiyenı, 1=Ilgili, 2=Çok Ilgili
+
+# OntolojiIleIlgiliDugular(kavram_id):
+# - Belirtilen kavram ile ilişkili tüm duguları döndürme
+
+# SemanticAra(kavram_id, arama_dizesi):
+# - Kavram metninde arama yapma
+# - Eşleşen kavramları döndürme
+
+# SemanticOlceklendir():
+# - Önemine göre kavramları sıralama
+# - Ilgi durumu ve bağlantı sayısına göre puanlama
+
+# BilgiErgisi(kavram_id):
+# - Belirtilen kavram hakkında bilgisi ergisi
+# - Tanım, hierarşi, ilişkiler, ilgi durumu

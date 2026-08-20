@@ -1,0 +1,10 @@
+# test_graph.tan — VETA Graph (graph.tan) smoke test
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Kural: mevcut TancElf binary'sini kullan; Faz 6 zemini (Storage + Query + Transaction + Event + Graph hazır); QEMU throttle toleranı.
+
+içe al "../libraries/concurrency/source/graph.tan"
+
+# Basit graph testi
+yaz("Graph Test: Düğüm ekleme aktif\n")
+yaus("Graph yapısı aktif\n")

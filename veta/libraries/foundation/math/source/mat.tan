@@ -1,0 +1,124 @@
+# mat.tan — math foundation library (tam çekirdek)
+# TAN-native, self-hosted derleyici (TancElf.tan) ile derlenir.
+# Yalnız tam sayı aritmetiği; kesir fonksiyonları tip-çıkarımı
+# sınırı nedeniyle henüz güvenilir değil (TAN_CAPABILITY_AUDIT.md §7).
+
+# mutlak: |x|. x >= 0 ise x, değilse -x.
+işlev mutlak(x)
+    eğer x < 0 ise
+        döndür 0 - x
+    değilse
+        döndür x
+    son
+son
+
+# enBuyuk: iki tam sayıdan büyüğü.
+işlev enBuyuk(a, b)
+    eğer a > b ise
+        döndür a
+    değilse
+        döndür b
+    son
+son
+
+# enKucuk: iki tam sayıdan küçüğü.
+işlev enKucuk(a, b)
+    eğer a < b ise
+        döndür a
+    değilse
+        döndür b
+    son
+son
+
+# tekMi: n tek ise 1, çift ise 0.
+işlev tekMi(n)
+    eğer n % 2 == 1 ise
+        döndür 1
+    değilse
+        döndür 0
+    son
+son
+
+# ciftMi: n çift ise 1, tek ise 0.
+işlev ciftMi(n)
+    döndür tekMi(n + 1)
+son
+
+# faktoriyel: n! (n >= 0). Recursive.
+işlev faktoriyel(n)
+    eğer n <= 1 ise
+        döndür 1
+    değilse
+        döndür n * faktoriyel(n - 1)
+    son
+son
+
+# tamUssu: taban^us (us >= 0). Döngü tabanlı.
+işlev tamUssu(taban, us)
+    sonuc = 1
+    i = 0
+    iken i < us
+        sonuc = sonuc * taban
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# ebob: Euclidean algoritmasıyla en büyük ortak bölen.
+işlev ebob(a, b)
+    iken b != 0
+        gecici = b
+        b = a % b
+        a = gecici
+    son
+    döndür a
+son
+
+# ekok: a * b / ebob(a, b). a ve b >= 0 varsayılır.
+# NOT: "/" her zaman kesir (float64) yoluna düşer — dönüş tipi
+# "tam" sanılırsa yaz() işaretçi basar. tamBol() ile tamsayı bölmesi kullanılır.
+işlev ekok(a, b)
+    döndür tamBol(a * b, ebob(a, b))
+son
+
+# tamKareKok: ⌊√n⌋ — tam karekökü.
+işlev tamKareKok(n)
+    eğer n < 0 ise
+        döndür 0
+    değilse
+        eğer n == 0 ise
+            döndür 0
+        değilse
+            i = 1
+            iken i * i <= n
+                i = i + 1
+            son
+            döndür i - 1
+        son
+    son
+son
+
+# asalMi: n asal ise 1, değilse 0. n <= 1 ise 0.
+işlev asalMi(n)
+    eğer n <= 1 ise
+        döndür 0
+    değilse
+        eğer n == 2 ise
+            döndür 1
+        değilse
+            eğer tekMi(n) == 0 ise
+                döndür 0
+            değilse
+                i = 3
+                ust = tamKareKok(n)
+                iken i <= ust
+                    eğer n % i == 0 ise
+                        döndür 0
+                    son
+                    i = i + 2
+                son
+                döndür 1
+            son
+        son
+    son
+son

@@ -1,0 +1,11 @@
+# test_smith.tan — VETA smoke test
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Kural: sadece mevcut TancElf binary'si kullan; bootstrap yenilenmediği sürece QEMU throttle engelliyorum.
+
+içe al "../source/math/source/mat.tan"
+yaz("math smoke test: ")
+yaz(mutlak(-42))
+yaz(" ")
+yaz(ekok(12, 18))
+yaz("\n")

@@ -1,0 +1,95 @@
+# event.tan — VETA Event Sistemi (Gelişmiş)
+# Observer pattern, publish-subscribe, distributed event spreading
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 6 zemini (Storage + Query + Transaction + Event hazır); QEMU throttle toleranı
+
+# EventType: Olay türü bayrağı
+# 0 = BASİC
+# 1 = CRITICAL
+# 2 = WARNING
+# 3 = INFO
+# 4 = DEBUG
+
+# Event (Olay) Yapısı:
+# - event_id: Benzersiz olay kimliği
+# - event_tip: Olay türü (0-4 arası)
+# - kaynak: Olayın kaynağı (entity_id veya transaction_id)
+# - hedef: Hedef entity_id (optional)
+# - zaman: Olay zaman damgası (sistem sayacı)
+# - veri: Ekstra veri (optional, bayt dizi)
+# - durum: Olay durumu (0=Bekliyor, 1=Yayınlandı, 2=Alındı, 3=Kaldırıldı)
+
+# Olay Kimliği Üretici:
+# - Sistem geneli sayacı kullanarak benzersiz event_id üretme
+# - Format: [node_id]-[timestamp]-[sequence]
+
+# Olay Sistemi (Event System) Yapısı:
+# - abone_listesi: Her event_tip için abone entity_id listesi
+# - olay_deque: Yayınlanacak olaylar kuyrugu
+# - lock: Event system lock for thread safety (Faz 5)
+
+# AboneOl(event_tip, entity_id):
+# - entity_id'i event_tip abone listesine ekleme
+# - Tekrar eklemeyi engelleme
+
+# AboneKaldir(event_tip, entity_id):
+# - entity_id'i event_tip abone listesinden kaldırma
+
+# AboneVarMi(event_tip, entity_id):
+# - Belirtilen entity_id'nin event_tip abonede olup olmadığını kontrol etme
+# - True/False döndürme
+
+# OlayYap(event_tip, kaynak, hedef, veri):
+# - Yeni bir olay oluşturma
+# - event_id ataması
+# - Olay deque'ye ekleme
+
+# OlayYayinla():
+# - Olay deque'inden bir olay almak
+# - Abone listesine göre iterare
+# - Her abone için abone fonksiyonunu çağırma
+# - Olay durumunu "Yayınlandı" yapma
+
+# OlayAl(event_tip):
+# - Belirtilen event_tip için alınmamış olayları döndürme
+# - Olay durumunu "Alındı" yapma
+# - Kaç adım alınmadığını sayma
+
+# olustur(event_tip, kaynak, hedef, veri):
+# - Yeni bir event nesnesi yaratma
+# - event_id, zaman, veri ataması
+# - Event deque'ye ekleme
+
+# distributed_sistem (Distributed System):
+# - NodeId: Benzersiz dağıtık sistem kimliği
+# - node_id: Mevcut node'in kimliği
+# - spread_event(event_tip, kaynak, veri, node_id): Olayın dağıtık sistem üzerinden yayılması
+# - Tüm node'lar üzerinden olay spreadinin yapılması
+
+# NodeIdYap():
+# - Benzersiz dağıtık sistem kimliği üretme
+# - Format: "node-[timestamp]-[sequence]"
+
+# spread_event(event_tip, kaynak, veri, node_id):
+# - Olayın node_id üzerinden yayılması
+# - Hedef node'lara event copy'sı gönderme
+# - Log kaydı tutma
+
+# aktif_abone_sayisi(event_tip):
+# - Belirtilen event_tipindeki aktif abone sayısını döndürme
+
+# EventSistemi (Event System) Global Fonksiyonlar:
+# - Tüm event yönetim fonksiyonlarının erişimi
+# - System başlatma ve kapatma
+# - Durum raporlama
+
+# system_baslat():
+# - Event system'ı başlatma
+# - Abone listelerini sıfırlama
+# - System durumunun "aktif" olarak işaretlenmesi
+
+# system_kapat():
+# - Event system'ı kapatma
+# - Tüm abonelikleri temizleme
+# - Olay deque'ini boşaltma
+# - System durumunun "kapalı" olarak işaretlenmesi

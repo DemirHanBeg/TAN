@@ -1,0 +1,30 @@
+# test_mat.tan — math library test (tek dosya, beklenen çıktı doğrulaması)
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Beklenen çıktı: her satır tek tam sayı, alttaki listedeki sıra ile eşleşir.
+içe al "../source/mat.tan"
+
+yaz(mutlak(-17))           # 1
+yaz(mutlak(42))            # 2
+yaz(enBuyuk(10, 20))       # 3
+yaz(enKucuk(10, 20))       # 4
+yaz(tekMi(7))              # 5
+yaz(tekMi(4))              # 6
+yaz(ciftMi(7))             # 7
+yaz(ciftMi(4))             # 8
+yaz(faktoriyel(10))        # 9
+yaz(faktoriyel(5))         # 10
+yaz(tamUssu(2, 10))        # 11
+yaz(tamUssu(3, 5))         # 12
+yaz(ebob(12, 18))          # 13
+yaz(ekok(12, 18))          # 14
+yaz(asalMi(2))             # 15
+yaz(asalMi(3))             # 16
+yaz(asalMi(4))             # 17
+yaz(asalMi(97))            # 18
+yaz(asalMi(100))           # 19
+yaz(tamKareKok(0))         # 20
+yaz(tamKareKok(1))         # 21
+yaz(tamKareKok(4))         # 22
+yaz(tamKareKok(15))        # 23
+yaz(tamKareKok(100))       # 24

@@ -1,0 +1,28 @@
+# test_option.tan — VETA option/library smoke test
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Kural: mevcut TancElf binary'sini kullan; bootstrap yenilenmediği sürece QEMU throttle engelliyorum.
+
+# option: Başarılı sonuç
+sonuç1 = optionBasarili(42)
+yaz("optionBasarili(42): ")
+yaz(optionDeğerAl(sonuç1))
+yaz("\n")
+
+# option: Başarısız sonuç (None)
+sonuç2 = optionBasarisiz()
+yaz("optionBasarisiz: ")
+yaz(optionDeğerAl(sonuç2))
+yaz("\n")
+
+# result: Başarılı sonuç
+sonuç3 = resultBasarili("tamam")
+yaz("resultBasarili: ")
+yaz(resultDeğerAl(sonuç3))
+yaz("\n")
+
+# result: Başarısız sonuç
+sonuç4 = resultBasarisiz("hata")
+yaz("resultBasarisiz: ")
+yaz(resultDeğerAl(sonuç4))
+yaz("\n")

@@ -1,0 +1,51 @@
+# transaction.tan — VETA Transaction (İşlem) Yönetimi
+# ACID özellikleri: Atomicity, Consistency, Isolation, Durability
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 5 (2B) dosya syscall'larından faydalanır; Faz 6 zemini
+
+# TransactionDurum:
+# 0 = AKTİF (active)
+# 1 = KOMİT EDILDI (committed)
+# 2 = ROLLEDBACK (rolled back)
+# 3 = İPTAL EDİLDI (aborted)
+
+# Transaction (İşlem) Yapısı:
+# - transaction_id: Benzersiz işlem Kimliği
+# - durum: TransactionDurum
+# - WAL_başvurisi: Bağlı WAL giriş sayısı
+# - değişkenler: İşlem sırasında yapılan değişiklikler
+# - commit_tarihi: Commit zaman damgası
+
+# TransactionYap():
+# - Yeni bir işlem başlatır
+# - Benzersiz ID atar
+# - WAL başvurusunu sıfırlar
+# - Durumu AKTİF yapar
+
+# TransactionCommit():
+# - Tüm değişikliklerin WAL'a kaydedilmesini sağlar
+# - Durumu KOMİT EDILDI yapar
+# - Diskte değişiklikleri kalıcı yapmak için fsync benzeri işlem
+
+# TransactionRollback():
+# - Tüm değişiklikleri geri alır
+# - WAL entrées geri okunur
+# - Durumu ROLLEDBACK yapar
+# - Değişiklikler diskteki görünmez
+
+# TransactionIDYap():
+# - Benzersiz bir işlem kimliği üretir
+# - Sistem geneli sayaç kullanılarak oluşturulur
+
+# aktif_islemler: Tüm aktif (açık) işlemlerin listesi
+# - TransactionID ile erişim sağlar
+# - TransactionDurum kontrolü yapar
+# - Commit/rollback seçenekleri sunar
+
+#TransactionAktifMi(transaction_id):
+# - Belirtilen işlemin açık olup olmadığını kontrol eder
+# - Durum kontrolü yapar
+
+#TransactionListe():
+# - Tüm aktif işlemleri listeler
+# - transaction_id ve durum bilgilerini döndürür

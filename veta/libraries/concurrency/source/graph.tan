@@ -1,0 +1,55 @@
+# graph.tan — VETA Graph Sistemi
+# Graph veri yapıları ve algoritmaları
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 6 zemini (Storage + Query + Transaction + Event + Graph hazır); QEMU throttle toleranı
+
+# Graph (Graf) Yapısı:
+# - node_sayisi: Graf düğümü sayısı
+# - edge_sayisi: Graf kenarı sayısı
+# - düğümler: [node_id: integer, etiket: string, özellikler: map]
+# - kenarlar: [source: integer, target: integer, weight: integer, özellikler: map]
+
+# Node (Düğüm) Yapısı:
+# - node_id: Benzersiz düğüm kimliği
+# - etiket: Düğüm etiketi (string)
+# - özellikler: [key: string, value: any] map
+
+# Edge (Kenar) Yapısı:
+# - source: Başlangıç düğümü kimliği
+# - target: Bitiş düğümü kimliği
+# - weight: Kenar ağırlığı
+# - özellikler: [key: string, value: any] map
+
+# GraphOluştur():
+# - Yeni bir graph yaratma
+# - Başlangıçta boş graph
+
+# DugumEkle(node_id, etiket):
+# - Yeni bir düğüm graf'e ekleme
+# - node_id'ye sahip düğümün zaten var olup olmadığını kontrol etme
+
+# DugumKaldir(node_id):
+# - Graf'tan düğümü kaldırma
+# - Bağlı kenarları da kaldırma
+
+# KenarEkle(source, target, weight):
+# - Graf'e yeni bir kenar ekleme
+# - source ve target düğümlerin varlığını kontrol etme
+
+# KenarKaldir(source, target):
+# - Graf'tan kenarı kaldırma
+
+# GraphDegree(node_id):
+# - Belirtilen düğümün bağlı olduğu kenar sayısını döndürme
+
+# GraphYolBul(source, target):
+# - Source'tan Target'a yol bulma (BFS algoritması)
+# - Bulduğu yolu node_id listesi olarak döndürme
+
+# GraphDFS(node_id):
+# - Derinlik-first search (DFS) algoritmasıyla tarama
+# - Ziyaret edilen node'ların listesi döndürme
+
+# GraphBFS(node_id):
+# - Genişlik-first search (BFS) algoritmasıyla tarama
+# - Ziyaret edilen node'ların listesi döndürme

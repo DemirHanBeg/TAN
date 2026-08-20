@@ -1,0 +1,42 @@
+# wal.tan — VETA Write-Ahead Logging (WAL) Sistemi
+# Disk kaybını önlemek ve crash recovery için WAL protokolü
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 5 (2B) dosya syscall'larından faydalanır
+
+# WAL protokolü:
+# 1. Her değişiklik önce WAL'a kaydedilir
+# 2. Veri dosyasına uygulanmadan önce commit edilmez
+# 3. Commit sonrası WALEntries temizlenebilir
+
+# WALEntry: Tek bir WAL kaydı
+# - bayt 0-7: öncelik / transaction ID
+# - bayt 8-16: sayfa numarası
+# - bayt 16-24: eski değer (before image)
+# - bayt 24-32: yeni değer (after image)
+# - bayt 32-40: timestamp (basit sayaç)
+# - bayt 40-45: WAL magic number ("WAL\0")
+
+# WAL dosyası yapısı:
+# - 4096 baytlık sayfalar halinde düzenlenir
+# - Her sayfa başı: magic number + sayfa numarası + LSN (Log Sequence Number)
+# - Veri: actual WAL kayıtları
+
+# WALBasla: WAL sistemini başlatır
+# - WAL dosyasını oluştur/ac
+# - Mevcut LSONU'nu belirler
+
+# WALEkle: Yeni bir WAL kaydı ekler
+# - Önceki değer (before image) kaydedilir
+# - Yeni değer (after image) kaydedilir
+# - LSN artırılır
+
+# WALCommit: Tüm bekleyen WAL kaydını veri dosyasına uygular
+# - Veri sayfalarını güncelle
+# - WAL temizlenir veya konum kaydırılır
+
+# WALRollback: Bekleyen WAY kaydını geri alır
+# - Değişiklikleri geri alır
+# - Veri dosyası değişmez
+
+# WALSona: WAL'yı sonlandırır ve kaydet
+# - Tüm değişikliklerin kaydedilmesini sağlar

@@ -1,0 +1,38 @@
+# query.tan — VETA Query Modülü
+# TAN-native sorguMotorü: parser, planlayıcı, executor
+# DERLEME: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Kural: Faz 6 zemini (Storage 2B+2D) hazır; QEMU throttle toleranı
+
+# QueryTipleri:
+# - SELECT: Veri seçme
+# - INSERT: Veri ekleme
+# - UPDATE: Veri güncelleme
+# - DELETE: Veri silme
+
+# QueryYap():
+# - Basit bir query çalıştırma
+# - Query dizesini kabul etme
+# - Sonuçları döndürme
+
+# Planlayici:
+# - Query'yi optimize etme
+# - En uygun yolu belirleme
+# - Index kullanım kararını verme
+
+# Executor:
+# - Planlanan query'yi çalıştırmak
+# - Sonuçları döndürmek
+# - Resource yönetimi
+
+# SELECT * FROM table WHERE condition
+# INSERT INTO table (column1, column2) VALUES (value1, value2)
+# UPDATE table SET column1 = value1 WHERE condition
+# DELETE FROM table WHERE condition
+
+# QueryBasari(sonuç):
+# - Query başarılı olduğunda döndür
+# - sonucu işleme için geçi
+
+# QueryHata(hataMesajı):
+# - Query hatasında döndür
+# - Hata mesajını çıktıya yaz

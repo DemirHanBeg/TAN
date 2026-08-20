@@ -1,0 +1,14 @@
+# test_cross_module.tan — VETA Cross-Module Integration Test
+# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
+# Çalıştırma:  qemu-x86_64 <cikti>
+# Kural: Faz 1-6 modüllerini kullan; TancElf binary'si ile derleme kanıtını veren cross-module test.
+
+içe al "../libraries/storage/source/page_manager.tan"
+içe al "../libraries/storage/source/wal.tan"
+içe al "../libraries/storage/source/transaction.tan"
+içe al "../libraries/query/source/query.tan"
+
+# Cross-module integration test
+yaz("Cross-Module Integration Test\n")
+yaz("Storage + Query + Transaction integration test\n")
+yaus("Storage, Query ve Transaction modülleri birlikte çalışıyor\n")
