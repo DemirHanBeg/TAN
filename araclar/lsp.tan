@@ -219,7 +219,64 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"textDocumentSync\":1}}}"))
+    lspYaz(govde)
+    döndür 0
+son
+
+# ---- diagnostics: kaynaktan tanı listesi [satir(0), severity, kod, mesaj] ----
+işlev lspTanilar(kaynak)
+    satirlar = satiraBol(kaynak)
+    liste = []
+    derinlik = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer blokAcici(kelime) ise
+            derinlik = derinlik + 1
+        değilse
+            eğer metinEsit(kelime, "son") ise
+                eğer derinlik == 0 ise
+                    liste = ekle(liste, [si, 1, "TAN001", "eşleşen blok yok, fazladan 'son'"])
+                değilse
+                    derinlik = derinlik - 1
+                son
+            son
+        son
+        nsatir = uzunluk(satir)
+        eğer nsatir > 0 ve bosMuk(metinAl(satir, nsatir - 1)) ise
+            liste = ekle(liste, [si, 2, "TAN003", "satır sonunda gereksiz boşluk"])
+        son
+        si = si + 1
+    son
+    eğer derinlik > 0 ise
+        liste = ekle(liste, [0, 1, "TAN002", "blok kapatılmamış ('son' eksik)"])
+    son
+    döndür liste
+son
+
+# publishDiagnostics bildirimi (uri, kaynak)
+işlev lspPublishDiagnostics(uri, kaynak)
+    tanilar = lspTanilar(kaynak)
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"", metinBirlestir(uri, "\",\"diagnostics\":["))
+    i = 0
+    iken i < uzunluk(tanilar)
+        t = tanilar[i]
+        eğer i > 0 ise
+            govde = metinBirlestir(govde, ",")
+        son
+        satirNo = metin(t[0])
+        aralik = metinBirlestir("{\"start\":{\"line\":", metinBirlestir(satirNo, ",\"character\":0},\"end\":{\"line\":"))
+        aralik = metinBirlestir(aralik, metinBirlestir(satirNo, ",\"character\":80}}"))
+        govde = metinBirlestir(govde, metinBirlestir("{\"range\":", aralik))
+        govde = metinBirlestir(govde, metinBirlestir(",\"severity\":", metin(t[1])))
+        govde = metinBirlestir(govde, metinBirlestir(",\"code\":\"", metinBirlestir(t[2], "\"")))
+        govde = metinBirlestir(govde, metinBirlestir(",\"message\":\"", metinBirlestir(t[3], "\"}")))
+        i = i + 1
+    son
+    govde = metinBirlestir(govde, "]}}")
     lspYaz(govde)
     döndür 0
 son
@@ -242,6 +299,10 @@ işlev lspCalis()
             uri = jsonMetin(govde, "uri")
             yol = uriYol(uri)
             d = lspDocumentSymbol(id, oku(yol))
+        değilse eğer metinEsit(yontem, "textDocument/didOpen") veya metinEsit(yontem, "textDocument/didSave") ise
+            uri = jsonMetin(govde, "uri")
+            yol = uriYol(uri)
+            d = lspPublishDiagnostics(uri, oku(yol))
         değilse eğer metinEsit(yontem, "shutdown") ise
             lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
         değilse eğer metinEsit(yontem, "exit") ise
