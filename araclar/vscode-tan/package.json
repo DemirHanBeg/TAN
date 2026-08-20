@@ -1,0 +1,23 @@
+{
+  "name": "tan-lsp",
+  "displayName": "TAN Language",
+  "description": "TAN dili için LSP entegrasyonu (tanlsp) — sembol, tanı, hover, git-tanıma.",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:tan"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "tan",
+        "aliases": ["TAN", "tan"],
+        "extensions": [".tan"],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}
