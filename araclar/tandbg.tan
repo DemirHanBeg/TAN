@@ -1,0 +1,33 @@
+# tandbg.tan — TAN debugger (ptrace tabanlı, AYRI araç). Hedef programı ptrace
+# ile izler, tek-adım (single-step) ile çalıştırıp yürütülen komut (instruction)
+# sayısını raporlar. Kaldıraç 5 (debugger) — self-hosting'e DOKUNMADAN (TancElf
+# codegen'i değişmedi, sadece ptrace builtin'leri eklendi).
+# Derle: ./TancElf araclar/tandbg.tan tandbg
+# Çalıştır: ./tandbg <hedef-binary>
+# NOT: adres-seviyesi (kaynak-satır için DWARF gerekir — ayrı iş). Bu, gerçek
+# dinamik izleme: fork+PTRACE_TRACEME+execve, sonra PTRACE_SINGLESTEP döngüsü.
+
+hedef = arg(1)
+pid = catal()
+
+eğer pid == 0 ise
+    # çocuk: kendini izlemeye aç, hedefi çalıştır
+    d = izle(0, 0, 0, 0)          # PTRACE_TRACEME
+    d = calistir(hedef)
+    yaz("HATA: execve başarısız")
+değilse
+    yaz(metinBirlestir("izleniyor: ", metinBirlestir(hedef, metinBirlestir(" (pid ", metinBirlestir(metin(pid), ")")))))
+    adim = 0
+    durum = bekle()              # execve sonrası ilk durak (SIGTRAP)
+    iken 1 < 2
+        eğer (durum & 127) == 0 ise    # WIFEXITED: düşük 7 bit 0 → çıktı
+            dur
+        son
+        adim = adim + 1
+        d = izle(9, pid, 0, 0)   # PTRACE_SINGLESTEP
+        durum = bekle()
+    son
+    cikisKodu = (durum >> 8) & 255
+    yaz(metinBirlestir("yürütülen komut sayısı: ", metin(adim)))
+    yaz(metinBirlestir("hedef çıkış kodu: ", metin(cikisKodu)))
+son
