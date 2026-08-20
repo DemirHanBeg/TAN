@@ -1,0 +1,131 @@
+# bicimlendir.tan — TAN kaynağını kanonik girintiyle biçimlendirir (formatter).
+# Kullanım: (tan elf ile derlenip)  ./bicimlendir <dosya.tan>
+# Biçimlenmiş kaynağı stdout'a yazar (dosyayı DEĞİŞTİRMEZ — güvenli; yönlendir).
+# TAN dilinde self-hosted tooling — Faz B / madde 6 (formatter).
+# Kural: blok açıcı (işlev/eğer/iken/her/dene) girintiyi +1; 'son' -1 (önce düş,
+# sonra yaz); 'değilse'/'yakala' zincir-ortası → bir seviye geri yaz, derinlik
+# değişmez. Girinti birimi = 4 boşluk.
+
+# --- yardımcılar (simgeler/denetle ile ortak; ileride kutuphane/tanoku.tan) ---
+
+işlev bosMuk(c)
+    döndür c == " " veya c == karakter(9)
+son
+
+işlev satiraBol(kaynak)
+    satirlar = []
+    gecerli = ""
+    n = uzunluk(kaynak)
+    i = 0
+    iken i < n
+        c = metinAl(kaynak, i)
+        eğer c == "\n" ise
+            satirlar = ekle(satirlar, gecerli)
+            gecerli = ""
+        değilse
+            gecerli = metinBirlestir(gecerli, c)
+        son
+        i = i + 1
+    son
+    eğer uzunluk(gecerli) > 0 ise
+        satirlar = ekle(satirlar, gecerli)
+    son
+    döndür satirlar
+son
+
+işlev boslukAtla(satir, basla)
+    n = uzunluk(satir)
+    i = basla
+    iken i < n ve bosMuk(metinAl(satir, i))
+        i = i + 1
+    son
+    döndür i
+son
+
+işlev kelimeAl(satir, basla)
+    n = uzunluk(satir)
+    kelime = ""
+    i = basla
+    iken i < n
+        c = metinAl(satir, i)
+        eğer bosMuk(c) veya c == "(" ise
+            dur
+        son
+        kelime = metinBirlestir(kelime, c)
+        i = i + 1
+    son
+    döndür kelime
+son
+
+işlev blokAcici(k)
+    döndür metinEsit(k, "işlev") veya metinEsit(k, "eğer") veya metinEsit(k, "iken") veya metinEsit(k, "her") veya metinEsit(k, "dene")
+son
+
+# baştaki ve sondaki boşlukları kırp
+işlev kirp(satir)
+    n = uzunluk(satir)
+    bas = boslukAtla(satir, 0)
+    ucu = n
+    iken ucu > bas ve bosMuk(metinAl(satir, ucu - 1))
+        ucu = ucu - 1
+    son
+    sonuc = ""
+    i = bas
+    iken i < ucu
+        sonuc = metinBirlestir(sonuc, metinAl(satir, i))
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+# n seviye girinti (4 boşluk/seviye)
+işlev girinti(n)
+    s = ""
+    i = 0
+    iken i < n
+        s = metinBirlestir(s, "    ")
+        i = i + 1
+    son
+    döndür s
+son
+
+# --- sürücü ---
+
+eğer argsay() < 2 ise
+    yaz("Kullanım: bicimlendir <dosya.tan>")
+değilse
+    yol = arg(1)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+
+    derinlik = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        icerik = kirp(satirlar[si])
+
+        eğer uzunluk(icerik) == 0 ise
+            yaz("")
+        değilse
+            ilk = kelimeAl(icerik, 0)
+
+            eğer metinEsit(ilk, "son") ise
+                eğer derinlik > 0 ise
+                    derinlik = derinlik - 1
+                son
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+            değilse eğer metinEsit(ilk, "değilse") veya metinEsit(ilk, "yakala") ise
+                d2 = derinlik - 1
+                eğer d2 < 0 ise
+                    d2 = 0
+                son
+                yaz(metinBirlestir(girinti(d2), icerik))
+            değilse eğer blokAcici(ilk) ise
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+                derinlik = derinlik + 1
+            değilse
+                yaz(metinBirlestir(girinti(derinlik), icerik))
+            son
+        son
+        si = si + 1
+    son
+son
