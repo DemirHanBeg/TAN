@@ -18,6 +18,7 @@ eğer argsay() < 2 ise
     yaz("  dogrula      lockfile'a karşı bütünlük kontrolü")
     yaz("  imzala       dosyayı HMAC-SHA256 ile imzala (<dosya> <anahtar>)")
     yaz("  imzadogrula  imzayı doğrula (<dosya> <anahtar> <imza>)")
+    yaz("  cek          uzak paket çek + sha256 doğrula (<ip> <port> <yol> [sha])")
     yaz("  sürüm        toolchain bilgisi")
 değilse
     komut = arg(1)
@@ -35,6 +36,14 @@ değilse
             yaz("Kullanım: tan imzadogrula <dosya.tan> <anahtar> <imza>")
         değilse
             d = imzaDogrulaAna(arg(2), arg(3), arg(4))
+        son
+    değilse eğer metinEsit(komut, "cek") ise
+        eğer argsay() < 5 ise
+            yaz("Kullanım: tan cek <ip> <port> <yol> [beklenen-sha256|-]")
+        değilse eğer argsay() < 6 ise
+            d = cekAna(arg(2), arg(3), arg(4), "-")
+        değilse
+            d = cekAna(arg(2), arg(3), arg(4), arg(5))
         son
     değilse
         # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu

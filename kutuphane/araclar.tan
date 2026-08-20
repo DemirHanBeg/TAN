@@ -4,6 +4,67 @@
 
 içe al "kutuphane/tanoku.tan"
 içe al "kutuphane/sha256.tan"
+içe al "kutuphane/ag.tan"
+
+# metni tam sayıya çevir (rakamlar)
+işlev metneTam(s)
+    n = uzunluk(s)
+    r = 0
+    i = 0
+    iken i < n
+        k = kod(metinAl(s, i))
+        eğer k >= 48 ve k <= 57 ise
+            r = r * 10 + (k - 48)
+        son
+        i = i + 1
+    son
+    döndür r
+son
+
+# "127.0.0.1" → [127,0,0,1]
+işlev ipParcala(ip)
+    parcalar = []
+    gecerli = ""
+    n = uzunluk(ip)
+    i = 0
+    iken i < n
+        c = metinAl(ip, i)
+        eğer c == "." ise
+            parcalar = ekle(parcalar, metneTam(gecerli))
+            gecerli = ""
+        değilse
+            gecerli = metinBirlestir(gecerli, c)
+        son
+        i = i + 1
+    son
+    döndür ekle(parcalar, metneTam(gecerli))
+son
+
+# ---- cek: uzak paketi çek + SHA-256 bütünlük doğrula (Kaldıraç 4 registry) ----
+işlev cekAna(ip, portMetin, yol, beklenenSha)
+    parca = ipParcala(ip)
+    port = metneTam(portMetin)
+    yanit = httpGet(parca[0], parca[1], parca[2], parca[3], port, yol)
+    eğer uzunluk(yanit) == 0 ise
+        yaz("HATA: bağlantı yok ya da boş yanıt")
+        döndür 1
+    son
+    govde = httpGovde(yanit)
+    gercek = metinBirlestir("", sha256(govde))
+    yaz(metinBirlestir("indirilen sha256: ", gercek))
+    eğer metinEsit(beklenenSha, "-") ise
+        yaz("--- içerik ---")
+        yazHam(metinBirlestir("", govde))
+    değilse eğer metinEsit(gercek, beklenenSha) ise
+        yaz("[BÜTÜNLÜK TAMAM] paket doğrulandı, kabul edildi")
+        yaz("--- içerik ---")
+        yazHam(metinBirlestir("", govde))
+    değilse
+        yaz("[BÜTÜNLÜK BOZUK] sha uyuşmuyor — paket REDDEDİLDİ")
+        yaz(metinBirlestir("beklenen: ", beklenenSha))
+    son
+    döndür 0
+son
 
 # bir kaynaktaki tüm `içe al "yol"` bağımlılıklarını liste olarak döndürür
 işlev iceAlleriBul(kaynak)
