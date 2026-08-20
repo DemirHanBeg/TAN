@@ -2823,6 +2823,88 @@ işlev yazBaytlarBant()
     döndür listeBirlestir(b, retBant())
 son
 
+# 2B - Dosya G/Ç helper'ları (TancElf.tan'a eklenmesi gerekenler)
+# DOSYA AÇ: dosyaAc(yol, mod) -> fd (negatifse hata)
+işlev dosyaAc(yol, mod)
+    b = [bcEtiket("f_dosyaAc")]
+    b = listeBirlestir(b, pushKayit(3))
+    b = listeBirlestir(b, movKayit(3, 2))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
+    b = listeBirlestir(b, movPtrOku(0, 0))
+    b = listeBirlestir(b, callBant("f_tan_ayir"))
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 0))
+    b = listeBirlestir(b, movKayit(0, 0))
+    b = listeBirlestir(b, addImm32(0, 16))
+    b = listeBirlestir(b, movImm32(1, 2))
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
+    b = listeBirlestir(b, cmpImm32(0, 0))
+    b = listeBirlestir(b, jccBant(1, "dosyaAc_hata"))
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, jmpBant("dosyaAc_biti"))
+    b = listeBirlestir(b, [bcEtiket("dosyaAc_hata")])
+    b = listeBirlestir(b, movImm32(0, -1))
+    b = listeBirlestir(b, [bcEtiket("dosyaAc_biti")])
+    döndür listeBirlestir(b, retBant())
+son
+
+# 2B - DOSYA Oku
+işlev dosyaOku(dosya)
+    b = [bcEtiket("f_dosyaOku")]
+    b = listeBirlestir(b, pushKayit(3))
+    b = listeBirlestir(b, movKayit(3, 0))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
+    b = listeBirlestir(b, movKayit(0, 0))
+    b = listeBirlestir(b, leaDolayli(0, 0, 16))
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
+    b = listeBirlestir(b, movImm32(0, 16))
+    b = listeBirlestir(b, cmpImm32(0, 0))
+    b = listeBirlestir(b, jccBant(1, "dosyaOku_hata"))
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, jmpBant("dosyaOku_biti"))
+    b = listeBirlestir(b, [bcEtiket("dosyaOku_hata")])
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, [bcEtiket("dosyaOku_biti")])
+    döndür listeBirlestir(b, retBant())
+son
+
+# 2B - DOSYA YAZ
+işlev dosyaYaz(dosya, icerik)
+    b = [bcEtiket("f_dosyaYaz")]
+    b = listeBirlestir(b, pushKayit(3))
+    b = listeBirlestir(b, movKayit(3, 1))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
+    b = listeBirlestir(b, movKayit(0, 0))
+    b = listeBirlestir(b, leaDolayli(0, 0, 16))
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 1))
+    b = listeBirlestir(b, movPtrOku(0, 1))
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
+    b = listeBirlestir(b, movImm32(0, 16))
+    b = listeBirlestir(b, cmpImm32(0, 0))
+    b = listeBirlestir(b, jccBant(1, "dosyaYaz_hata"))
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, jmpBant("dosyaYaz_biti"))
+    b = listeBirlestir(b, [bcEtiket("dosyaYaz_hata")])
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, [bcEtiket("dosyaYaz_biti")])
+    döndür listeBirlestir(b, retBant())
+son
+
+# 2B - DOSYA KAPAT
+işlev dosyaKapat(dosya)
+    b = [bcEtiket("f_dosyaKapat")]
+    b = listeBirlestir(b, pushKayit(1))
+    b = listeBirlestir(b, movKayit(1, 3))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
+    b = listeBirlestir(b, movKayit(0, 0))
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, movImm32(0, 0))
+    b = listeBirlestir(b, retBant())
+son
+
 # ---------------- PROGRAM ARGÜMANLARI (libc yok, ham yığın) ----------------
 # _start'ta rsp -> [argc][argv0][argv1]... Bu taban rsp DEĞİŞTİRİLMEDEN ÖNCE
 # saklanmalı — DerleElf.go argvYakala/yardimciArgsay/yardimciArg ile birebir
@@ -2893,7 +2975,7 @@ işlev cagriSonucTipi(ad, islevTipKutu)
     # t/d "tam" sanılıyor, blokDerle/deyimDerle'deki ONLARCA "t=="/"d=="
     # karşılaştırması hep yanlış (0) dönüyordu — self-hosting'in en
     # yaygın kırılma noktasıydı (metinEsit ailesindeki BEŞİNCİ örnek).
-    eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") ise
+    eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") veya metinEsit(ad, "metinBirlestir") veya metinEsit(ad, "metinAl") ise
         döndür "metin"
     son
     döndür islevTipiAra(islevTipKutu, ad)
@@ -2950,7 +3032,7 @@ işlev islevTipiKaydet(islevTipKutu, ad, tip)
 son
 
 işlev yerlesikMetinDonerMi(ad)
-    eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") ise
+    eğer metinEsit(ad, "metin") veya metinEsit(ad, "karakter") veya metinEsit(ad, "oku") veya metinEsit(ad, "arg") veya metinEsit(ad, "alan") veya metinEsit(ad, "pTur") veya metinEsit(ad, "pDeger") veya metinEsit(ad, "metinBirlestir") veya metinEsit(ad, "metinAl") ise
         döndür 1
     son
     döndür 0
