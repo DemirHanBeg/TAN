@@ -219,8 +219,115 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"textDocumentSync\":1}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"textDocumentSync\":1}}}"))
     lspYaz(govde)
+    döndür 0
+son
+
+# ---- hover / definition yardımcıları ----
+
+# no'lu satırı (0-tabanlı) döndür
+işlev satirAl(kaynak, no)
+    satirlar = satiraBol(kaynak)
+    eğer no < 0 veya no >= uzunluk(satirlar) ise
+        döndür ""
+    son
+    döndür satirlar[no]
+son
+
+# kimlik karakteri mi? (harf/rakam/_ veya çok-baytlı Türkçe >=128)
+işlev kimlikKarMi(c)
+    k = kod(c)
+    eğer k >= 48 ve k <= 57 ise
+        döndür doğru
+    son
+    eğer k >= 65 ve k <= 90 ise
+        döndür doğru
+    son
+    eğer k >= 97 ve k <= 122 ise
+        döndür doğru
+    son
+    eğer k >= 128 ise
+        döndür doğru
+    son
+    döndür c == "_"
+son
+
+# kar konumundaki kelimeyi (kimlik) döndür
+işlev konumKelime(satir, kar)
+    n = uzunluk(satir)
+    eğer kar < 0 veya kar >= n ise
+        döndür ""
+    son
+    bas = kar
+    iken bas > 0 ve kimlikKarMi(metinAl(satir, bas - 1))
+        bas = bas - 1
+    son
+    ucu = kar
+    iken ucu < n ve kimlikKarMi(metinAl(satir, ucu))
+        ucu = ucu + 1
+    son
+    kelime = ""
+    i = bas
+    iken i < ucu
+        kelime = metinBirlestir(kelime, metinAl(satir, i))
+        i = i + 1
+    son
+    döndür kelime
+son
+
+# ad'lı işlevin tanım satır no'su (0) ve imzası → [no, imza]; yoksa [-1, ""]
+işlev islevBul(kaynak, ad)
+    satirlar = satiraBol(kaynak)
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kel = kelimeAl(satir, b)
+        eğer metinEsit(kel, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kel))
+            eğer metinEsit(kelimeAl(satir, adBasla), ad) ise
+                döndür [si, kirp(satir)]
+            son
+        son
+        si = si + 1
+    son
+    döndür [0 - 1, ""]
+son
+
+# hover yanıtı (id, kaynak, satirNo, kar)
+işlev lspHover(id, kaynak, satirNo, kar)
+    satir = satirAl(kaynak, satirNo)
+    kelime = konumKelime(satir, kar)
+    bulundu = islevBul(kaynak, kelime)
+    eğer bulundu[0] < 0 ise
+        lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
+    değilse
+        deger = metinBirlestir("işlev ", metinBirlestir(kelime, " — tanım satır "))
+        deger = metinBirlestir(deger, metin(bulundu[0] + 1))
+        govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"contents\":{\"kind\":\"plaintext\",\"value\":\""))
+        govde = metinBirlestir(govde, metinBirlestir(deger, "\"}}}"))
+        lspYaz(govde)
+    son
+    döndür 0
+son
+
+# definition yanıtı (id, uri, kaynak, satirNo, kar)
+işlev lspDefinition(id, uri, kaynak, satirNo, kar)
+    satir = satirAl(kaynak, satirNo)
+    kelime = konumKelime(satir, kar)
+    bulundu = islevBul(kaynak, kelime)
+    eğer bulundu[0] < 0 ise
+        lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
+    değilse
+        dno = metin(bulundu[0])
+        aralik = metinBirlestir("{\"start\":{\"line\":", metinBirlestir(dno, ",\"character\":0},\"end\":{\"line\":"))
+        aralik = metinBirlestir(aralik, metinBirlestir(dno, ",\"character\":0}}"))
+        govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"uri\":\""))
+        govde = metinBirlestir(govde, metinBirlestir(uri, metinBirlestir("\",\"range\":", aralik)))
+        govde = metinBirlestir(govde, "}}")
+        lspYaz(govde)
+    son
     döndür 0
 son
 
@@ -303,6 +410,16 @@ işlev lspCalis()
             uri = jsonMetin(govde, "uri")
             yol = uriYol(uri)
             d = lspPublishDiagnostics(uri, oku(yol))
+        değilse eğer metinEsit(yontem, "textDocument/hover") ise
+            uri = jsonMetin(govde, "uri")
+            sno = metinRakamlari(jsonHam(govde, "line"), 0)
+            kno = metinRakamlari(jsonHam(govde, "character"), 0)
+            d = lspHover(id, oku(uriYol(uri)), sno, kno)
+        değilse eğer metinEsit(yontem, "textDocument/definition") ise
+            uri = jsonMetin(govde, "uri")
+            sno = metinRakamlari(jsonHam(govde, "line"), 0)
+            kno = metinRakamlari(jsonHam(govde, "character"), 0)
+            d = lspDefinition(id, uri, oku(uriYol(uri)), sno, kno)
         değilse eğer metinEsit(yontem, "shutdown") ise
             lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
         değilse eğer metinEsit(yontem, "exit") ise
