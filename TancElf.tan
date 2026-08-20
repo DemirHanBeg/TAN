@@ -208,11 +208,15 @@ işlev tokenle(kaynak)
             z = tamponEkle(tokenKutu, tNKutu, tokenKodla("VIRGUL", ",", satir, soh))
             i = i + 1
 
+        değilse eğer (h == "<" veya h == ">") ve i + 1 < n ve metinAl(kaynak, i + 1) == h ise
+            z = tamponEkle(tokenKutu, tNKutu, tokenKodla("ISLEC", metinBirlestir(h, h), satir, soh))
+            i = i + 2
+
         değilse eğer (h == ">" veya h == "<" veya h == "=" veya h == "!") ve i + 1 < n ve metinAl(kaynak, i + 1) == "=" ise
             z = tamponEkle(tokenKutu, tNKutu, tokenKodla("ISLEC", metinBirlestir(h, "="), satir, soh))
             i = i + 2
 
-        değilse eğer h == "+" veya h == "-" veya h == "*" veya h == "/" veya h == "%" veya h == ">" veya h == "<" veya h == "=" ise
+        değilse eğer h == "+" veya h == "-" veya h == "*" veya h == "/" veya h == "%" veya h == ">" veya h == "<" veya h == "=" veya h == "&" veya h == "|" veya h == "^" ise
             z = tamponEkle(tokenKutu, tNKutu, tokenKodla("ISLEC", h, satir, soh))
             i = i + 1
 
@@ -492,8 +496,22 @@ işlev karsilastirmaAyristir(tokenler, pozKutu, sayacKutu)
 son
 
 işlev toplamaAyristir(tokenler, pozKutu, sayacKutu)
-    bant = carpmaAyristir(tokenler, pozKutu, sayacKutu)
+    bant = bitselAyristir(tokenler, pozKutu, sayacKutu)
     iken pTur(tokenler, pozKutu) == "ISLEC" ve (pDeger(tokenler, pozKutu) == "+" veya pDeger(tokenler, pozKutu) == "-")
+        islec = pDeger(tokenler, pozKutu)
+        x = pIlerle(tokenler, pozKutu)
+        x = pSatirlariAtla(tokenler, pozKutu)
+        sag = bitselAyristir(tokenler, pozKutu, sayacKutu)
+        bant = listeBirlestir(bant, sag)
+        bant = ekle(bant, bc("IKILI", islec, ""))
+    son
+    döndür bant
+son
+
+# bitsel/kaydırma katmanı: & | ^ << >>  (toplama ile carpma arası öncelik)
+işlev bitselAyristir(tokenler, pozKutu, sayacKutu)
+    bant = carpmaAyristir(tokenler, pozKutu, sayacKutu)
+    iken pTur(tokenler, pozKutu) == "ISLEC" ve (pDeger(tokenler, pozKutu) == "&" veya pDeger(tokenler, pozKutu) == "|" veya pDeger(tokenler, pozKutu) == "^" veya pDeger(tokenler, pozKutu) == "<<" veya pDeger(tokenler, pozKutu) == ">>")
         islec = pDeger(tokenler, pozKutu)
         x = pIlerle(tokenler, pozKutu)
         x = pSatirlariAtla(tokenler, pozKutu)
@@ -1452,6 +1470,17 @@ işlev xorKayit(hedef, kaynak)
 son
 işlev andKayit(hedef, kaynak)
     döndür ikiliKayit(33, hedef, kaynak) # 0x21
+son
+işlev orKayit(hedef, kaynak)
+    döndür ikiliKayit(9, hedef, kaynak) # 0x09
+son
+# shl/shr r/m64, cl  (REX.W D3 /spec) — spec=4 shl, 5 shr; sayaç cl'de (rcx)
+işlev shiftClKayit(reg, spec)
+    rex = 72
+    eğer reg >= 8 ise
+        rex = rex + 1
+    son
+    döndür [bcBayt(rex), bcBayt(211), bcBayt(modrmBayt(3, spec, reg))]
 son
 
 # ---------------- SSE (ondalık/kesir sayı) komut kodlayıcıları ----------------
@@ -3840,6 +3869,16 @@ işlev ifadeBantYaz(rpnBant, adlarKutu, sayacKutu, tipKutu, islevTipKutu)
                     z = tamponEkleTumu(kodKutu, nKutu, cqo())
                     z = tamponEkleTumu(kodKutu, nKutu, idivKayit(1))
                     z = tamponEkleTumu(kodKutu, nKutu, movKayit(0, 2)) # rax = rdx (kalan)
+                değilse eğer a1 == "&" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, andKayit(0, 1))
+                değilse eğer a1 == "|" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, orKayit(0, 1))
+                değilse eğer a1 == "^" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, xorKayit(0, 1))
+                değilse eğer a1 == "<<" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, shiftClKayit(0, 4))
+                değilse eğer a1 == ">>" ise
+                    z = tamponEkleTumu(kodKutu, nKutu, shiftClKayit(0, 5))
                 değilse
                     # karşılaştırma: cmp + setcc + movzx
                     z = tamponEkleTumu(kodKutu, nKutu, cmpKayit(0, 1))
