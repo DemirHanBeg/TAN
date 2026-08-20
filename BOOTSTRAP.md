@@ -1,3 +1,5 @@
+> ⚠️ **TARİHSEL — Go dönemi kaydı.** Go referans motoru 2026-08-20'de TAMAMEN kaldırıldı; repo artık %100 self-hosted, sıfır Go. Bu belge o dönemin mimarisini/planını anlatır. Güncel mimari için **CURRENT_ARCHITECTURE.md**. Buradaki "go build", ".go dosyası", "yorumlayıcı/VM" atıfları ARTIK GEÇERLİ DEĞİL.
+
 # TAN Bootstrap Analizi — Go → TAN Gen1 → Gen2 → Gen3 → TAN Derleyici
 
 *Bu belge repository'deki kaynak, script ve git geçmişinin doğrudan analizine dayanır (2026-08-13). Kanıt bulunmayan hiçbir iddia içermez; kanıt bulunmayan noktalar "BİLİNMİYOR" olarak işaretlenmiştir. Tüm satır numaraları çalışma ağacındaki güncel dosyalara aittir.*

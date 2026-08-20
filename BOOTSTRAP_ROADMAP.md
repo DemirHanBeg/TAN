@@ -1,3 +1,5 @@
+> ⚠️ **TARİHSEL — Go dönemi kaydı.** Go referans motoru 2026-08-20'de TAMAMEN kaldırıldı; repo artık %100 self-hosted, sıfır Go. Bu belge o dönemin mimarisini/planını anlatır. Güncel mimari için **CURRENT_ARCHITECTURE.md**. Buradaki "go build", ".go dosyası", "yorumlayıcı/VM" atıfları ARTIK GEÇERLİ DEĞİL.
+
 # TAN Bootstrap Yol Haritası — Go → TAN Gen1 → Gen2 → Gen3 → TAN Derleyici
 
 *Hedef zincir: `Go → TAN Gen1 → TAN Gen2 → TAN Gen3 → (mümkünse) TAN → TAN compiler`. Bu belge zincirin bugünkü durumunu, taşıma fazlarını, her fazın kapsamını/doğrulamasını ve bilinen tuzakları verir. Kanıt bulunmayan noktalar "BİLİNMİYOR" olarak işaretlenmiştir. Tüm satır numaraları çalışma ağacındaki dosyalara aittir.*

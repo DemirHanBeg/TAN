@@ -1,13 +1,12 @@
 # Tan
 
-**A programming language with Turkish keywords that compiles to native x86-64 binaries with zero external tools — its own assembler, its own linker.**
+**A programming language with Turkish keywords that compiles to native x86-64 binaries with zero external tools — its own assembler, its own linker, and now written entirely in itself.**
 
-*Türkçe anahtar kelimeli, kendi assembler'ı ve kendi linker'ı olan, sıfır dış bağımlılıkla native binary üreten programlama dili.*
+*Türkçe anahtar kelimeli, kendi assembler'ı ve kendi linker'ı olan, sıfır dış bağımlılıkla native binary üreten, %100 kendi kendini derleyen programlama dili.*
 
 ```
-$ tan elf program.tan cikti
-ELF doğrudan yazıldı: cikti (1048 bayt)
-Kullanılan dış araç: YOK (as/ld/gcc/libc hiçbiri)
+$ ./TancElf program.tan cikti
+TancElf: program.tan -> cikti  (1048 bayt)
 
 $ ldd cikti
         not a dynamic executable
@@ -15,9 +14,9 @@ $ ldd cikti
 
 ---
 
-## Self-hosting: Tan compiles Tan — zero Go, verified
+## Self-hosting: Tan compiles Tan — ZERO Go
 
-**`TancElf.tan` — the compiler itself, written in Tan — compiles itself and reproduces itself byte-for-byte, with no Go involved.**
+**`TancElf.tan` — the compiler itself, written in Tan — compiles itself and reproduces itself byte-for-byte, with no Go anywhere.** As of **2026-08-20 the Go reference engine was fully removed** (all `.go` files, `go.mod/sum`, and the Go-built binaries deleted; they remain in git history only).
 
 ```bash
 ./TancElf TancElf.tan gen1   # committed native seed compiles the self-hosted compiler
@@ -27,20 +26,23 @@ cmp gen2 gen3                 # silent — byte-identical, fixed point reached
 ```
 
 or simply `./BootstrapGoSuz.sh`, which does exactly this and checks the result.
+`TestArkaUcGoSuzTemiz.sh` runs it in a clean environment and asserts that
+**go/gcc/clang/as/ld are never invoked**.
 
-**Go is not part of this chain at all.** `TancElf` — a small (~115 KB), statically-linked, native x86-64 ELF binary committed in this repo — is the one bootstrap artifact the chain needs, and it is itself reproducible: `KanitGoSuzTarihce.sh` independently rebuilds it (and every historical generation of the compiler) straight from git history using nothing but earlier native `Tan` binaries, no Go, no gcc/clang/as/ld. See `SURUM.md` → "Go'suz Bootstrap" for the full trace, including the one place in the project's history (commit `9ffe0b5`) where a new builtin was introduced and self-used in the same commit — a classic bootstrap chicken-and-egg — and the two-step shim that gets past it without touching `TancElf.tan` itself.
+`TancElf` — a small (~146 KB), statically-linked, native x86-64 ELF binary
+committed in this repo — is the one bootstrap artifact the chain needs, and it
+is itself reproducible from git history using nothing but earlier native `Tan`
+binaries (`KanitGoSuzTarihce.sh`).
 
-Go source (`DerleElf.go`, the interpreter, the VM) stays in the tree as an **independent reference only** — nothing in the production chain requires it. `FarkTesti.sh`/`TestArkaUc.sh` use it *if present* for cross-checking (Ken Thompson "Trusting Trust" reasoning: an independent second implementation catches bugs a self-hosted compiler could hide from itself — see `SURUM.md` 0.5.0 for the nine self-hosting bugs this caught, and the Go'suz Bootstrap section for a tenth).
-
-The two external-tool-dependent legacy backends (`tan derle` → C → gcc, `tan asm` → x86-64 asm → as/ld) are archived in `arsiv/` — superseded by `tan elf`, which needs nothing.
-
-At the machine-code level, Tan writes the REX prefixes, ModRM bytes, RIP-relative addressing, label fixups, the ELF64 header and the program header by hand. There is no `printf` — integer-to-string conversion is hand-written machine code and output goes through a raw `write` syscall. Strings and lists are backed by a hand-written `brk`-based bump allocator, no libc.
+At the machine-code level, Tan writes the REX prefixes, ModRM bytes, RIP-relative
+addressing, label fixups, the ELF64 header and the program header by hand. There
+is no `printf` — integer-to-string conversion is hand-written machine code and
+output goes through a raw `write` syscall. Strings and lists are backed by a
+hand-written `brk`-based bump allocator, no libc.
 
 ---
 
-## Quick start
-
-**Go-free (recommended — this is the real production path now):**
+## Quick start (Go-free — the only path now)
 
 ```bash
 git clone https://github.com/DemirHanBeg/TAN.git
@@ -51,23 +53,11 @@ cd TAN
 ./out
 ```
 
-**With Go available (optional — only needed for the interpreter/VM and cross-checking):**
+Verify, including the self-hosting fixed point and clean environment:
 
 ```bash
-go build -o tan .           # only needed for the interpreter/VM/package manager
-./tan Ornek.tan              # run with the interpreter
-./tan elf AsmTest.tan out    # Go's own elf backend, for comparison
-./out
-```
-
-Verify everything, including the self-hosting fixed point:
-
-```bash
-./Bootstrap.sh                  # Go-free chain first, then Go cross-check if Go is present
-./KanitGoSuzTarihce.sh          # independent proof: rebuilds the whole history, zero Go
-./TestArkaUcGoSuzTemiz.sh       # clean-room check: no go/gcc/clang/as/ld touched
-./TestArkaUc.sh elf             # 20 backend regression tests (needs Go)
-./FarkTesti.sh ornekler/*.tan   # interpreter vs native cross-check (needs Go)
+./TestArkaUcGoSuzTemiz.sh       # clean-room: no go/gcc/clang/as/ld touched
+./KanitGoSuzTarihce.sh          # independent proof: rebuilds the history, zero Go
 ```
 
 ---
@@ -91,6 +81,21 @@ Keywords: `işlev` (function), `döndür` (return), `eğer/değilse/son` (if/els
 
 ---
 
+## Developer tooling (written in Tan, `araclar/`)
+
+Self-hosted tooling — each compiles with `./TancElf` and emits `--json`:
+
+```bash
+./TancElf araclar/simgeler.tan simgeler && ./simgeler dosya.tan --json   # symbols
+./TancElf araclar/denetle.tan  denetle  && ./denetle  dosya.tan --json   # block-balance lint
+./TancElf araclar/bicimlendir.tan bic   && ./bic      dosya.tan          # canonical formatter
+```
+
+`kutuphane/tanoku.tan` holds the shared tokenizer/scan helpers all tools
+`içe al`. This is the foundation for the coming LSP.
+
+---
+
 ## Real example: cutting-stock optimizer
 
 `Kesim.tan` — a working production tool. Given stock bars and a cut list, it minimizes waste (First Fit Decreasing), accounts for saw kerf, and **verifies its own output** before you cut anything.
@@ -101,10 +106,6 @@ Keywords: `işlev` (function), `döndür` (return), `eğer/değilse/son` (if/els
      7 | 1200+950+950+950+950+950             |    32 |  %99.46
 
 Kullanilan stok : 11 cubuk = 66000 mm    Verim: %89.63
-
- OZ-DENETIM
-   2400 mm : istenen 4 / planda 4   TAMAM
- DENGE DENETIMI: TAMAM — 59160 + 6657 + 183 = 66000
  >>> PLAN GECERLI. Kesime hazir.
 ```
 
@@ -112,7 +113,7 @@ Kullanilan stok : 11 cubuk = 66000 mm    Verim: %89.63
 
 ## Number system
 
-Tan distinguishes `int64` (exact) from `float64`. This matters:
+Tan distinguishes `int64` (exact) from `float64`:
 
 ```
 123456789 * 987654321
@@ -127,51 +128,38 @@ Rules: `int OP int → int`, `int OP float → float`, `int / int → int if div
 
 ## Honest limitations
 
-This is the part most projects hide. Read it before you judge.
+**The compiler handles:** int64/float64 arithmetic, string and list variables (hand-written heap allocator), comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `her...içinde`, `dur/devam`, recursive functions, file I/O (`oku`/`yazBaytlar`/`dosyaAc/Oku/Yaz/Kapat`), `içe al` (module import — static expansion at compile time), and is complete enough to compile itself.
 
-**The `elf` backend handles:** int64 and float64 arithmetic, string and list variables (with a hand-written heap allocator), comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `her...içinde`, `dur/devam`, functions with recursion, file I/O (`oku`/`yazBaytlar`), and is complete enough to compile itself (see Self-hosting above).
+**Open items:**
+- `dene/yakala` (try/catch) — parsed by the lexer, not yet in code generation (clear compile-time error, not silent wrong output).
+- Full toolchain still being rebuilt in Tan (Go host was removed): LSP, test runner, structured diagnostics, package manager, API/dependency query. See the leverage roadmap.
+- x86-64 Linux only. Other architectures need a new backend.
+- No DWARF debug info (`gdb` sees no symbols).
+- Naive code generator — no register allocation / DCE. Correct, not fast.
 
-**It does NOT yet handle:** `içe al` (module imports — interpreter-only for now) and `dene/yakala` (try/catch — parsed by the lexer, not yet implemented in code generation; both raise a clear compile-time error rather than silently producing wrong output).
-
-**Other open items:**
-- x86-64 Linux only. Other architectures would need a new backend.
-- No DWARF debug info, so `gdb` sees no symbols.
-- The code generator is naive — no register allocation, no dead code elimination, no loop unrolling. Correct, not fast.
-- WASM build exists but has not been tested in a real browser.
-- The archived `derle`/`asm` backends (`arsiv/`) are frozen at whatever feature set they had when archived — not maintained further.
-
-**What never goes away:** the x86-64 instruction set and the Linux syscall ABI. Those are not dependencies; they are the language being spoken.
+**What never goes away:** the x86-64 instruction set and the Linux syscall ABI. Not dependencies — the language being spoken.
 
 ---
 
 ## Repository layout
 
 ```
-*.go                Go seed engine: lexer, parser, interpreter, bytecode VM,
-                    Sayi.go (number system), DerleElf.go (elf backend —
-                    still the reference/cross-check for TancElf.tan)
-arsiv/              archived: DerleC.go, DerleAsm.go — the two external-
-                    tool-dependent backends, superseded by tan elf
 TancElf.tan         the self-hosting compiler, written entirely in Tan —
                     compiles itself, byte-identical fixed point proven
-kutuphane/          31 standard library modules, written in Tan
+TancElf             committed native seed binary (~146 KB, static)
+gen1 / gen2 / gen3  bootstrap generations (fixed-point artifacts)
+araclar/            developer tooling, written in Tan (simgeler, denetle,
+                    bicimlendir; more coming)
+kutuphane/          standard library + tooling modules, written in Tan
+                    (tanoku.tan = shared tokenizer/scan helpers)
 Tanc.tan, Tanc2.tan, TancAsm.tan   earlier Tan-written compiler attempts
 Kesim.tan           cutting-stock optimizer (real tool)
 Talay.tan           freight index scoring pipeline
 Noral.tan           neural network with backpropagation
 testler/            test programs
-TestArkaUc.sh     20 backend regression tests
-FarkTesti.sh        interpreter-vs-native cross-check
-Bootstrap.sh        elf backend + self-hosting chain + regression
-web/                browser REPL (build tan.wasm separately)
-```
-
----
-
-## Building the WASM REPL
-
-```bash
-GOOS=js GOARCH=wasm go build -o web/tan.wasm .
+BootstrapGoSuz.sh   self-hosting chain, zero Go
+TestArkaUcGoSuzTemiz.sh   clean-room: asserts no go/gcc/clang/as/ld
+KanitGoSuzTarihce.sh      rebuilds compiler history from git, zero Go
 ```
 
 ---
@@ -180,4 +168,6 @@ GOOS=js GOARCH=wasm go build -o web/tan.wasm .
 
 MIT — see [LICENSE](LICENSE).
 
-Contributions welcome. The most useful ones right now: `içe al` (module import) support in the self-hosted compiler, `dene/yakala` (try/catch) code generation, the remaining handful of built-ins (`taban`, `tavan`, `sözlük`, `harfler`, `parçala`) in `TancElf.tan`'s own runtime, or an ARM64 backend.
+Contributions welcome. Highest-value right now: the developer toolchain being
+rebuilt in Tan (LSP, test runner, structured diagnostics, package manager),
+`dene/yakala` code generation, or an ARM64 backend.
