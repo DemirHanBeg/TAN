@@ -1,0 +1,22 @@
+# ozet.tan — TAN içerik özeti (hash). İçerik-adresleme + bütünlük için.
+# Polinom rolling hash: h = (h*31 + bayt) mod P, P = 1000000007 (< 2^31, taşma yok).
+# NOT: KRİPTOGRAFİK DEĞİL — değişiklik-tespiti / bütünlük içindir, güvenlik için
+# gerçek SHA256 (Kaldıraç 4 olgunlaşınca) gerekir. Sadece yerleşik kullanır.
+
+işlev ozet(metin)
+    p = 1000000007
+    h = 0
+    n = uzunluk(metin)
+    i = 0
+    iken i < n
+        h = h * 31 + kod(metinAl(metin, i))
+        h = h - tamBol(h, p) * p
+        i = i + 1
+    son
+    döndür h
+son
+
+# dosya içeriğinin özeti (onlu metin olarak)
+işlev dosyaOzeti(yol)
+    döndür metin(ozet(oku(yol)))
+son

@@ -1,0 +1,18 @@
+# ozet_testleri.tan — kutuphane/ozet.tan hash fonksiyonunun birim testleri.
+içe al "kutuphane/test.tan"
+içe al "kutuphane/ozet.tan"
+
+gecti = 0
+toplam = 0
+
+yaz("== ozet ==")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(0, ozet(""), "bos metin ozeti 0")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(ozet("merhaba"), ozet("merhaba"), "belirlenimci (ayni girdi ayni ozet)")
+toplam = toplam + 1
+gecti = gecti + iddiaDogru(ozet("merhaba") != ozet("merhabb"), "farkli girdi farkli ozet")
+toplam = toplam + 1
+gecti = gecti + iddiaDogru(ozet("abc") != ozet("acb"), "sira duyarli")
+
+d = testSonuc(gecti, toplam)

@@ -3,6 +3,47 @@
 # Kaldıraç 5 (tek toolchain) + Kaldıraç 1 (tooling). Ortak tarama: tanoku.tan.
 
 içe al "kutuphane/tanoku.tan"
+içe al "kutuphane/ozet.tan"
+
+# bir kaynaktaki tüm `içe al "yol"` bağımlılıklarını liste olarak döndürür
+işlev iceAlleriBul(kaynak)
+    satirlar = satiraBol(kaynak)
+    baglar = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        eğer metinEsit(kelimeAl(satir, b), "içe") ise
+            t1 = karakterBul(satir, "\"", 0)
+            eğer t1 >= 0 ise
+                t2 = karakterBul(satir, "\"", t1 + 1)
+                eğer t2 > t1 ise
+                    p = ""
+                    j = t1 + 1
+                    iken j < t2
+                        p = metinBirlestir(p, metinAl(satir, j))
+                        j = j + 1
+                    son
+                    baglar = ekle(baglar, p)
+                son
+            son
+        son
+        si = si + 1
+    son
+    döndür baglar
+son
+
+# metin listede var mı? (metinEsit ile)
+işlev metinListedeVarMi(liste, hedef)
+    i = 0
+    iken i < uzunluk(liste)
+        eğer metinEsit(liste[i], hedef) ise
+            döndür doğru
+        son
+        i = i + 1
+    son
+    döndür yanlış
+son
 
 # anahtar kelime mi? (simgeler'de üst-seviye değişken tespitinde eleme)
 işlev anahtarMiKelime(k)
@@ -119,6 +160,12 @@ işlev denetleAna(yol, json)
                 son
             son
         son
+
+        # TAN003: satır sonu boşluğu (uyarı)
+        nsatir = uzunluk(satir)
+        eğer nsatir > 0 ve bosMuk(metinAl(satir, nsatir - 1)) ise
+            tanilar = ekle(tanilar, ["TAN003", "uyarı", metin(si + 1), "satır sonunda gereksiz boşluk", "satır sonu boşluk/tab diff gürültüsü ve tutarsızlık yaratır", "satır sonu boşluklarını sil (bicimlendir otomatik yapar)"])
+        son
         si = si + 1
     son
 
@@ -171,6 +218,186 @@ işlev denetleAna(yol, json)
                 si = si + 1
             son
         son
+    son
+    döndür 0
+son
+
+# ---- api: dışa-açık işlev imzaları (Kaldıraç 1) ----
+işlev apiAna(yol, json)
+    kaynak = oku(yol)
+    satirlar = satiraBol(kaynak)
+    imzalar = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        eğer b == 0 ise
+            kelime = kelimeAl(satir, 0)
+            eğer metinEsit(kelime, "işlev") ise
+                adBasla = boslukAtla(satir, uzunluk(kelime))
+                ad = kelimeAl(satir, adBasla)
+                acKonum = karakterBul(satir, "(", adBasla)
+                parametreler = ""
+                eğer acKonum >= 0 ise
+                    parametreler = parametreAl(satir, acKonum)
+                son
+                imzalar = ekle(imzalar, [ad, parametreler])
+            son
+        son
+        si = si + 1
+    son
+
+    eğer json ise
+        cikti = "{\"api\":["
+        si = 0
+        iken si < uzunluk(imzalar)
+            im = imzalar[si]
+            eğer si > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"ad\":\"")
+            cikti = metinBirlestir(cikti, im[0])
+            cikti = metinBirlestir(cikti, "\",\"parametreler\":\"")
+            cikti = metinBirlestir(cikti, im[1])
+            cikti = metinBirlestir(cikti, "\"}")
+            si = si + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        si = 0
+        iken si < uzunluk(imzalar)
+            im = imzalar[si]
+            cikti = metinBirlestir("işlev ", metinBirlestir(im[0], metinBirlestir("(", metinBirlestir(im[1], ")"))))
+            yaz(cikti)
+            si = si + 1
+        son
+    son
+    döndür 0
+son
+
+# ---- bagimlilik: içe al grafiği (Kaldıraç 1) ----
+işlev bagimlilikAna(yol, json)
+    baglar = iceAlleriBul(oku(yol))
+
+    eğer json ise
+        cikti = "{\"bagimliliklar\":["
+        si = 0
+        iken si < uzunluk(baglar)
+            eğer si > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "\"")
+            cikti = metinBirlestir(cikti, baglar[si])
+            cikti = metinBirlestir(cikti, "\"")
+            si = si + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        eğer uzunluk(baglar) == 0 ise
+            yaz("(bağımlılık yok)")
+        değilse
+            si = 0
+            iken si < uzunluk(baglar)
+                yaz(metinBirlestir("içe al ", baglar[si]))
+                si = si + 1
+            son
+        son
+    son
+    döndür 0
+son
+
+# ---- kilit: içerik-adresli lockfile (Kaldıraç 3) ----
+# Hedef dosya + TÜM transitive içe al bağımlılıklarının özetini (hash) üretir.
+# Deterministik build/bütünlük için. Şema: {"kilit":[{"yol","ozet"}]}
+işlev kilitAna(yol, json)
+    kuyruk = [yol]
+    gorulen = []
+    kayitlar = []
+    ki = 0
+    iken ki < uzunluk(kuyruk)
+        aktif = kuyruk[ki]
+        ki = ki + 1
+        eğer metinListedeVarMi(gorulen, aktif) == yanlış ise
+            gorulen = ekle(gorulen, aktif)
+            kaynak = oku(aktif)
+            kayitlar = ekle(kayitlar, [aktif, metin(ozet(kaynak))])
+            depler = iceAlleriBul(kaynak)
+            di = 0
+            iken di < uzunluk(depler)
+                kuyruk = ekle(kuyruk, depler[di])
+                di = di + 1
+            son
+        son
+    son
+
+    eğer json ise
+        cikti = "{\"kilit\":["
+        ki = 0
+        iken ki < uzunluk(kayitlar)
+            k = kayitlar[ki]
+            eğer ki > 0 ise
+                cikti = metinBirlestir(cikti, ",")
+            son
+            cikti = metinBirlestir(cikti, "{\"yol\":\"")
+            cikti = metinBirlestir(cikti, k[0])
+            cikti = metinBirlestir(cikti, "\",\"ozet\":")
+            cikti = metinBirlestir(cikti, k[1])
+            cikti = metinBirlestir(cikti, "}")
+            ki = ki + 1
+        son
+        cikti = metinBirlestir(cikti, "]}")
+        yaz(cikti)
+    değilse
+        ki = 0
+        iken ki < uzunluk(kayitlar)
+            k = kayitlar[ki]
+            yaz(metinBirlestir(k[1], metinBirlestir("  ", k[0])))
+            ki = ki + 1
+        son
+    son
+    döndür 0
+son
+
+# ---- dogrula: lockfile'a karşı bütünlük kontrolü (Kaldıraç 4) ----
+# `tan kilit X > X.kilit` ile üretilen düz lockfile'ı okur, her dosyayı yeniden
+# hash'ler, beklenen==gerçek karşılaştırır. Tampering/drift tespiti (madde 29).
+işlev dogrulaAna(kilitYol)
+    kaynak = oku(kilitYol)
+    satirlar = satiraBol(kaynak)
+    toplam = 0
+    tamam = 0
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        eğer uzunluk(kirp(satir)) > 0 ise
+            beklenenOzet = kelimeAl(satir, 0)
+            yolBasla = uzunluk(beklenenOzet) + 2
+            dyol = ""
+            j = yolBasla
+            iken j < uzunluk(satir)
+                dyol = metinBirlestir(dyol, metinAl(satir, j))
+                j = j + 1
+            son
+            gercekOzet = metin(ozet(oku(dyol)))
+            toplam = toplam + 1
+            eğer metinEsit(beklenenOzet, gercekOzet) ise
+                tamam = tamam + 1
+                yaz(metinBirlestir("  [TAMAM] ", dyol))
+            değilse
+                yaz(metinBirlestir("  [DEGISTI] ", dyol))
+                yaz(metinBirlestir("    beklenen: ", beklenenOzet))
+                yaz(metinBirlestir("    gercek  : ", gercekOzet))
+            son
+        son
+        si = si + 1
+    son
+    yaz("")
+    eğer tamam == toplam ise
+        yaz(metinBirlestir("BÜTÜNLÜK TAMAM: ", metinBirlestir(metin(toplam), " dosya değişmemiş")))
+    değilse
+        yaz(metinBirlestir("BÜTÜNLÜK BOZUK: ", metinBirlestir(metin(toplam - tamam), " dosya değişmiş")))
     son
     döndür 0
 son

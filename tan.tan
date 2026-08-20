@@ -8,8 +8,12 @@ eğer argsay() < 2 ise
     yaz("TAN aracı — Kullanım: tan <komut> <dosya.tan> [--json]")
     yaz("Komutlar:")
     yaz("  simgeler     sembol listeleyici (işlev/değişken)")
-    yaz("  denetle      blok dengesi linter'ı")
+    yaz("  api          dışa-açık işlev imzaları")
+    yaz("  bagimlilik   içe al grafiği")
+    yaz("  denetle      blok dengesi linter'ı + tanı")
     yaz("  bicimlendir  kanonik formatter (bic)")
+    yaz("  kilit        içerik-adresli lockfile (transitive özet)")
+    yaz("  dogrula      lockfile'a karşı bütünlük kontrolü")
 değilse
     komut = arg(1)
 
@@ -34,10 +38,18 @@ değilse
     değilse
         eğer metinEsit(komut, "simgeler") ise
             d = simgelerAna(yol, json)
+        değilse eğer metinEsit(komut, "api") ise
+            d = apiAna(yol, json)
+        değilse eğer metinEsit(komut, "bagimlilik") ise
+            d = bagimlilikAna(yol, json)
         değilse eğer metinEsit(komut, "denetle") ise
             d = denetleAna(yol, json)
         değilse eğer metinEsit(komut, "bicimlendir") veya metinEsit(komut, "bic") ise
             d = bicimlendirAna(yol)
+        değilse eğer metinEsit(komut, "kilit") ise
+            d = kilitAna(yol, json)
+        değilse eğer metinEsit(komut, "dogrula") ise
+            d = dogrulaAna(yol)
         değilse
             yaz(metinBirlestir("Bilinmeyen komut: ", komut))
         son
