@@ -81,18 +81,28 @@ Keywords: `işlev` (function), `döndür` (return), `eğer/değilse/son` (if/els
 
 ---
 
-## Developer tooling (written in Tan, `araclar/`)
+## Developer toolchain (written in Tan, single binary)
 
-Self-hosted tooling — each compiles with `./TancElf` and emits `--json`:
+A unified `tan` toolchain — compile once with `bash kur.sh`, then:
 
 ```bash
-./TancElf araclar/simgeler.tan simgeler && ./simgeler dosya.tan --json   # symbols
-./TancElf araclar/denetle.tan  denetle  && ./denetle  dosya.tan --json   # block-balance lint
-./TancElf araclar/bicimlendir.tan bic   && ./bic      dosya.tan          # canonical formatter
+tan simgeler   dosya.tan --json    # symbols (functions/variables)
+tan api        dosya.tan --json    # public function signatures
+tan bagimlilik dosya.tan --json    # içe al dependency graph
+tan ast        dosya.tan --json    # structural parse tree
+tan denetle    dosya.tan --json    # linter + AI-native diagnostics (TANxxxx + reason + fix)
+tan bicimlendir dosya.tan          # canonical formatter (deterministic, idempotent)
+tan kilit      dosya.tan           # SHA-256 content-addressed lockfile (transitive)
+tan dogrula    dosya.kilit         # integrity check against lockfile
+tan imzala     dosya.tan <key>     # HMAC-SHA256 signature
+tan imzadogrula dosya.tan <key> <sig>   # verify signature
+tan sürüm                          # toolchain info
 ```
 
-`kutuphane/tanoku.tan` holds the shared tokenizer/scan helpers all tools
-`içe al`. This is the foundation for the coming LSP.
+All self-hosted (zero Go), all `--json` for AI/editor consumption.
+`kutuphane/tanoku.tan` = shared tokenizer/scan helpers; `kutuphane/sha256.tan` =
+SHA-256 + HMAC (real crypto, matches `sha256sum`). Unit tests: `bash TestAraclar.sh`.
+Reproducibility: `bash HermetikDogrula.sh` (proves byte-deterministic builds).
 
 ---
 
@@ -128,11 +138,12 @@ Rules: `int OP int → int`, `int OP float → float`, `int / int → int if div
 
 ## Honest limitations
 
-**The compiler handles:** int64/float64 arithmetic, string and list variables (hand-written heap allocator), comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `her...içinde`, `dur/devam`, recursive functions, file I/O (`oku`/`yazBaytlar`/`dosyaAc/Oku/Yaz/Kapat`), `içe al` (module import — static expansion at compile time), and is complete enough to compile itself.
+**The compiler handles:** int64/float64 arithmetic, bitwise & shift (`& | ^ << >>`), string and list variables (hand-written heap allocator), comparisons, `ve/veya/değil`, `eğer/değilse`, `iken`, `her...içinde`, `dur/devam`, recursive functions, file I/O (`oku`/`yazBaytlar`/`dosyaAc/Oku/Yaz/Kapat`), `içe al` (module import — static expansion at compile time), and is complete enough to compile itself. Bitwise support enables real crypto in pure Tan — see `kutuphane/sha256.tan` (SHA-256 + HMAC, matches `sha256sum`).
 
 **Open items:**
 - `dene/yakala` (try/catch) — parsed by the lexer, not yet in code generation (clear compile-time error, not silent wrong output).
-- Full toolchain still being rebuilt in Tan (Go host was removed): LSP, test runner, structured diagnostics, package manager, API/dependency query. See the leverage roadmap.
+- Toolchain built in Tan (Go host removed): the query/lint/format/lockfile/signing commands are done; a persistent **LSP protocol server** (needs a stdin builtin + JSON-RPC loop), a debugger, and a remote package registry are the remaining larger subsystems.
+- Weak static return-type inference: a function returning text may need `metinBirlestir("", f(x))` at the call site to print as text.
 - x86-64 Linux only. Other architectures need a new backend.
 - No DWARF debug info (`gdb` sees no symbols).
 - Naive code generator — no register allocation / DCE. Correct, not fast.
