@@ -26,7 +26,7 @@ işlev sha256Hex8(x)
     döndür s
 son
 
-işlev sha256(mesaj)
+işlev sha256Ozu(mesaj)
     K = [1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221, 3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580, 3835390401, 4022224774, 264347078, 604807628, 770255983, 1249150122, 1555081692, 1996064986, 2554220882, 2821834349, 2952996808, 3210313671, 3336571891, 3584528711, 113926993, 338241895, 666307205, 773529912, 1294757372, 1396182291, 1695183700, 1986661051, 2177026350, 2456956037, 2730485921, 2820302411, 3259730800, 3345764771, 3516065817, 3600352804, 4094571909, 275423344, 430227734, 506948616, 659060556, 883997877, 958139571, 1322822218, 1537002063, 1747873779, 1955562222, 2024104815, 2227730452, 2361852424, 2428436474, 2756734187, 3204031479, 3329325298]
 
     h0 = 1779033703
@@ -119,12 +119,56 @@ işlev sha256(mesaj)
         bi = bi + 1
     son
 
-    r = metinBirlestir(sha256Hex8(h0), sha256Hex8(h1))
-    r = metinBirlestir(r, sha256Hex8(h2))
-    r = metinBirlestir(r, sha256Hex8(h3))
-    r = metinBirlestir(r, sha256Hex8(h4))
-    r = metinBirlestir(r, sha256Hex8(h5))
-    r = metinBirlestir(r, sha256Hex8(h6))
-    r = metinBirlestir(r, sha256Hex8(h7))
+    döndür [h0, h1, h2, h3, h4, h5, h6, h7]
+son
+
+# hex özet (64 karakter)
+işlev sha256(mesaj)
+    hh = sha256Ozu(mesaj)
+    r = metinBirlestir(sha256Hex8(hh[0]), sha256Hex8(hh[1]))
+    r = metinBirlestir(r, sha256Hex8(hh[2]))
+    r = metinBirlestir(r, sha256Hex8(hh[3]))
+    r = metinBirlestir(r, sha256Hex8(hh[4]))
+    r = metinBirlestir(r, sha256Hex8(hh[5]))
+    r = metinBirlestir(r, sha256Hex8(hh[6]))
+    r = metinBirlestir(r, sha256Hex8(hh[7]))
     döndür r
+son
+
+# 32 ham bayt (HMAC/binary için)
+işlev sha256Ham(mesaj)
+    hh = sha256Ozu(mesaj)
+    r = ""
+    i = 0
+    iken i < 8
+        w = hh[i]
+        r = metinBirlestir(r, karakter((w >> 24) & 255))
+        r = metinBirlestir(r, karakter((w >> 16) & 255))
+        r = metinBirlestir(r, karakter((w >> 8) & 255))
+        r = metinBirlestir(r, karakter(w & 255))
+        i = i + 1
+    son
+    döndür r
+son
+
+# HMAC-SHA256(anahtar, mesaj) → 64 karakter hex imza (Kaldıraç 4: imzalama)
+işlev hmacSha256(anahtar, mesaj)
+    blok = 64
+    eğer uzunluk(anahtar) > blok ise
+        anahtar = sha256Ham(anahtar)
+    son
+    iken uzunluk(anahtar) < blok
+        anahtar = metinBirlestir(anahtar, karakter(0))
+    son
+    ipad = ""
+    opad = ""
+    i = 0
+    iken i < blok
+        kb = kod(metinAl(anahtar, i))
+        ipad = metinBirlestir(ipad, karakter(kb ^ 54))
+        opad = metinBirlestir(opad, karakter(kb ^ 92))
+        i = i + 1
+    son
+    ic = sha256Ham(metinBirlestir(ipad, mesaj))
+    döndür sha256(metinBirlestir(opad, ic))
 son

@@ -491,6 +491,25 @@ işlev astAna(yol, json)
     döndür 0
 son
 
+# ---- imzala: dosyayı HMAC-SHA256 ile imzala (Kaldıraç 4: imzalı registry) ----
+işlev imzalaAna(yol, anahtar)
+    yaz(metinBirlestir("", hmacSha256(anahtar, oku(yol))))
+    döndür 0
+son
+
+# ---- imzadogrula: imzayı doğrula ----
+işlev imzaDogrulaAna(yol, anahtar, beklenen)
+    gercek = metinBirlestir("", hmacSha256(anahtar, oku(yol)))
+    eğer metinEsit(gercek, beklenen) ise
+        yaz(metinBirlestir("[GEÇERLİ] imza doğru — ", yol))
+    değilse
+        yaz(metinBirlestir("[GEÇERSİZ] imza uyuşmuyor — ", yol))
+        yaz(metinBirlestir("  beklenen: ", beklenen))
+        yaz(metinBirlestir("  gerçek  : ", gercek))
+    son
+    döndür 0
+son
+
 # ---- sürüm ----
 işlev surumAna()
     yaz("TAN toolchain — self-hosted (sıfır Go)")

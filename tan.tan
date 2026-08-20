@@ -15,12 +15,26 @@ eğer argsay() < 2 ise
     yaz("  bicimlendir  kanonik formatter (bic)")
     yaz("  kilit        içerik-adresli lockfile (SHA-256, transitive)")
     yaz("  dogrula      lockfile'a karşı bütünlük kontrolü")
+    yaz("  imzala       dosyayı HMAC-SHA256 ile imzala (<dosya> <anahtar>)")
+    yaz("  imzadogrula  imzayı doğrula (<dosya> <anahtar> <imza>)")
     yaz("  sürüm        toolchain bilgisi")
 değilse
     komut = arg(1)
 
     eğer metinEsit(komut, "sürüm") veya metinEsit(komut, "surum") ise
         d = surumAna()
+    değilse eğer metinEsit(komut, "imzala") ise
+        eğer argsay() < 4 ise
+            yaz("Kullanım: tan imzala <dosya.tan> <anahtar>")
+        değilse
+            d = imzalaAna(arg(2), arg(3))
+        son
+    değilse eğer metinEsit(komut, "imzadogrula") ise
+        eğer argsay() < 5 ise
+            yaz("Kullanım: tan imzadogrula <dosya.tan> <anahtar> <imza>")
+        değilse
+            d = imzaDogrulaAna(arg(2), arg(3), arg(4))
+        son
     değilse
         # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu
         json = yanlış

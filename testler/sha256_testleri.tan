@@ -13,4 +13,10 @@ gecti = gecti + iddiaMetin("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410
 toplam = toplam + 1
 gecti = gecti + iddiaMetin("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1", sha256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"), "sha256 448-bit blok sınırı")
 
+yaz("== hmac-sha256 ==")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8", hmacSha256("key", "The quick brown fox jumps over the lazy dog"), "hmac key/fox")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("9946dad4e00e913fc8be8e5d3f7e110a4a9e832f83fb09c345285d78638d8a0e", hmacSha256("secret", "abc"), "hmac secret/abc")
+
 d = testSonuc(gecti, toplam)
