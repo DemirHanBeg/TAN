@@ -1,0 +1,55 @@
+# tanoku_testleri.tan — kutuphane/tanoku.tan yardımcılarının birim testleri.
+# Çalıştır: ./TancElf testler/tanoku_testleri.tan t && ./t   (tan/ dizininden)
+# Metin dönenler → iddiaMetin; sayı/bool dönenler → iddiaSayi.
+
+içe al "kutuphane/test.tan"
+içe al "kutuphane/tanoku.tan"
+
+gecti = 0
+toplam = 0
+
+yaz("== girinti (metin) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("", girinti(0), "girinti(0) bos")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("    ", girinti(1), "girinti(1) 4 bosluk")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("        ", girinti(2), "girinti(2) 8 bosluk")
+
+yaz("== kirp (metin) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("abc", kirp("   abc   "), "kirp bos temizler")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("abc", kirp("abc"), "kirp bossuz ayni")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("", kirp("     "), "kirp tumu bosluk bos")
+
+yaz("== kelimeAl (metin) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("işlev", kelimeAl("işlev topla", 0), "kelimeAl ilk kelime")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("topla", kelimeAl("topla(a)", 0), "kelimeAl parantezde durur")
+
+yaz("== boslukAtla (sayı) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(3, boslukAtla("   x", 0), "boslukAtla 3 bosluk atlar")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(0, boslukAtla("x", 0), "boslukAtla bossuz 0")
+
+yaz("== blokAcici (bool) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(1, blokAcici("eğer"), "blokAcici eğer dogru")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(1, blokAcici("işlev"), "blokAcici işlev dogru")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(0, blokAcici("yaz"), "blokAcici yaz yanlis")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(0, blokAcici("son"), "blokAcici son yanlis")
+
+yaz("== karakterBul (sayı) ==")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(2, karakterBul("abc", "c", 0), "karakterBul bulur")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(0 - 1, karakterBul("abc", "z", 0), "karakterBul yok -1")
+
+d = testSonuc(gecti, toplam)

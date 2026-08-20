@@ -1,0 +1,62 @@
+# test.tan — TAN iddia (assertion) kütüphanesi. Self-verification (madde 13).
+# Kullanım: test dosyası `içe al "kutuphane/test.tan"`, üst seviyede sayaç tutar:
+#   gecti = 0 ; toplam = 0
+#   toplam = toplam + 1 ; gecti = gecti + iddiaMetin(beklenen, gercek, "ad")
+#   ... ; d = testSonuc(gecti, toplam)
+#
+# TİP-BAZLI (TancElf statik tip izlemesi zayıf — parametre/dönüş "tam" sanılır):
+#   iddiaMetin  → metinEsit ile (tip-bağımsız içerik karşılaştırma)
+#   iddiaSayi   → == ile (tam sayı karşılaştırma)
+#   iddiaDogru  → koşul doğru mu
+# NOT: sayaç ÜST SEVİYEDE tutulur; iddia* fonksiyonları 1/0 DÖNDÜRÜR, çağıran
+# biriktirir (fonksiyon global yazamayabilir). Sadece yerleşik kullanır.
+
+# metin eşitliği (her iki taraf da metin) — metinEsit tip-bağımsızdır
+işlev iddiaMetin(beklenen, gercek, ad)
+    eğer metinEsit(beklenen, gercek) ise
+        yaz(metinBirlestir("  [GECTI] ", ad))
+        döndür 1
+    değilse
+        yaz(metinBirlestir("  [KALDI] ", ad))
+        yaz(metinBirlestir("    beklenen: ", beklenen))
+        yaz(metinBirlestir("    gercek  : ", gercek))
+        döndür 0
+    son
+son
+
+# sayı eşitliği (her iki taraf da tam sayı)
+işlev iddiaSayi(beklenen, gercek, ad)
+    eğer beklenen == gercek ise
+        yaz(metinBirlestir("  [GECTI] ", ad))
+        döndür 1
+    değilse
+        yaz(metinBirlestir("  [KALDI] ", ad))
+        yaz(metinBirlestir("    beklenen: ", metin(beklenen)))
+        yaz(metinBirlestir("    gercek  : ", metin(gercek)))
+        döndür 0
+    son
+son
+
+# koşul doğru mu?
+işlev iddiaDogru(kosul, ad)
+    eğer kosul ise
+        yaz(metinBirlestir("  [GECTI] ", ad))
+        döndür 1
+    değilse
+        yaz(metinBirlestir("  [KALDI] ", ad))
+        döndür 0
+    son
+son
+
+# özet yazdır
+işlev testSonuc(gecti, toplam)
+    yaz("")
+    kaldi = toplam - gecti
+    yaz(metinBirlestir("SONUC: ", metinBirlestir(metin(gecti), metinBirlestir("/", metinBirlestir(metin(toplam), " gecti")))))
+    eğer kaldi == 0 ise
+        yaz("TUM TESTLER GECTI")
+    değilse
+        yaz(metinBirlestir(metin(kaldi), " TEST KALDI"))
+    son
+    döndür 0
+son
