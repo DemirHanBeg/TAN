@@ -2,6 +2,12 @@ işlev topla(a, b)
     döndür a + b
 son
 
+işlev carp(n)
+    sonuc = n * n
+    döndür sonuc
+son
+
 x = topla(1, 2)
 y = topla(3, 4)
 yaz(x + y)
+yaz(carp(5))

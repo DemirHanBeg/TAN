@@ -296,10 +296,114 @@ işlev islevBul(kaynak, ad)
     döndür [0 - 1, ""]
 son
 
+# satirNo'yu (0-tabanlı) kapsayan üst-seviye işlevin tanım satırını (0)
+# döndürür; yoksa -1. Basit sezgi: en yakın önceki b==0 "işlev" satırı.
+işlev islevKapsayan(satirlar, satirNo)
+    en = satirNo
+    iken en >= 0
+        satir = satirlar[en]
+        b = boslukAtla(satir, 0)
+        eğer b == 0 ve metinEsit(kelimeAl(satir, 0), "işlev") ise
+            döndür en
+        son
+        en = en - 1
+    son
+    döndür 0 - 1
+son
+
+# baslangic'taki işlev'in blok derinliği 0'a düştüğü kapanış "son" satırını
+# döndürür (bulunamazsa dosya sonu).
+işlev islevSonu(satirlar, baslangic)
+    derinlik = 0
+    si = baslangic
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer blokAcici(kelime) ise
+            derinlik = derinlik + 1
+        değilse eğer metinEsit(kelime, "son") ise
+            derinlik = derinlik - 1
+            eğer derinlik == 0 ise
+                döndür si
+            son
+        son
+        si = si + 1
+    son
+    döndür uzunluk(satirlar) - 1
+son
+
+# "a, b" → ["a","b"] (parametre imzasını virgülle böler, kırpar)
+işlev parametreListesi(parametreMetni)
+    liste = []
+    gecerli = ""
+    n = uzunluk(parametreMetni)
+    i = 0
+    iken i < n
+        c = metinAl(parametreMetni, i)
+        eğer c == "," ise
+            liste = ekle(liste, kirp(gecerli))
+            gecerli = ""
+        değilse
+            gecerli = metinBirlestir(gecerli, c)
+        son
+        i = i + 1
+    son
+    eğer uzunluk(kirp(gecerli)) > 0 ise
+        liste = ekle(liste, kirp(gecerli))
+    son
+    döndür liste
+son
+
+# satirNo'yu kapsayan işlevin parametreleri/yerel değişkenleri içinde ad'ı
+# arar. Bulunursa [tanımSatırı(0), tür("parametre"|"yerel")], yoksa [-1, ""].
+işlev yerelBul(kaynak, satirNo, ad)
+    satirlar = satiraBol(kaynak)
+    baslangic = islevKapsayan(satirlar, satirNo)
+    eğer baslangic < 0 ise
+        döndür [0 - 1, ""]
+    son
+    bitis = islevSonu(satirlar, baslangic)
+    eğer satirNo > bitis ise
+        döndür [0 - 1, ""]
+    son
+    satir0 = satirlar[baslangic]
+    acKonum = karakterBul(satir0, "(", 0)
+    eğer acKonum >= 0 ise
+        parametreler = parametreListesi(parametreAl(satir0, acKonum))
+        eğer metinListedeVarMi(parametreler, ad) ise
+            döndür [baslangic, "parametre"]
+        son
+    son
+    si = baslangic + 1
+    iken si < bitis
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        esit = karakterBul(satir, "=", b)
+        eğer esit > b ise
+            aday = kirp(kelimeAl(satir, b))
+            eğer metinEsit(aday, ad) ise
+                döndür [si, "yerel"]
+            son
+        son
+        si = si + 1
+    son
+    döndür [0 - 1, ""]
+son
+
 # hover yanıtı (id, kaynak, satirNo, kar)
 işlev lspHover(id, kaynak, satirNo, kar)
     satir = satirAl(kaynak, satirNo)
     kelime = konumKelime(satir, kar)
+    yerel = yerelBul(kaynak, satirNo, kelime)
+    eğer yerel[0] >= 0 ise
+        deger = metinBirlestir(yerel[1], metinBirlestir(" ", kelime))
+        deger = metinBirlestir(deger, metinBirlestir(" — tanım satır ", metin(yerel[0] + 1)))
+        govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"contents\":{\"kind\":\"plaintext\",\"value\":\""))
+        govde = metinBirlestir(govde, metinBirlestir(deger, "\"}}}"))
+        lspYaz(govde)
+        döndür 0
+    son
     bulundu = islevBul(kaynak, kelime)
     eğer bulundu[0] < 0 ise
         lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
@@ -317,6 +421,17 @@ son
 işlev lspDefinition(id, uri, kaynak, satirNo, kar)
     satir = satirAl(kaynak, satirNo)
     kelime = konumKelime(satir, kar)
+    yerel = yerelBul(kaynak, satirNo, kelime)
+    eğer yerel[0] >= 0 ise
+        dno = metin(yerel[0])
+        aralik = metinBirlestir("{\"start\":{\"line\":", metinBirlestir(dno, ",\"character\":0},\"end\":{\"line\":"))
+        aralik = metinBirlestir(aralik, metinBirlestir(dno, ",\"character\":0}}"))
+        govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"uri\":\""))
+        govde = metinBirlestir(govde, metinBirlestir(uri, metinBirlestir("\",\"range\":", aralik)))
+        govde = metinBirlestir(govde, "}}")
+        lspYaz(govde)
+        döndür 0
+    son
     bulundu = islevBul(kaynak, kelime)
     eğer bulundu[0] < 0 ise
         lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))

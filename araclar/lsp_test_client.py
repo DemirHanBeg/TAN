@@ -48,6 +48,10 @@ def main():
          "params": {"textDocument": {"uri": uri}}},
         {"jsonrpc": "2.0", "id": 4, "method": "textDocument/formatting",
          "params": {"textDocument": {"uri": uri}}},
+        {"jsonrpc": "2.0", "id": 7, "method": "textDocument/hover",
+         "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
+        {"jsonrpc": "2.0", "id": 8, "method": "textDocument/definition",
+         "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
         {"jsonrpc": "2.0", "id": 5, "method": "textDocument/references",
          "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
         {"jsonrpc": "2.0", "id": 6, "method": "textDocument/completion",
@@ -81,6 +85,12 @@ def main():
                 print(yeni[:200])
             else:
                 print("[formatting] sonuç yok")
+        elif obj.get("id") == 7:
+            r = obj["result"]
+            print(f"[hover] {r['contents']['value'] if r else 'sonuç yok'}")
+        elif obj.get("id") == 8:
+            r = obj["result"]
+            print(f"[definition] {r if r else 'sonuç yok'}")
         elif obj.get("id") == 5:
             locs = obj["result"]
             print(f"[references] {len(locs)} konum:")
