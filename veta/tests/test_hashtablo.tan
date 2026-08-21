@@ -1,0 +1,115 @@
+# test_hashtablo.tan — 2A gerçek hash tablosu testi (VETA sözlük ihtiyacı)
+# Kompilasyon: ./TancElf veta/tests/test_hashtablo.tan <cikti> (repo kökünden)
+# Çalıştırma:  <cikti>
+# Bu test derleme VE ÇALIŞTIRMA olarak doğrulanmıştır (native WSL2, throttle yok).
+
+içe al "../../kutuphane/ozet.tan"
+içe al "../../kutuphane/HashTablo.tan"
+
+basarili = 0
+toplam = 0
+
+ht = htYeni()
+ht = htKoy(ht, "ad", "demir")
+ht = htKoy(ht, "sehir", "istanbul")
+ht = htKoy(ht, "ad", "demir2")
+
+toplam = toplam + 1
+eğer metinEsit(htAl(ht, "ad"), "demir2") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: guncelleme\n")
+son
+
+toplam = toplam + 1
+eğer metinEsit(htAl(ht, "sehir"), "istanbul") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: al\n")
+son
+
+toplam = toplam + 1
+eğer metinEsit(htAl(ht, "yok"), "") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: olmayan anahtar bos donmeli\n")
+son
+
+toplam = toplam + 1
+eğer htVarMi(ht, "sehir") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: varMi pozitif\n")
+son
+
+toplam = toplam + 1
+eğer değil htVarMi(ht, "yok") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: varMi negatif\n")
+son
+
+toplam = toplam + 1
+eğer htBoyut(ht) == 2 ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: boyut guncelleme sonrasi 2 olmali\n")
+son
+
+ht = htSil(ht, "sehir")
+
+toplam = toplam + 1
+eğer değil htVarMi(ht, "sehir") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: sil sonrasi varMi negatif\n")
+son
+
+toplam = toplam + 1
+eğer htBoyut(ht) == 1 ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: sil sonrasi boyut 1 olmali\n")
+son
+
+anahtarlar = htAnahtarlar(ht)
+toplam = toplam + 1
+eğer uzunluk(anahtarlar) == 1 ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: anahtarlar sayisi 1 olmali\n")
+son
+
+toplam = toplam + 1
+eğer metinEsit(anahtarlar[0], "ad") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: kalan anahtar 'ad' olmali\n")
+son
+
+# çakışma testi: aynı kovaya düşecek çok sayıda anahtar (61 kova) - basit stres
+i = 0
+iken i < 200
+    k = metinBirlestir("k", metin(i))
+    ht = htKoy(ht, k, metin(i))
+    i = i + 1
+son
+
+toplam = toplam + 1
+eğer htBoyut(ht) == 201 ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: 200 ekleme sonrasi boyut 201 olmali (ad + 200)\n")
+son
+
+toplam = toplam + 1
+eğer metinEsit(htAl(ht, "k150"), "150") ise
+    basarili = basarili + 1
+değilse
+    yaz("BASARISIZ: k150 degeri 150 olmali (coklu-kova dogrulugu)\n")
+son
+
+yaz(metin(basarili))
+yaz("/")
+yaz(metin(toplam))
+yaz(" gecti\n")

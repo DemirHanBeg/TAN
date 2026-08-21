@@ -1,0 +1,152 @@
+# ============================================================
+# HashTablo.tan — 2A: gerçek hash tablosu (saf Tan, kütüphane seviyesi)
+# ------------------------------------------------------------
+# TancElf'te native `sözlük()` tipi YOK (Sozluk.tan/KVDeposu.tan bunu
+# varsayıyor ama derlenmiyor — "f_anahtarlar" etiketi bulunamıyor,
+# doğrulandı: ./TancElf kutuphane/Sozluk.tan -> BAGLAMA HATASI).
+# Bu modül gerçek bir hash tablosunu sadece MEVCUT ispatlı ilkellerle
+# kurar: dizi (ekle/uzunluk/indeks), ozet() (kutuphane/ozet.tan polinom
+# hash), tamBol (mod), metinEsit/metinBirlestir. Yeni derleyici sözdizimi
+# YOK — "kütüphane-first" kuralına uygun, self-hosting sabit noktasına
+# sıfır risk.
+#
+# BİLİNEN TancElf SINIRI (doğrulandı, kütüphane bunu telafi ediyor):
+# dizi elemanı olan bir metni doğrudan yaz()/karşılaştırma yapmadan önce
+# metinBirlestir("", x) ile "metin bağlamına" almak gerekiyor — yoksa
+# yaz() ham bellek adresini tam sayı gibi basıyor (bkz. sha256.tan'daki
+# aynı not). Bu dosyadaki her okuma bunu uygular.
+#
+# Tasarım: zincirleme (chaining) ile sabit KOVA_SAYISI=61 (asal) kovalı
+# hash tablosu. Yeniden boyutlandırma (rehash) YOK — küçük/orta ölçek
+# (config, oturum, meta veri, VETA Faz 6 sözlük ihtiyaçları) için yeterli,
+# büyük ölçek gerekirse ayrı bir iş (rehash) olarak ertelendi (dürüst).
+#
+# Kullanım:
+#   içe al "kutuphane/ozet.tan"
+#   içe al "kutuphane/HashTablo.tan"
+#   ht = htYeni()
+#   ht = htKoy(ht, "ad", "demir")
+#   yaz(htAl(ht, "ad"))        # demir
+#   yaz(htVarMi(ht, "yok"))    # 0
+#   ht = htSil(ht, "ad")
+# ============================================================
+
+işlev htYeni()
+    kovaSayisi = 61
+    anahtarKovalari = []
+    degerKovalari = []
+    i = 0
+    iken i < kovaSayisi
+        anahtarKovalari = ekle(anahtarKovalari, [])
+        degerKovalari = ekle(degerKovalari, [])
+        i = i + 1
+    son
+    döndür [kovaSayisi, anahtarKovalari, degerKovalari, 0]
+son
+
+işlev htKova(ht, anahtar)
+    kovaSayisi = ht[0]
+    h = ozet(anahtar)
+    döndür h - tamBol(h, kovaSayisi) * kovaSayisi
+son
+
+# iç yardımcı: kova dizisi içinde anahtarın indeksini bul, yoksa -1
+işlev htKovaIndeksi(kovaAnahtarlari, anahtar)
+    i = 0
+    n = uzunluk(kovaAnahtarlari)
+    iken i < n
+        mevcut = metinBirlestir("", kovaAnahtarlari[i])
+        eğer metinEsit(mevcut, anahtar) ise
+            döndür i
+        son
+        i = i + 1
+    son
+    döndür 0 - 1
+son
+
+işlev htKoy(ht, anahtar, deger)
+    kova = htKova(ht, anahtar)
+    anahtarKovalari = ht[1]
+    degerKovalari = ht[2]
+    sayac = ht[3]
+    kovaA = anahtarKovalari[kova]
+    kovaD = degerKovalari[kova]
+    idx = htKovaIndeksi(kovaA, anahtar)
+    eğer idx >= 0 ise
+        kovaD[idx] = deger
+    değilse
+        kovaA = ekle(kovaA, anahtar)
+        kovaD = ekle(kovaD, deger)
+        sayac = sayac + 1
+    son
+    anahtarKovalari[kova] = kovaA
+    degerKovalari[kova] = kovaD
+    döndür [ht[0], anahtarKovalari, degerKovalari, sayac]
+son
+
+işlev htAl(ht, anahtar)
+    kova = htKova(ht, anahtar)
+    kovaA = ht[1][kova]
+    idx = htKovaIndeksi(kovaA, anahtar)
+    eğer idx < 0 ise
+        döndür ""
+    son
+    kovaD = ht[2][kova]
+    döndür metinBirlestir("", kovaD[idx])
+son
+
+işlev htVarMi(ht, anahtar)
+    kova = htKova(ht, anahtar)
+    kovaA = ht[1][kova]
+    idx = htKovaIndeksi(kovaA, anahtar)
+    döndür idx >= 0
+son
+
+işlev htSil(ht, anahtar)
+    kova = htKova(ht, anahtar)
+    anahtarKovalari = ht[1]
+    degerKovalari = ht[2]
+    sayac = ht[3]
+    kovaA = anahtarKovalari[kova]
+    kovaD = degerKovalari[kova]
+    idx = htKovaIndeksi(kovaA, anahtar)
+    eğer idx < 0 ise
+        döndür ht
+    son
+    yeniA = []
+    yeniD = []
+    i = 0
+    n = uzunluk(kovaA)
+    iken i < n
+        eğer i != idx ise
+            yeniA = ekle(yeniA, metinBirlestir("", kovaA[i]))
+            yeniD = ekle(yeniD, metinBirlestir("", kovaD[i]))
+        son
+        i = i + 1
+    son
+    anahtarKovalari[kova] = yeniA
+    degerKovalari[kova] = yeniD
+    döndür [ht[0], anahtarKovalari, degerKovalari, sayac - 1]
+son
+
+işlev htAnahtarlar(ht)
+    sonuc = []
+    kovaSayisi = ht[0]
+    anahtarKovalari = ht[1]
+    i = 0
+    iken i < kovaSayisi
+        kovaA = anahtarKovalari[i]
+        j = 0
+        m = uzunluk(kovaA)
+        iken j < m
+            sonuc = ekle(sonuc, metinBirlestir("", kovaA[j]))
+            j = j + 1
+        son
+        i = i + 1
+    son
+    döndür sonuc
+son
+
+işlev htBoyut(ht)
+    döndür ht[3]
+son

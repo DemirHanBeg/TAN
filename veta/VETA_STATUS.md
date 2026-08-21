@@ -58,11 +58,36 @@
 - **Test dosyaları:** veta/tests/test_concurrency.tan — derleme CANOLI, çalıştırma UNVERIFIED (throttle)
 - **Bağımlılık:** 2B ile ilişkilidir; 2B tamamlandığı için 2D implementasyonu başlatıldı
 
-#### 2A — Sözlük (Diğer blok)
-- HAZIRLANIYOR — Hash tablosu + runtime desteği QEMU throttle'ından sonra
+#### 2A — Sözlük (TAMAMLANDI, kütüphane seviyesinde — 2026-08-21)
+- **Yol değişikliği:** Orijinal plan derleyici-native `sözlük()` tipi + yeni sözdizimiydi
+  (bkz. audit/FAZ5_BLOCKED_KATALOGU.md — "Karmaşıklık: YÜKSEK"). Bunun yerine
+  **kütüphane-first kuralına uyularak** `kutuphane/HashTablo.tan` yazıldı: zincirleme
+  (chaining), sabit 61 kovalı gerçek hash tablosu — `ozet()` (kutuphane/ozet.tan polinom
+  hash) + mevcut dizi ilkelleri (`ekle`/`uzunluk`/indeks) + `metinEsit`/`metinBirlestir`
+  ile, **YENİ DERLEYİCİ SÖZDİZİMİ YOK**. TancElf.tan HİÇ değiştirilmedi → self-hosting
+  sabit noktasına sıfır risk (gen2==gen3 doğrulandı, ayrıca değişmedi çünkü dokunulmadı).
+- **API:** `htYeni()`, `htKoy(ht,k,v)`, `htAl(ht,k)`, `htVarMi(ht,k)`, `htSil(ht,k)`,
+  `htAnahtarlar(ht)`, `htBoyut(ht)`.
+- **Doğrulama:** `veta/tests/test_hashtablo.tan` — 12/12 test GEÇTİ (güncelleme, silme,
+  varMi, anahtarlar, ve 200 anahtarlık çoklu-kova çakışma stres testi dahil). Gerçekten
+  ÇALIŞTIRILDI (native WSL2, throttle yok), sadece derleme değil.
+- **Not (eski Sozluk.tan/KVDeposu.tan/VeriYapilari.tan hakkında dürüst bulgu):** Bu 3
+  dosya native `sözlük()` + `{...}` obje literalinin VAR OLDUĞUNU varsayıyor — ikisi de
+  YOK. Doğrulandı: `./TancElf kutuphane/Sozluk.tan` → `BAGLAMA HATASI: etiket bulunamadi:
+  f_anahtarlar`; `./TancElf kutuphane/VeriYapilari.tan` → `DERLEME HATASI: bilinmeyen
+  deyim: öge` (obje literal `{"öge":...}` sözdizimi yok). Bu 3 dosya DERLENMİYOR, önceden
+  hiç test edilmemiş ölü kod — bu oturumda dokunulmadı/düzeltilmedi (kapsam dışı,
+  ayrıca not edildi).
+- **Bilinen TancElf sınırı (yeni bulgu, kütüphane bunu telafi ediyor):** Dizi elemanı
+  olan bir METİN doğrudan `yaz()`/karşılaştırma öncesi `metinBirlestir("", x)` ile
+  "metin bağlamına" alınmalı — yoksa `yaz()` ham bellek adresini tam sayı gibi basıyor
+  (mevcut sha256.tan'daki nottaki AYNI sınır, burada dizi-elemanı-metin için de geçerli
+  olduğu doğrulandı). `HashTablo.tan` içindeki her okuma bunu zaten uyguluyor.
 
-#### 2C — Ham Bellek Erişimi (Diğer blok)
-- HAZIRLANIYOR — Pointer arithmetic + bellek erişimi QEMU throttle'inden sonra
+#### 2C — Ham Bellek Erişimi (ÇÖZÜLDÜ — bkz. FAZ_B_58_SORUN_STRATEJI.md, 2026-08-20/21)
+- Bitwise/shift operatörleri (`& | ^ << >>`) TancElf.tan'a eklendi (commit 6dda6fe,
+  origin/main'de mevcut). Faz B kaldıraç çalışmasında madde 2C bu şekilde kapatıldı.
+  Bu dosya (VETA_STATUS.md) o zaman güncellenmemişti — şimdi senkronize edildi.
 
 #### 2B+2D Bootstrapping
 - Full gen1→gen2→gen3 bootstrap QEMU throttle'ından sonra başlatılacak

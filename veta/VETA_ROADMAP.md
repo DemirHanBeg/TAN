@@ -41,8 +41,8 @@ testli ve repo ekosistemine entegre.
 ### FAZ 5 — 2B+2D Dosya G/Ç ve Eşzamanlılık (DONE, throttle engellidir)
 - [x] io (konumlamalı G/Ç, 2B) — `dosyaAc/oku/yaz/kapat` TancElf.tanLines 2827-2910'e eklendi, QEMU throttle engelliyor; test: test_file_io.tan
 - [x] 2D eşzamanlılık (2D) — futex/thread/lock/atomik'lar TancElf.tana eklendi, QEMU throttle engelliyor; test: test_concurrency.tan
-- [ ] sözlük (2A) — Hash tablosu + runtime desteği QEMU throttle'ından sonra eklenecek
-- [ ] ham bellek erişimi (2C) — Pointer arithmetic + bellek erişimi QEMU throttle'ından sonra eklenecek
+- [x] sözlük (2A) — 2026-08-21: kütüphane seviyesinde (`kutuphane/HashTablo.tan`, chaining+ozet() hash), derleyiciye dokunmadan; 12/12 test GEÇTİ (bkz. VETA_STATUS.md)
+- [x] ham bellek erişimi (2C) — bitwise/shift operatörleriyle (commit 6dda6fe) Faz B'de çözüldü
 
 ### FAZ 6 — HIGH LEVEL (zemin matrisi hazır)
 - [x] Storage (Depolama) — 2B+2D zemini hazir; sayfa yöneticisi, WAL, MVCC tasarımı başlatıldı; test: test_storage.tan

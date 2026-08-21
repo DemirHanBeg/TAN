@@ -17,6 +17,16 @@ VEYA hash tablosu runtime helper'larının ELF'e gömülmesi. (2) Sözlük
 erişim (lookup) için kod üretimi. (3) Bellek yönetimi (hash collision,
 resize). **Karmaşıklık: YÜKSEK** — hash + bellek yönetimi + kod üretimi.
 
+**ÇÖZÜLDÜ (2026-08-21, alternatif yol):** Yukarıdaki analiz derleyici-native bir
+çözüm varsayıyordu. Bunun yerine "kütüphane-first" kuralı uygulandı: TancElf.tan'a
+HİÇ dokunulmadan, mevcut ilkellerle (dizi + `ozet()` hash + `metinEsit`) saf-TAN
+`kutuphane/HashTablo.tan` yazıldı — zincirlemeli, 61 sabit kova, gerçek O(1)
+ortalama erişim. Karmaşıklık pratikte DÜŞÜK çıktı çünkü "bellek yönetimi" ihtiyacı
+zaten var olan dizi/GC ilkelleri tarafından karşılanıyor; asıl gereken sadece hash
++ kova mantığıydı. Derleyici-native literal sözdizimi (`{k: v}`) hâlâ YOK ve
+gerekmiyor — API fonksiyon çağrılarıyla (`htKoy`/`htAl`/...) kullanılıyor. Detay
+ve test sonucu: VETA_STATUS.md 2A bölümü.
+
 ## 2B — Konumlamalı Dosya G/Ç (File I/O)
 
 **Durum:** SELF katmanında YOK.
