@@ -3,6 +3,7 @@
 # Go'nun tek-`go`-binary avantajını Tan'da geri getirir. Yeni araçlar buraya takılır.
 
 içe al "kutuphane/araclar.tan"
+içe al "kutuphane/tls.tan"
 
 eğer argsay() < 2 ise
     yaz("TAN aracı — Kullanım: tan <komut> <dosya.tan> [--json]")
@@ -20,6 +21,7 @@ eğer argsay() < 2 ise
     yaz("  imzadogrula  imzayı doğrula (<dosya> <anahtar> <imza>)")
     yaz("  cek          uzak paket çek + sha256 doğrula (<ip> <port> <yol> [sha])")
     yaz("  cekad        cek ama IP yerine hostname (gerçek DNS/TCP:53, TLS YOK) (<host> <port> <yol> [sha])")
+    yaz("  tlsgetir     GERÇEK TLS/HTTPS indir (curl+OpenSSL subprocess, K4) (<https-url> <hedef-dosya>)")
     yaz("  onbellekyaz  dosyayı içerik-adresli önbelleğe yaz (<dosya> <onbellek-dizin>)")
     yaz("  onbellekal   önbellekten hash ile oku (<hash> <onbellek-dizin> <hedef|->)")
     yaz("  sürüm        toolchain bilgisi")
@@ -55,6 +57,12 @@ değilse
             d = cekAdAna(arg(2), arg(3), arg(4), "-")
         değilse
             d = cekAdAna(arg(2), arg(3), arg(4), arg(5))
+        son
+    değilse eğer metinEsit(komut, "tlsgetir") ise
+        eğer argsay() < 4 ise
+            yaz("Kullanım: tan tlsgetir <https-url> <hedef-dosya>")
+        değilse
+            d = tlsGetirAna(arg(2), arg(3))
         son
     değilse eğer metinEsit(komut, "onbellekyaz") ise
         eğer argsay() < 4 ise

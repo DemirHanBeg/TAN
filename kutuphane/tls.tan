@@ -1,0 +1,42 @@
+# tls.tan — gerçek TLS/HTTPS (K4 registry kaldıracının kalan boşluğu).
+#
+# BİLİNÇLİ TASARIM KARARI: TLS handshake'i elle (asimetrik kripto, sertifika
+# doğrulama, AEAD şifreleme) YAZMADIK. Bu, hatasız yapılması haftalar süren
+# ve acele/doğrulanmamış hâliyle yok'tan kötü bir "sahte güvenlik" hissi
+# veren güvenlik-kritik bir iştir. Bunun yerine sistemin kendi (OpenSSL
+# destekli, güncellenen) `curl`'unu subprocess olarak çağırıyoruz — tıpkı
+# `soketAc`/`soketBagla` ile TCP'yi syscall seviyesinde yeniden kullandığımız
+# gibi, burada da TLS'i işletim sisteminin kanıtlanmış implementasyonuyla
+# yeniden kullanıyoruz. Yeni builtin: SADECE `yazDosyaCalistirilabilir`
+# (yazDosya ile birebir aynı, tek fark dosya izni 0755) — kripto YOK.
+#
+# GÜVENLİK: URL/hedef yolu shell script METNİNE gömülmez (injection riski).
+# Ayrı dosyalara yazılıp script içinde "$(cat ...)" ile okunur — bu, shell'in
+# ic̨eriği TEK bir tırnaklı argüman olarak ele almasını sağlar, script olarak
+# YENİDEN AYRIŞTIRMAZ (";", "$()", backtick içerse bile enjekte edilemez).
+
+içe al "kutuphane/tanoku.tan"
+
+# url'i hedefDosya'ya indirir (gerçek TLS, curl+OpenSSL). Başarı: 0, hata: 1.
+işlev tlsGetirAna(url, hedefDosya)
+    yazDosya("/tmp/tan_tls_url.txt", url)
+    yazDosya("/tmp/tan_tls_hedef.txt", hedefDosya)
+    script = "#!/bin/sh\ncurl -fsS -o \"$(cat /tmp/tan_tls_hedef.txt)\" \"$(cat /tmp/tan_tls_url.txt)\"\n"
+    yazDosyaCalistirilabilir("/tmp/tan_tls_getir.sh", script)
+
+    pid = catal()
+    eğer pid == 0 ise
+        d = calistir("/tmp/tan_tls_getir.sh")
+        döndür 1
+    son
+
+    durum = bekle()
+    cikisKodu = (durum >> 8) & 255
+    eğer cikisKodu == 0 ise
+        yaz(metinBirlestir("TLS GETIR TAMAM: ", hedefDosya))
+        döndür 0
+    değilse
+        yaz(metinBirlestir("HATA: curl başarısız (çıkış kodu ", metinBirlestir(metin(cikisKodu), ")")))
+        döndür 1
+    son
+son
