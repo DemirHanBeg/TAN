@@ -50,6 +50,8 @@ def main():
          "params": {"textDocument": {"uri": uri}}},
         {"jsonrpc": "2.0", "id": 5, "method": "textDocument/references",
          "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
+        {"jsonrpc": "2.0", "id": 6, "method": "textDocument/completion",
+         "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
         {"jsonrpc": "2.0", "id": 3, "method": "shutdown"},
         {"jsonrpc": "2.0", "method": "exit"},
     ]
@@ -84,6 +86,9 @@ def main():
             print(f"[references] {len(locs)} konum:")
             for l in locs[:5]:
                 print(f"    satır {l['range']['start']['line']}, kolon {l['range']['start']['character']}")
+        elif obj.get("id") == 6:
+            items = obj["result"]
+            print(f"[completion] {len(items)} öğe: {[i['label'] for i in items[:8]]}...")
         elif obj.get("id") == 3:
             print("[shutdown] ok")
 

@@ -220,7 +220,7 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"referencesProvider\":true,\"textDocumentSync\":1}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"referencesProvider\":true,\"completionProvider\":{},\"textDocumentSync\":1}}}"))
     lspYaz(govde)
     döndür 0
 son
@@ -497,6 +497,52 @@ işlev lspFormatting(id, kaynak)
     döndür 0
 son
 
+# ---- completion: anahtar kelimeler + yerleşikler + belgedeki işlev adları ----
+işlev lspCompletion(id, kaynak)
+    anahtarlar = ["yaz", "eğer", "ise", "değilse", "iken", "işlev", "döndür", "son", "her", "içinde", "dur", "devam", "içe", "al", "doğru", "yanlış", "yok", "ve", "veya", "değil", "köprü", "dene", "yakala"]
+    yerlesikler = ["uzunluk", "metinBirlestir", "metinAl", "metinEsit", "ekle", "oku", "arg", "argsay", "karakter", "kod", "metin"]
+
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", id)
+    govde = metinBirlestir(govde, ",\"result\":[")
+    ilkMi = doğru
+
+    i = 0
+    iken i < uzunluk(anahtarlar)
+        eğer ilkMi == yanlış ise
+            govde = metinBirlestir(govde, ",")
+        son
+        ilkMi = yanlış
+        item = metinBirlestir("{\"label\":\"", anahtarlar[i])
+        item = metinBirlestir(item, "\",\"kind\":14}")
+        govde = metinBirlestir(govde, item)
+        i = i + 1
+    son
+
+    i = 0
+    iken i < uzunluk(yerlesikler)
+        govde = metinBirlestir(govde, ",")
+        item = metinBirlestir("{\"label\":\"", yerlesikler[i])
+        item = metinBirlestir(item, "\",\"kind\":3}")
+        govde = metinBirlestir(govde, item)
+        i = i + 1
+    son
+
+    simgeler = lspSimgeler(kaynak)
+    i = 0
+    iken i < uzunluk(simgeler)
+        sm = simgeler[i]
+        govde = metinBirlestir(govde, ",")
+        item = metinBirlestir("{\"label\":\"", sm[0])
+        item = metinBirlestir(item, "\",\"kind\":3}")
+        govde = metinBirlestir(govde, item)
+        i = i + 1
+    son
+
+    govde = metinBirlestir(govde, "]}")
+    lspYaz(govde)
+    döndür 0
+son
+
 # ---- diagnostics: kaynaktan tanı listesi [satir(0), severity, kod, mesaj] ----
 işlev lspTanilar(kaynak)
     satirlar = satiraBol(kaynak)
@@ -597,6 +643,9 @@ işlev lspCalis()
             sno = metinRakamlari(jsonHam(govde, "line"), 0)
             kno = metinRakamlari(jsonHam(govde, "character"), 0)
             d = lspReferences(id, uri, oku(uriYol(uri)), sno, kno)
+        değilse eğer metinEsit(yontem, "textDocument/completion") ise
+            uri = jsonMetin(govde, "uri")
+            d = lspCompletion(id, oku(uriYol(uri)))
         değilse eğer metinEsit(yontem, "textDocument/formatting") ise
             uri = jsonMetin(govde, "uri")
             d = lspFormatting(id, oku(uriYol(uri)))
