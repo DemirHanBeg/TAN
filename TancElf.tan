@@ -1970,7 +1970,7 @@ işlev bagla(bant)
         son
         i = i + 1
     son
-    döndür tamponSonuc(sonucKutu, sonucNKutu)
+    döndür [tamponSonuc(sonucKutu, sonucNKutu), etikAdlari, etikKonumlari]
 son
 
 # baytListesindenMetin: bayt listesini (0-255) HAM bayt dizisi olan bir
@@ -1989,12 +1989,162 @@ son
 # sarar. Düzen DerleElf.go ile birebir aynı (elfTaban=0x400000,
 # basliklar=64+56=120) — böylece ./tan elf ile ./TancElf çıktıları
 # karşılaştırılabilir (fark testi, bkz. Olcum.sh yanına eklenecek karsilastir.sh).
-işlev elfUret(kodBaytlari, girisOfsetKodIci)
+# ASCII metnin baytlarını listeye ekler, sonuna 0 (null-sonlandırıcı) ekler.
+# KÜÇÜK, SABİT boyutlu listeler için (örn. .shstrtab, 4 sabit ad) — büyük/
+# programa-bağlı-boyutlu veri için nullSonluMetinEkleTampon kullan (aşağıda),
+# aksi halde her çağrı TÜM listeyi kopyalar (O(n²) — bagla()'nın kaçındığı
+# tuzağın aynısı, ilk denemede TancElf.tan'ın kendi derlemesinde SONSUZ
+# YAVAŞLIĞA yol açtığı doğrulandı, geri alınıp tampon deseniyle düzeltildi).
+işlev nullSonluMetinEkle(liste, s)
+    j = 0
+    n = uzunluk(s)
+    iken j < n
+        liste = ekle(liste, kod(metinAl(s, j)))
+        j = j + 1
+    son
+    liste = ekle(liste, 0)
+    döndür liste
+son
+
+# ASCII metnin baytlarını (+ null sonlandırıcı) bir baytTampon'a ekler — O(1) amortize.
+işlev nullSonluMetinEkleTampon(tamponKutu, nKutu, s)
+    j = 0
+    n = uzunluk(s)
+    iken j < n
+        z = baytTamponEkle(tamponKutu, nKutu, kod(metinAl(s, j)))
+        j = j + 1
+    son
+    z = baytTamponEkle(tamponKutu, nKutu, 0)
+    döndür 0
+son
+
+# v sayısını n baytlık küçük-uçlu olarak bir baytTampon'a ekler — O(1) amortize.
+işlev tamponKodEkleN(tamponKutu, nKutu, v, n)
+    z = baytTamponEkleTumu(tamponKutu, nKutu, tamdanBaytlar(v, n))
+    döndür 0
+son
+
+işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     elfTaban = 4194304 # 0x400000
     basliklar = 120    # 64 (ELF baslik) + 56 (1 program header)
     kodBoy = uzunluk(kodBaytlari)
     giris = elfTaban + basliklar + girisOfsetKodIci
-    toplam = basliklar + kodBoy
+    toplam = basliklar + kodBoy  # PT_LOAD boyutu — DEĞİŞMEDİ. Sembol/bölüm
+    # bilgisi bunun DIŞINDA (dosyanın sonuna) eklenir; PT_LOAD filesz/memsz'i
+    # kapsamadığı için çekirdek yükleyici (execve) bunu HİÇ görmez/okumaz —
+    # section header'lar zaten ELF spesifikasyonunda yalnız statik araçlar
+    # (readelf/nm/gdb/objdump) içindir, çalışma zamanını etkilemez. Bu yüzden
+    # bu ekleme mevcut hiçbir programın (self-hosting dahil) davranışını
+    # DEĞİŞTİREMEZ — yalnız dosyanın SONUNA yeni, aksi halde erişilmeyen
+    # bayt ekler.
+
+    # ---- .strtab: index0 boş metin ("\0"), sonra her etiket adı null-sonlu ----
+    # (baytTampon deseni — TancElf.tan'ın kendi etiket sayısı yüzlerce
+    # olduğundan plain-liste O(n²) kopyalama burada gerçekten yavaş: ilk
+    # denemede doğrulandı, tampon'a geçilince düzeldi.)
+    strtabKutu = baytTamponOlustur()
+    strtabNKutu = [0]
+    z = baytTamponEkle(strtabKutu, strtabNKutu, 0)
+    strOfsetKutu = tamponOlustur()
+    strOfsetNKutu = [0]
+    si = 0
+    iken si < uzunluk(etikAdlari)
+        z = tamponEkle(strOfsetKutu, strOfsetNKutu, strtabNKutu[0])
+        z = nullSonluMetinEkleTampon(strtabKutu, strtabNKutu, etikAdlari[si])
+        si = si + 1
+    son
+    strtab = baytTamponSonuc(strtabKutu, strtabNKutu)
+    strOfsetleri = tamponSonuc(strOfsetKutu, strOfsetNKutu)
+
+    # ---- .symtab: index0 NULL sembol (Elf64_Sym, 24 bayt, hepsi sıfır),
+    # sonra her etiket için bir yerel (STB_LOCAL/STT_NOTYPE) sembol ----
+    symtabKutu = baytTamponOlustur()
+    symtabNKutu = [0]
+    i = 0
+    iken i < 24
+        z = baytTamponEkle(symtabKutu, symtabNKutu, 0)
+        i = i + 1
+    son
+    si = 0
+    iken si < uzunluk(etikAdlari)
+        z = tamponKodEkleN(symtabKutu, symtabNKutu, strOfsetleri[si], 4)  # st_name
+        z = baytTamponEkle(symtabKutu, symtabNKutu, 0)                    # st_info (LOCAL|NOTYPE)
+        z = baytTamponEkle(symtabKutu, symtabNKutu, 0)                    # st_other
+        z = tamponKodEkleN(symtabKutu, symtabNKutu, 1, 2)                 # st_shndx = 1 (.text)
+        z = tamponKodEkleN(symtabKutu, symtabNKutu, elfTaban + basliklar + etikKonumlari[si], 8) # st_value
+        z = tamponKodEkleN(symtabKutu, symtabNKutu, 0, 8)                 # st_size (bilinmiyor)
+        si = si + 1
+    son
+    symtab = baytTamponSonuc(symtabKutu, symtabNKutu)
+    symSayi = uzunluk(etikAdlari) + 1
+
+    # ---- .shstrtab: bölüm adları ----
+    shstrtab = [0]
+    offText = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".text")
+    offSymtab = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".symtab")
+    offStrtab = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".strtab")
+    offShstrtab = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".shstrtab")
+
+    # ---- dosya-içi konumlar (PT_LOAD'dan SONRA, sırayla ekleniyor) ----
+    offSymtabDosya = toplam
+    offStrtabDosya = offSymtabDosya + uzunluk(symtab)
+    offShstrtabDosya = offStrtabDosya + uzunluk(strtab)
+    offShdrDosya = offShstrtabDosya + uzunluk(shstrtab)
+
+    # ---- bölüm başlıkları (Elf64_Shdr × 5, 64 bayt/tanesi) ----
+    sh = []
+    i = 0
+    iken i < 64
+        sh = ekle(sh, 0)          # index 0: NULL bölüm — tamamı sıfır
+        i = i + 1
+    son
+    sh = kodEkleN(sh, offText, 4)       # sh_name
+    sh = kodEkleN(sh, 1, 4)             # sh_type = SHT_PROGBITS
+    sh = kodEkleN(sh, 6, 8)             # sh_flags = ALLOC|EXECINSTR
+    sh = kodEkleN(sh, elfTaban, 8)      # sh_addr
+    sh = kodEkleN(sh, 0, 8)             # sh_offset
+    sh = kodEkleN(sh, toplam, 8)        # sh_size (başlıklar+kod)
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 16, 8)            # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
+
+    sh = kodEkleN(sh, offSymtab, 4)     # sh_name
+    sh = kodEkleN(sh, 2, 4)             # sh_type = SHT_SYMTAB
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr (yüklenmiyor)
+    sh = kodEkleN(sh, offSymtabDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(symtab), 8) # sh_size
+    sh = kodEkleN(sh, 3, 4)             # sh_link = .strtab index'i
+    sh = kodEkleN(sh, symSayi, 4)       # sh_info = ilk yerel-olmayan indeks (hepsi yerel)
+    sh = kodEkleN(sh, 8, 8)             # sh_addralign
+    sh = kodEkleN(sh, 24, 8)            # sh_entsize
+
+    sh = kodEkleN(sh, offStrtab, 4)     # sh_name
+    sh = kodEkleN(sh, 3, 4)             # sh_type = SHT_STRTAB
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr
+    sh = kodEkleN(sh, offStrtabDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(strtab), 8) # sh_size
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 1, 8)             # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
+
+    sh = kodEkleN(sh, offShstrtab, 4)   # sh_name
+    sh = kodEkleN(sh, 3, 4)             # sh_type = SHT_STRTAB
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr
+    sh = kodEkleN(sh, offShstrtabDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(shstrtab), 8) # sh_size
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 1, 8)             # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
 
     b = []
     b = ekle(b, 127) # 0x7F
@@ -2015,14 +2165,14 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci)
     b = kodEkleN(b, 1, 4)    # e_version
     b = kodEkleN(b, giris, 8) # e_entry
     b = kodEkleN(b, 64, 8)   # e_phoff
-    b = kodEkleN(b, 0, 8)    # e_shoff
+    b = kodEkleN(b, offShdrDosya, 8) # e_shoff
     b = kodEkleN(b, 0, 4)    # e_flags
     b = kodEkleN(b, 64, 2)   # e_ehsize
     b = kodEkleN(b, 56, 2)   # e_phentsize
     b = kodEkleN(b, 1, 2)    # e_phnum
-    b = kodEkleN(b, 0, 2)    # e_shentsize
-    b = kodEkleN(b, 0, 2)    # e_shnum
-    b = kodEkleN(b, 0, 2)    # e_shstrndx
+    b = kodEkleN(b, 64, 2)   # e_shentsize
+    b = kodEkleN(b, 5, 2)    # e_shnum
+    b = kodEkleN(b, 4, 2)    # e_shstrndx
 
     b = kodEkleN(b, 1, 4)          # p_type = PT_LOAD
     b = kodEkleN(b, 7, 4)          # p_flags = R+W+X
@@ -2033,7 +2183,12 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci)
     b = kodEkleN(b, toplam, 8)     # p_memsz
     b = kodEkleN(b, 4096, 8)       # p_align
 
-    döndür baytListesiBirlestir(b, kodBaytlari)
+    sonuc = baytListesiBirlestir(b, kodBaytlari)
+    sonuc = baytListesiBirlestir(sonuc, symtab)
+    sonuc = baytListesiBirlestir(sonuc, strtab)
+    sonuc = baytListesiBirlestir(sonuc, shstrtab)
+    sonuc = baytListesiBirlestir(sonuc, sh)
+    döndür sonuc
 son
 
 # yaz_sayı çalışma zamanı: DerleElf.go'daki yardimciYazSayi ile BİREBİR AYNI
@@ -4752,8 +4907,11 @@ z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, veriAyir("v_yiginSon", 8))
 z = tamponEkleTumu(bantTumuKutu, bantTumuNKutu, veriAyir("v___argv", 8))
 bantTumu = tamponSonuc(bantTumuKutu, bantTumuNKutu)
 
-kodBaytlari = bagla(bantTumu)
-dosyaBaytlari = elfUret(kodBaytlari, 0)
+baglaSonuc = bagla(bantTumu)
+kodBaytlari = baglaSonuc[0]
+etikAdlariSon = baglaSonuc[1]
+etikKonumlariSon = baglaSonuc[2]
+dosyaBaytlari = elfUret(kodBaytlari, 0, etikAdlariSon, etikKonumlariSon)
 yazBaytlar(ciktiYolu, dosyaBaytlari)
 
 yaz("TancElf: " + girdiYolu + " -> " + ciktiYolu + "  (" + metin(uzunluk(dosyaBaytlari)) + " bayt, " + metin(degiskenSayisi) + " degisken)")
