@@ -1,18 +1,10 @@
-# test_concurrency.tan — VETA concurrency (2D) smoke test
-# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
-# Çalıştırma:  qemu-x86_64 <cikti>
-# Kural: mevcut TancElf binary'sini kullan; bootstrap yenilenmediği sürece QEMU throttle engelliyorum.
-# BU TEST: QEMU throttle nedeniyle UNVERIFIED (ortam kısıtı) — ama derleme CANLIdir.
+# test_concurrency.tan — VETA concurrency (2D) durum testi
+# 2026-08-21: Gerçek durum doğrulandı — TancElf.tan'da futex/thread/kilit/atomik
+# YOK (grep: sıfır eşleşme). Önceki "eklendi, satır 4465..." kaydı yanlıştı (o
+# satırlarda ilgisiz tip-çıkarım kodu var). Eski test de "yaus(" yazım hatasıyla
+# derlenmiyordu ve gerçek hiçbir fonksiyon çağırmıyordu — sadece metin basıyordu.
+# Bu dosya artık gerçek durumu bildiriyor, var olmayan API'yi çağırmıyor.
 
-içe al "../source/math/source/mat.tan"
-
-# Basit atomik işlem testini çalıştırmak için
-yaz("=== Concurrency Test ===\n")
-
-# Basit lock testini çalıştırmak için değişkenler
-lock_deger = 0
-yaz("lock baslangici: 0\n")
-
-# basit futex wait/wake simgesi (TancElf içinde tanımlı)
-yaus("futex ve thread'lar TancElf.tan'da eklendi\n")
-yaz("Concurrency test: TancElf içinde futex/thread/lock/atomik'lar var\n")
+yaz("=== Concurrency (2D) Durum ===\n")
+yaz("futex/thread/kilit/atomik: TancElf.tan'da henuz YAZILMADI\n")
+yaz("2D: YOK — ayri, dikkatli bir derleyici oturumu gerekiyor\n")
