@@ -203,6 +203,60 @@ işlev simgelerAna(yol, json)
     döndür 0
 son
 
+# kimlik karakteri mi? (harf/rakam/_ veya çok-baytlı Türkçe >=128)
+işlev kimlikKarMi(c)
+    k = kod(c)
+    eğer k >= 48 ve k <= 57 ise
+        döndür doğru
+    son
+    eğer k >= 65 ve k <= 90 ise
+        döndür doğru
+    son
+    eğer k >= 97 ve k <= 122 ise
+        döndür doğru
+    son
+    eğer k >= 128 ise
+        döndür doğru
+    son
+    döndür c == "_"
+son
+
+# kaynakta 'ad(' whole-word kalıbının kaç kez geçtiğini sayar (tanım satırı dahil).
+# Not (bilinen sınır): içParcaLat gibi işlev adını STRING olarak alan dolaylı
+# çağrılar bu sayıma girmez — TAN007 o durumda yanlış-pozitif üretebilir, bu
+# yüzden "hata" değil "uyarı" seviyesinde.
+işlev cagriSayisi(kaynak, ad)
+    n = uzunluk(kaynak)
+    kn = uzunluk(ad)
+    sayi = 0
+    i = 0
+    iken i < n
+        oncekiKimlik = yanlış
+        eğer i > 0 ve kimlikKarMi(metinAl(kaynak, i - 1)) ise
+            oncekiKimlik = doğru
+        son
+        eğer kimlikKarMi(metinAl(kaynak, i)) ve oncekiKimlik == yanlış ise
+            eslesme = doğru
+            j = 0
+            iken j < kn
+                eğer i + j >= n veya metinAl(kaynak, i + j) != metinAl(ad, j) ise
+                    eslesme = yanlış
+                son
+                j = j + 1
+            son
+            eğer eslesme ve i + kn < n ve metinAl(kaynak, i + kn) == "(" ise
+                sayi = sayi + 1
+            son
+            iken i < n ve kimlikKarMi(metinAl(kaynak, i))
+                i = i + 1
+            son
+        değilse
+            i = i + 1
+        son
+    son
+    döndür sayi
+son
+
 # ---- denetle: blok dengesi linter'ı + STRUCTURED DIAGNOSTICS (Kaldıraç 2) ----
 # Tanı kaydı: [kod, önem, satır(metin), mesaj, sebep, çözüm] — AI-native.
 # JSON şeması: {"tani":[{"kod","onem","satir","mesaj","sebep","cozum"}]}
@@ -253,6 +307,25 @@ işlev denetleAna(yol, json)
 
     eğer derinlik > 0 ise
         tanilar = ekle(tanilar, ["TAN002", "hata", "0", metinBirlestir(metin(derinlik), " blok kapatılmamış ('son' eksik)"), "blok açıcı (işlev/eğer/iken/her/dene) sayısı 'son' sayısından fazla", metinBirlestir(metin(derinlik), " adet 'son' anahtar kelimesi ekle")])
+    son
+
+    # TAN007: kullanılmayan işlev (tanımlı ama dosya içinde hiç çağrılmıyor)
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer metinEsit(kelime, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kelime))
+            ad = kelimeAl(satir, adBasla)
+            eğer uzunluk(ad) > 0 ise
+                sayi = cagriSayisi(kaynak, ad)
+                eğer sayi <= 1 ise
+                    tanilar = ekle(tanilar, ["TAN007", "uyarı", metin(si + 1), metinBirlestir("kullanılmayan işlev: ", ad), "bu işlev dosya içinde başka hiçbir yerden çağrılmıyor (yalnızca tanımı var)", "işlevi kullan, dışa aç (bkz. tan api) ya da ölü kodu sil"])
+                son
+            son
+        son
+        si = si + 1
     son
 
     eğer json ise
