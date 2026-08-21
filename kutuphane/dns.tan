@@ -1,0 +1,119 @@
+# dns.tan — minimal DNS-over-TCP çözümleyici (A kaydı). TLS YOK, düz TCP.
+# RFC 1035: TCP DNS mesajları 2-bayt big-endian uzunluk ön ekiyle gönderilir.
+# NOT (dürüstlük): Bu GERÇEK DNS protokolüdür ama UDP değil TCP kullanır —
+# yeni bir transport icat edilmedi, zaten var olan/kanıtlı TCP soket
+# altyapısı (ag.tan) yeniden kullanıldı. Çoğu genel resolver (8.8.8.8,
+# 1.1.1.1) TCP:53'ü de destekler (RFC 7766). "TLS" değildir, düz metin
+# DNS sorgusu — DNS-over-TLS/HTTPS ayrı, çok daha büyük bir iştir.
+
+içe al "kutuphane/ag.tan"
+
+# 16-bit big-endian sayıyı 2 baytlık metne kodlar
+işlev be16(n)
+    döndür metinBirlestir(karakter((n >> 8) & 255), karakter(n & 255))
+son
+
+# ad (örn. "example.com") -> DNS QNAME kodlaması (uzunluk-önekli etiketler + 0)
+işlev qnameKodla(ad)
+    sonuc = ""
+    etiket = ""
+    n = uzunluk(ad)
+    i = 0
+    iken i < n
+        c = metinAl(ad, i)
+        eğer c == "." ise
+            sonuc = metinBirlestir(sonuc, karakter(uzunluk(etiket)))
+            sonuc = metinBirlestir(sonuc, etiket)
+            etiket = ""
+        değilse
+            etiket = metinBirlestir(etiket, c)
+        son
+        i = i + 1
+    son
+    eğer uzunluk(etiket) > 0 ise
+        sonuc = metinBirlestir(sonuc, karakter(uzunluk(etiket)))
+        sonuc = metinBirlestir(sonuc, etiket)
+    son
+    sonuc = metinBirlestir(sonuc, karakter(0))
+    döndür sonuc
+son
+
+# DNS sorgu mesajı gövdesi (header+question, TCP 2-bayt uzunluk öneki HARİÇ)
+işlev dnsSorgu(ad)
+    baslik = be16(4660)
+    baslik = metinBirlestir(baslik, be16(256))
+    baslik = metinBirlestir(baslik, be16(1))
+    baslik = metinBirlestir(baslik, be16(0))
+    baslik = metinBirlestir(baslik, be16(0))
+    baslik = metinBirlestir(baslik, be16(0))
+    soru = qnameKodla(ad)
+    soru = metinBirlestir(soru, be16(1))
+    soru = metinBirlestir(soru, be16(1))
+    döndür metinBirlestir(baslik, soru)
+son
+
+# ad'ı DNS sunucusuna (sIp1..4, sPort genelde 53) TCP üzerinden sorar,
+# ilk A kaydını [b1,b2,b3,b4] olarak döndürür; bulunamazsa/hatada [] döner.
+işlev dnsCoz(ad, sIp1, sIp2, sIp3, sIp4, sPort)
+    fd = soketAc()
+    eğer fd < 0 ise
+        döndür []
+    son
+    addr = sockaddrYap(sIp1, sIp2, sIp3, sIp4, sPort)
+    r = soketBagla(fd, addr)
+    eğer r < 0 ise
+        d = soketKapat(fd)
+        döndür []
+    son
+    gövde = dnsSorgu(ad)
+    mesaj = metinBirlestir(be16(uzunluk(gövde)), gövde)
+    d = soketYaz(fd, mesaj)
+    yanit = soketTumunuOku(fd)
+    d = soketKapat(fd)
+
+    eğer uzunluk(yanit) < 14 ise
+        döndür []
+    son
+    ancount = kod(metinAl(yanit, 8)) * 256 + kod(metinAl(yanit, 9))
+    eğer ancount == 0 ise
+        döndür []
+    son
+
+    n = uzunluk(yanit)
+    i = 14
+    iken i < n ve kod(metinAl(yanit, i)) != 0
+        etUzun = kod(metinAl(yanit, i))
+        i = i + 1 + etUzun
+    son
+    i = i + 1 + 4
+
+    ai = 0
+    iken ai < ancount ve i + 12 <= n
+        ilkBayt = kod(metinAl(yanit, i))
+        eğer ilkBayt >= 192 ise
+            i = i + 2
+        değilse
+            iken i < n ve kod(metinAl(yanit, i)) != 0
+                etUzun = kod(metinAl(yanit, i))
+                i = i + 1 + etUzun
+            son
+            i = i + 1
+        son
+        eğer i + 10 > n ise
+            döndür []
+        son
+        tur = kod(metinAl(yanit, i)) * 256 + kod(metinAl(yanit, i + 1))
+        rdlen = kod(metinAl(yanit, i + 8)) * 256 + kod(metinAl(yanit, i + 9))
+        i = i + 10
+        eğer tur == 1 ve rdlen == 4 ve i + 4 <= n ise
+            b1 = kod(metinAl(yanit, i))
+            b2 = kod(metinAl(yanit, i + 1))
+            b3 = kod(metinAl(yanit, i + 2))
+            b4 = kod(metinAl(yanit, i + 3))
+            döndür [b1, b2, b3, b4]
+        son
+        i = i + rdlen
+        ai = ai + 1
+    son
+    döndür []
+son

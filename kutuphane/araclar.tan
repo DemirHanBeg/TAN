@@ -5,6 +5,7 @@
 içe al "kutuphane/tanoku.tan"
 içe al "kutuphane/sha256.tan"
 içe al "kutuphane/ag.tan"
+içe al "kutuphane/dns.tan"
 
 # metni tam sayıya çevir (rakamlar)
 işlev metneTam(s)
@@ -64,6 +65,32 @@ işlev cekAna(ip, portMetin, yol, beklenenSha)
         yaz(metinBirlestir("beklenen: ", beklenenSha))
     son
     döndür 0
+son
+
+# dörtlü ip listesini "a.b.c.d" metnine çevirir
+işlev ipMetneCevir(ip)
+    s = metin(ip[0])
+    s = metinBirlestir(s, ".")
+    s = metinBirlestir(s, metin(ip[1]))
+    s = metinBirlestir(s, ".")
+    s = metinBirlestir(s, metin(ip[2]))
+    s = metinBirlestir(s, ".")
+    s = metinBirlestir(s, metin(ip[3]))
+    döndür s
+son
+
+# ---- cek-ad: hostname'i GERÇEK DNS (TCP:53) ile çözüp cek'e devreder ----
+# NOT (dürüstlük): DNS var, TLS YOK — kaydı düz TCP üzerinden (cekAna gibi)
+# çeker. HTTPS/TLS ayrı, çok daha büyük bir iş (el ile TLS handshake riskli).
+işlev cekAdAna(ad, portMetin, yol, beklenenSha)
+    ip = dnsCoz(ad, 1, 1, 1, 1, 53)
+    eğer uzunluk(ip) != 4 ise
+        yaz(metinBirlestir("HATA: DNS çözülemedi (1.1.1.1:53 üzerinden): ", ad))
+        döndür 1
+    son
+    ipMetin = ipMetneCevir(ip)
+    yaz(metinBirlestir(metinBirlestir("DNS: ", ad), metinBirlestir(" -> ", ipMetin)))
+    döndür cekAna(ipMetin, portMetin, yol, beklenenSha)
 son
 
 # bir kaynaktaki tüm `içe al "yol"` bağımlılıklarını liste olarak döndürür
