@@ -376,6 +376,42 @@ işlev denetleAna(yol, json)
         si = si + 1
     son
 
+    # TAN009: kullanılmayan yerel değişken (bir işlev gövdesinde tanımlanmış
+    # ama gövde metninde tam olarak bir kez geçiyor — yalnızca kendi ataması)
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer b == 0 ve metinEsit(kelime, "işlev") ise
+            bitisIslev = islevSonu(satirlar, si)
+            govdeMetni = ""
+            gi = si + 1
+            iken gi < bitisIslev
+                govdeMetni = metinBirlestir(govdeMetni, metinBirlestir(satirlar[gi], "\n"))
+                gi = gi + 1
+            son
+            gorulenYerel = []
+            gi = si + 1
+            iken gi < bitisIslev
+                gsatir = satirlar[gi]
+                gb = boslukAtla(gsatir, 0)
+                esit = karakterBul(gsatir, "=", gb)
+                eğer esit > gb ise
+                    aday = kirp(kelimeAl(gsatir, gb))
+                    eğer uzunluk(aday) > 0 ve metinListedeVarMi(gorulenYerel, aday) == yanlış ve anahtarMiKelime(aday) == yanlış ise
+                        gorulenYerel = ekle(gorulenYerel, aday)
+                        eğer kelimeSayisiMetinde(govdeMetni, aday) == 1 ise
+                            tanilar = ekle(tanilar, ["TAN009", "uyarı", metin(gi + 1), metinBirlestir("kullanılmayan yerel değişken: ", aday), "bu değişken atandıktan sonra işlev gövdesinde bir daha hiç okunmuyor", "değişkeni kullan ya da gereksiz atamayı sil"])
+                        son
+                    son
+                son
+                gi = gi + 1
+            son
+        son
+        si = si + 1
+    son
+
     eğer json ise
         cikti = "{\"tani\":["
         si = 0
