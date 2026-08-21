@@ -219,7 +219,7 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"textDocumentSync\":1}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"textDocumentSync\":1}}}"))
     lspYaz(govde)
     döndür 0
 son
@@ -331,6 +331,100 @@ işlev lspDefinition(id, uri, kaynak, satirNo, kar)
     döndür 0
 son
 
+# ---- rename (tek dosya içi, whole-word) ----
+
+# satirdaki 'kelime' whole-word geçtiği tüm başlangıç kolonlarını döndür
+işlev satirdaTumKonumlar(satir, kelime)
+    liste = []
+    n = uzunluk(satir)
+    kn = uzunluk(kelime)
+    i = 0
+    iken i < n
+        oncekiKimlik = yanlış
+        eğer i > 0 ve kimlikKarMi(metinAl(satir, i - 1)) ise
+            oncekiKimlik = doğru
+        son
+        eğer kimlikKarMi(metinAl(satir, i)) ve oncekiKimlik == yanlış ise
+            eslesme = doğru
+            j = 0
+            iken j < kn
+                eğer i + j >= n veya metinAl(satir, i + j) != metinAl(kelime, j) ise
+                    eslesme = yanlış
+                son
+                j = j + 1
+            son
+            sonrakiKimlikDegil = doğru
+            eğer i + kn < n ve kimlikKarMi(metinAl(satir, i + kn)) ise
+                sonrakiKimlikDegil = yanlış
+            son
+            eğer eslesme ve sonrakiKimlikDegil ise
+                liste = ekle(liste, i)
+            son
+            iken i < n ve kimlikKarMi(metinAl(satir, i))
+                i = i + 1
+            son
+        değilse
+            i = i + 1
+        son
+    son
+    döndür liste
+son
+
+# rename yanıtı (id, uri, kaynak, satirNo, kar, yeniAd) — tek dosya içindeki
+# tüm whole-word geçişlerini değiştiren bir WorkspaceEdit üretir
+işlev lspRename(id, uri, kaynak, satirNo, kar, yeniAd)
+    satir0 = satirAl(kaynak, satirNo)
+    kelime = konumKelime(satir0, kar)
+    eğer uzunluk(kelime) == 0 ise
+        lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
+        döndür 0
+    son
+    satirlar = satiraBol(kaynak)
+    duzenler = ""
+    ilkMi = doğru
+    si = 0
+    iken si < uzunluk(satirlar)
+        konumlar = satirdaTumKonumlar(satirlar[si], kelime)
+        ki = 0
+        iken ki < uzunluk(konumlar)
+            kol = konumlar[ki]
+            snStr = metin(si)
+            basStr = metin(kol)
+            sonStr = metin(kol + uzunluk(kelime))
+            aralik = "{\"start\":{\"line\":"
+            aralik = metinBirlestir(aralik, snStr)
+            aralik = metinBirlestir(aralik, ",\"character\":")
+            aralik = metinBirlestir(aralik, basStr)
+            aralik = metinBirlestir(aralik, "},\"end\":{\"line\":")
+            aralik = metinBirlestir(aralik, snStr)
+            aralik = metinBirlestir(aralik, ",\"character\":")
+            aralik = metinBirlestir(aralik, sonStr)
+            aralik = metinBirlestir(aralik, "}}")
+            duzen = "{\"range\":"
+            duzen = metinBirlestir(duzen, aralik)
+            duzen = metinBirlestir(duzen, ",\"newText\":\"")
+            duzen = metinBirlestir(duzen, yeniAd)
+            duzen = metinBirlestir(duzen, "\"}")
+            eğer ilkMi == yanlış ise
+                duzenler = metinBirlestir(duzenler, ",")
+            son
+            ilkMi = yanlış
+            duzenler = metinBirlestir(duzenler, duzen)
+            ki = ki + 1
+        son
+        si = si + 1
+    son
+    govde = "{\"jsonrpc\":\"2.0\",\"id\":"
+    govde = metinBirlestir(govde, id)
+    govde = metinBirlestir(govde, ",\"result\":{\"changes\":{\"")
+    govde = metinBirlestir(govde, uri)
+    govde = metinBirlestir(govde, "\":[")
+    govde = metinBirlestir(govde, duzenler)
+    govde = metinBirlestir(govde, "]}}}")
+    lspYaz(govde)
+    döndür 0
+son
+
 # ---- diagnostics: kaynaktan tanı listesi [satir(0), severity, kod, mesaj] ----
 işlev lspTanilar(kaynak)
     satirlar = satiraBol(kaynak)
@@ -420,6 +514,12 @@ işlev lspCalis()
             sno = metinRakamlari(jsonHam(govde, "line"), 0)
             kno = metinRakamlari(jsonHam(govde, "character"), 0)
             d = lspDefinition(id, uri, oku(uriYol(uri)), sno, kno)
+        değilse eğer metinEsit(yontem, "textDocument/rename") ise
+            uri = jsonMetin(govde, "uri")
+            sno = metinRakamlari(jsonHam(govde, "line"), 0)
+            kno = metinRakamlari(jsonHam(govde, "character"), 0)
+            yeniAd = jsonMetin(govde, "newName")
+            d = lspRename(id, uri, oku(uriYol(uri)), sno, kno, yeniAd)
         değilse eğer metinEsit(yontem, "shutdown") ise
             lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
         değilse eğer metinEsit(yontem, "exit") ise
