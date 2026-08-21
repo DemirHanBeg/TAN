@@ -1,0 +1,91 @@
+/*
+ * VETA tasarım tokenleri — "Dokuma" dil.
+ * Tek kaynak: açık ve koyu mod burada tanımlanır, bileşenler yalnızca
+ * `var(--...)` okur. Zemin yumuşak beyaz, aksan çini-turkuaz.
+ */
+
+:root {
+  /* — Açık mod (varsayılan) — */
+  --veta-bg: #f4f8f8;
+  --veta-panel: #ffffff;
+  --veta-ink: #25302f;
+  --veta-sub: #7c8a89;
+  --veta-tur: #2e9cad;
+  --veta-tur-deep: #1c7a88;
+  --veta-tur-soft: #e7f4f5;
+  --veta-tur-soft-2: #f0f8f9;
+  --veta-line: rgba(46, 156, 173, 0.14);
+  --veta-raf: #eef4f4;
+  --veta-golge: 0 1px 2px rgba(20, 45, 45, 0.04), 0 10px 30px rgba(20, 45, 45, 0.06);
+  --veta-golge-hover: 0 4px 10px rgba(20, 45, 45, 0.06), 0 16px 40px rgba(20, 45, 45, 0.09);
+  --veta-chrome: rgba(244, 248, 248, 0.72);
+  --veta-scrim: rgba(10, 20, 20, 0.34);
+  --veta-basari: #3aae7a;
+
+  /* — Yarıçap — */
+  --veta-r-kart: 18px;
+  --veta-r-ic: 11px;
+  --veta-r-pill: 24px;
+
+  /* — Hareket — */
+  --veta-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --veta-ease-drawer: cubic-bezier(0.2, 0.85, 0.25, 1);
+  --veta-sure-hizli: 150ms;
+  --veta-sure-normal: 300ms;
+  --veta-sure-giris: 500ms;
+}
+
+/* Sistem tercihi koyu VE kullanıcı açık modu elle seçmediyse */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="acik"]) {
+    --veta-bg: #0b1414;
+    --veta-panel: #12201f;
+    --veta-ink: #e6f0ef;
+    --veta-sub: #7e9695;
+    --veta-tur: #43b8c6;
+    --veta-tur-deep: #79d6e0;
+    --veta-tur-soft: rgba(67, 184, 198, 0.13);
+    --veta-tur-soft-2: rgba(67, 184, 198, 0.07);
+    --veta-line: rgba(67, 184, 198, 0.16);
+    --veta-raf: #0e1a19;
+    --veta-golge: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.4);
+    --veta-golge-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.45);
+    --veta-chrome: rgba(11, 20, 20, 0.72);
+    --veta-scrim: rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Kullanıcının elle seçtiği tema — sistem tercihini ezer, her iki yönde de */
+:root[data-tema="koyu"] {
+  --veta-bg: #0b1414;
+  --veta-panel: #12201f;
+  --veta-ink: #e6f0ef;
+  --veta-sub: #7e9695;
+  --veta-tur: #43b8c6;
+  --veta-tur-deep: #79d6e0;
+  --veta-tur-soft: rgba(67, 184, 198, 0.13);
+  --veta-tur-soft-2: rgba(67, 184, 198, 0.07);
+  --veta-line: rgba(67, 184, 198, 0.16);
+  --veta-raf: #0e1a19;
+  --veta-golge: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.4);
+  --veta-golge-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.45);
+  --veta-chrome: rgba(11, 20, 20, 0.72);
+  --veta-scrim: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-tema="acik"] {
+  --veta-bg: #f4f8f8;
+  --veta-panel: #ffffff;
+  --veta-ink: #25302f;
+  --veta-sub: #7c8a89;
+  --veta-tur: #2e9cad;
+  --veta-tur-deep: #1c7a88;
+  --veta-tur-soft: #e7f4f5;
+  --veta-tur-soft-2: #f0f8f9;
+  --veta-line: rgba(46, 156, 173, 0.14);
+  --veta-raf: #eef4f4;
+  --veta-golge: 0 1px 2px rgba(20, 45, 45, 0.04), 0 10px 30px rgba(20, 45, 45, 0.06);
+  --veta-golge-hover: 0 4px 10px rgba(20, 45, 45, 0.06), 0 16px 40px rgba(20, 45, 45, 0.09);
+  --veta-chrome: rgba(244, 248, 248, 0.72);
+  --veta-scrim: rgba(10, 20, 20, 0.34);
+}
