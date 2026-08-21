@@ -19,6 +19,8 @@ eğer argsay() < 2 ise
     yaz("  imzala       dosyayı HMAC-SHA256 ile imzala (<dosya> <anahtar>)")
     yaz("  imzadogrula  imzayı doğrula (<dosya> <anahtar> <imza>)")
     yaz("  cek          uzak paket çek + sha256 doğrula (<ip> <port> <yol> [sha])")
+    yaz("  onbellekyaz  dosyayı içerik-adresli önbelleğe yaz (<dosya> <onbellek-dizin>)")
+    yaz("  onbellekal   önbellekten hash ile oku (<hash> <onbellek-dizin> <hedef|->)")
     yaz("  sürüm        toolchain bilgisi")
 değilse
     komut = arg(1)
@@ -44,6 +46,18 @@ değilse
             d = cekAna(arg(2), arg(3), arg(4), "-")
         değilse
             d = cekAna(arg(2), arg(3), arg(4), arg(5))
+        son
+    değilse eğer metinEsit(komut, "onbellekyaz") ise
+        eğer argsay() < 4 ise
+            yaz("Kullanım: tan onbellekyaz <dosya> <onbellek-dizin>")
+        değilse
+            d = onbellekYazAna(arg(2), arg(3))
+        son
+    değilse eğer metinEsit(komut, "onbellekal") ise
+        eğer argsay() < 5 ise
+            yaz("Kullanım: tan onbellekal <hash> <onbellek-dizin> <hedef-yol|->")
+        değilse
+            d = onbellekAlAna(arg(2), arg(3), arg(4))
         son
     değilse
         # komuttan sonraki argümanlar: --json bayrağı + ilk dosya yolu

@@ -591,6 +591,57 @@ işlev dogrulaAna(kilitYol)
     döndür 0
 son
 
+# ---- onbellek: içerik-adresli önbellek deposu (Kaldıraç 3 — uzak cache) ----
+# Yerel yarım: dosyayı sha256'siyle adresli tek bir dizine yazar/okur (CAS).
+# Uzak yarım: aynı dizin `registrys <port>` ile servis edilir, başka bir
+# makineden `tan cek <ip> <port> <hash> <hash>` ile GERÇEK TCP üzerinden
+# çekilip kendi hash'ine karşı doğrulanır — yani "uzak cache" = bu CAS dizini
+# + zaten var olan registry client/server ikilisinin bileşimi (yeni ağ kodu
+# icat edilmedi, kanıtlı TCP altyapısı yeniden kullanıldı).
+
+# dosyayı onbellekDizin/<sha256> olarak yazar (zaten varsa dokunmaz — CAS
+# doğası gereği içerik==adres, tekrar yazmaya gerek yok). Hash'i döndürür.
+işlev onbellekYazAna(dosyaYolu, onbellekDizin)
+    icerik = oku(dosyaYolu)
+    hash = metinBirlestir("", sha256(icerik))
+    hedef = metinBirlestir(onbellekDizin, metinBirlestir("/", hash))
+    eğer dosyaVarMi(hedef) ise
+        yaz(metinBirlestir("[ONBELLEKTE VAR] ", hash))
+    değilse
+        d = yazDosya(hedef, icerik)
+        yaz(metinBirlestir("[ONBELLEGE YAZILDI] ", hash))
+    son
+    yaz(metinBirlestir("  onbellek yolu: ", hedef))
+    döndür 0
+son
+
+# onbellekDizin/<hash>'i okuyup hedefYol'a yazar (hedefYol "-" ise stdout'a
+# ham basar). İçeriği tekrar hashleyip istenen hash'le eşleştiğini doğrular
+# (yerel CAS için de bütünlük garantisi — bozuk/yanlış dosya sessizce kabul
+# edilmez).
+işlev onbellekAlAna(hash, onbellekDizin, hedefYol)
+    kaynakYol = metinBirlestir(onbellekDizin, metinBirlestir("/", hash))
+    eğer dosyaVarMi(kaynakYol) == yanlış ise
+        yaz(metinBirlestir("[ONBELLEKTE YOK] ", hash))
+        döndür 1
+    son
+    icerik = oku(kaynakYol)
+    gercekHash = metinBirlestir("", sha256(icerik))
+    eğer metinEsit(gercekHash, hash) == yanlış ise
+        yaz("[ONBELLEK BOZUK] içerik istenen hash'le eşleşmiyor")
+        yaz(metinBirlestir("  istenen: ", hash))
+        yaz(metinBirlestir("  gerçek : ", gercekHash))
+        döndür 1
+    son
+    eğer metinEsit(hedefYol, "-") ise
+        yazHam(metinBirlestir("", icerik))
+    değilse
+        d = yazDosya(hedefYol, icerik)
+        yaz(metinBirlestir("[ONBELLEKTEN ALINDI] ", hedefYol))
+    son
+    döndür 0
+son
+
 # ---- ast: yapısal ayrıştırma ağacı (Kaldıraç 1) ----
 işlev astTur(kelime, satir, b)
     eğer blokAcici(kelime) ise
