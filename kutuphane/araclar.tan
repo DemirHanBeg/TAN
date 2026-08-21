@@ -355,6 +355,27 @@ işlev denetleAna(yol, json)
         si = si + 1
     son
 
+    # TAN008: yinelenen işlev tanımı (aynı ad birden fazla kez tanımlanmış)
+    gorulenler = []
+    si = 0
+    iken si < uzunluk(satirlar)
+        satir = satirlar[si]
+        b = boslukAtla(satir, 0)
+        kelime = kelimeAl(satir, b)
+        eğer metinEsit(kelime, "işlev") ise
+            adBasla = boslukAtla(satir, b + uzunluk(kelime))
+            ad = kelimeAl(satir, adBasla)
+            eğer uzunluk(ad) > 0 ise
+                eğer metinListedeVarMi(gorulenler, ad) ise
+                    tanilar = ekle(tanilar, ["TAN008", "hata", metin(si + 1), metinBirlestir("yinelenen işlev tanımı: ", ad), "aynı isimde birden fazla işlev tanımlanmış; sonraki tanım öncekini gölgeler, derleyici hangi tanımı kullanacağını belirsizleştirir", "işlevlerden birini yeniden adlandır ya da sil"])
+                değilse
+                    gorulenler = ekle(gorulenler, ad)
+                son
+            son
+        son
+        si = si + 1
+    son
+
     eğer json ise
         cikti = "{\"tani\":["
         si = 0
