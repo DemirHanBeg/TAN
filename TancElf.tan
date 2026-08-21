@@ -365,6 +365,23 @@ işlev karakterVarMi(s, aranan)
     döndür 0
 son
 
+# s, onek ile mi başlıyor? (K5 DWARF: "Lsatir" etiketlerini süzmek için)
+işlev onekMi(s, onek)
+    ns = uzunluk(s)
+    no = uzunluk(onek)
+    eğer ns < no ise
+        döndür 0
+    son
+    i = 0
+    iken i < no
+        eğer metinAl(s, i) != metinAl(onek, i) ise
+            döndür 0
+        son
+        i = i + 1
+    son
+    döndür 1
+son
+
 işlev bc(op, a1, a2)
     # ÖNCEDEN "op + soh + a1 + soh + a2" (düz "+") kullanıyordu. op/a1/a2
     # PARAMETRE olduğundan TancElf.tan'ın kendi tip çıkarımı onları hep
@@ -785,6 +802,17 @@ işlev blokDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKu
         eğer t == "ANAHTAR" ve (d == "son" veya d == "değilse") ise
             döndür tamponSonuc(kodKutu, nKutu)
         son
+        # K5 DWARF: bu deyimin kodundan HEMEN ÖNCE sıfır-bayt bir "satır
+        # etiketi" ekle (mevcut bcEtiket/yeniEtiket mekanizması — YENİ bir
+        # bayt-sayma icat ETMEDEN, bagla()'nın zaten hesapladığı gerçek
+        # adresi SONRADAN okuyacağız). Her deyimin gerçek kaynak satırını
+        # (token kaydının 2. alanı, tokenKodla'da zaten yazılıyordu — hiç
+        # kullanılmıyordu) satirHaritasi'na kaydeder.
+        satirHaritasi = islevTipKutu[5]
+        satirNo = metneTamSayi(alan(tokenler[pozKutu[0]], 2))
+        etSatir = yeniEtiket(sayacKutu, "Lsatir")
+        z = tamponEkleTumu(kodKutu, nKutu, [bcEtiket(etSatir)])
+        z = tamponEkle(satirHaritasi[0], satirHaritasi[1], [etSatir, satirNo])
         z = tamponEkleTumu(kodKutu, nKutu, deyimDerle(tokenler, pozKutu, adlarKutu, sayacKutu, dEtiketler, islevTipKutu))
     son
     döndür tamponSonuc(kodKutu, nKutu)
@@ -2024,7 +2052,54 @@ işlev tamponKodEkleN(tamponKutu, nKutu, v, n)
     döndür 0
 son
 
-işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
+# ULEB128 kodla (v >= 0) — DWARF .debug_line program operandları için.
+işlev uleb128Kodla(v)
+    baytlar = []
+    surdur = 1
+    iken surdur == 1
+        bayt = v & 127
+        v = v >> 7
+        eğer v == 0 ise
+            surdur = 0
+        değilse
+            bayt = bayt | 128
+        son
+        baytlar = ekle(baytlar, bayt)
+    son
+    döndür baytlar
+son
+
+# SLEB128 kodla — SADECE v >= 0 için doğruluğu garanti (bu dosyada
+# DW_LNS_advance_line hep artan/eşit satır numarası görüyor, kaynak
+# tokenleri LİNEER işlendiği için satır asla GERİ gitmiyor — negatif dal
+# kasıtlı olarak yazılmadı, spec'in pozitif-sayı kuralına tam uyar).
+işlev sleb128Kodla(v)
+    baytlar = []
+    surdur = 1
+    iken surdur == 1
+        bayt = v & 127
+        v = v >> 7
+        eğer v == 0 ve (bayt & 64) == 0 ise
+            surdur = 0
+        değilse
+            bayt = bayt | 128
+        son
+        baytlar = ekle(baytlar, bayt)
+    son
+    döndür baytlar
+son
+
+işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari, dwarfBilgisi)
+    # dwarfBilgisi = [satirOfsetleri, satirNolari, kaynakDosyaAdi] — TEK
+    # parametre içinde paketlendi (6-parametre ABI sınırı, bkz. Madde 9
+    # notu / satirHaritasi'nın aynı sebeple islevTipKutu'ya paketlenmesi).
+    satirOfsetleri = dwarfBilgisi[0]
+    satirNolari = dwarfBilgisi[1]
+    # TancElf.tan'ın kendi parametre-tipi çıkarımı YOK — string parametre
+    # ("bkz. islevDerle notu", metinBirlestir CAGRI ailesindeki bilinen
+    # sınır) tam sayı sanılabilir. metinBirlestir("", ...) ile string
+    # bağlamına zorla (sha256() ile aynı desen).
+    kaynakDosyaAdi = metinBirlestir("", dwarfBilgisi[2])
     elfTaban = 4194304 # 0x400000
     basliklar = 120    # 64 (ELF baslik) + 56 (1 program header)
     kodBoy = uzunluk(kodBaytlari)
@@ -2078,6 +2153,106 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     symtab = baytTamponSonuc(symtabKutu, symtabNKutu)
     symSayi = uzunluk(etikAdlari) + 1
 
+    # ---- K5 DWARF: .debug_abbrev (tek abbrev — compile_unit, çocuksuz) ----
+    # DW_TAG_compile_unit=0x11, DW_AT_name=0x03/DW_FORM_string=0x08,
+    # DW_AT_comp_dir=0x1b/DW_FORM_string, DW_AT_low_pc=0x11/DW_FORM_addr=0x01,
+    # DW_AT_high_pc=0x12/DW_FORM_data4=0x06 (DWARF4'te data-form high_pc,
+    # low_pc'ye eklenecek GÖRECELİ boyut olarak yorumlanır), DW_AT_stmt_list
+    # =0x10/DW_FORM_data4 (.debug_line ofseti — tek CU, hep 0).
+    debugAbbrev = [1, 17, 0, 3, 8, 27, 8, 17, 1, 18, 6, 16, 6, 0, 0, 0]
+
+    # ---- K5 DWARF: .debug_line (satır-numarası programı) ----
+    # Header sabitleri: special opcode HİÇ ÜRETİLMİYOR (sadece standart
+    # opcode'lar: advance_pc/advance_line/copy) — line_base/line_range
+    # değerleri bu yüzden İŞLEVSEL OLARAK kullanılmıyor, standart DWARF
+    # varsayılanları (0 seçildi: negatif-bayt kodlama sorusundan tamamen
+    # kaçınmak için, spec bunu YASAKLAMIYOR, sadece special opcode aralığını
+    # etkiler).
+    dlProgKutu = baytTamponOlustur()
+    dlProgNKutu = [0]
+    # DW_LNE_set_address (extended opcode): 0x00, uleb128(1+8), 0x02, adres(8)
+    z = baytTamponEkle(dlProgKutu, dlProgNKutu, 0)
+    z = baytTamponEkleTumu(dlProgKutu, dlProgNKutu, uleb128Kodla(9))
+    z = baytTamponEkle(dlProgKutu, dlProgNKutu, 2)
+    z = tamponKodEkleN(dlProgKutu, dlProgNKutu, elfTaban + basliklar, 8)
+    oncekiOfset = 0
+    oncekiSatir = 1
+    si = 0
+    dlSayi = uzunluk(satirOfsetleri)
+    iken si < dlSayi
+        ofset = satirOfsetleri[si]
+        satir = satirNolari[si]
+        deltaAdres = ofset - oncekiOfset
+        eğer deltaAdres > 0 ise
+            z = baytTamponEkle(dlProgKutu, dlProgNKutu, 2)   # DW_LNS_advance_pc
+            z = baytTamponEkleTumu(dlProgKutu, dlProgNKutu, uleb128Kodla(deltaAdres))
+        son
+        deltaSatir = satir - oncekiSatir
+        eğer deltaSatir != 0 ise
+            z = baytTamponEkle(dlProgKutu, dlProgNKutu, 3)   # DW_LNS_advance_line
+            z = baytTamponEkleTumu(dlProgKutu, dlProgNKutu, sleb128Kodla(deltaSatir))
+        son
+        z = baytTamponEkle(dlProgKutu, dlProgNKutu, 1)       # DW_LNS_copy
+        oncekiOfset = ofset
+        oncekiSatir = satir
+        si = si + 1
+    son
+    # dizinin sonuna kadar ilerlet, end_sequence
+    sonDelta = kodBoy - oncekiOfset
+    eğer sonDelta > 0 ise
+        z = baytTamponEkle(dlProgKutu, dlProgNKutu, 2)
+        z = baytTamponEkleTumu(dlProgKutu, dlProgNKutu, uleb128Kodla(sonDelta))
+    son
+    z = baytTamponEkle(dlProgKutu, dlProgNKutu, 0)   # extended
+    z = baytTamponEkleTumu(dlProgKutu, dlProgNKutu, uleb128Kodla(1))
+    z = baytTamponEkle(dlProgKutu, dlProgNKutu, 1)   # DW_LNE_end_sequence
+    dlProgram = baytTamponSonuc(dlProgKutu, dlProgNKutu)
+
+    dlBaslikGovdeKutu = baytTamponOlustur()
+    dlBaslikGovdeNKutu = [0]
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 1)   # min_instruction_length
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 1)   # max_ops_per_instruction
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 1)   # default_is_stmt
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 0)   # line_base (0, special opcode kullanılmıyor)
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 1)   # line_range (>=1 olmalı, kullanılmıyor)
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 13)  # opcode_base
+    stdUzunluklari = [0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]
+    si = 0
+    iken si < uzunluk(stdUzunluklari)
+        z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, stdUzunluklari[si])
+        si = si + 1
+    son
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 0)  # include_directories sonu (boş)
+    z = nullSonluMetinEkleTampon(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, kaynakDosyaAdi)
+    z = baytTamponEkleTumu(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, uleb128Kodla(0)) # dizin idx
+    z = baytTamponEkleTumu(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, uleb128Kodla(0)) # mtime
+    z = baytTamponEkleTumu(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, uleb128Kodla(0)) # size
+    z = baytTamponEkle(dlBaslikGovdeKutu, dlBaslikGovdeNKutu, 0)  # file_names sonu
+    dlBaslikGovde = baytTamponSonuc(dlBaslikGovdeKutu, dlBaslikGovdeNKutu)
+
+    # unit_length: version(2)+header_length(4) HARİÇ, header_length'in
+    # KENDİSİNDEN SONRAKİ HER ŞEYİN (dlBaslikGovde + dlProgram) boyutu.
+    dlHeaderLength = uzunluk(dlBaslikGovde)
+    dlIcerikBoy = 2 + 4 + dlHeaderLength + uzunluk(dlProgram)  # version+header_length+govde+program
+    debugLine = kodEkleN([], dlIcerikBoy, 4)          # unit_length
+    debugLine = kodEkleN(debugLine, 4, 2)             # version
+    debugLine = kodEkleN(debugLine, dlHeaderLength, 4) # header_length
+    debugLine = baytListesiBirlestir(debugLine, dlBaslikGovde)
+    debugLine = baytListesiBirlestir(debugLine, dlProgram)
+
+    # ---- K5 DWARF: .debug_info (tek compile_unit DIE) ----
+    diGovde = kodEkleN([], 4, 2)              # version
+    diGovde = kodEkleN(diGovde, 0, 4)         # debug_abbrev_offset
+    diGovde = kodEkleN(diGovde, 8, 1)         # address_size
+    diGovde = kodEkleN(diGovde, 1, 1)         # abbrev_code = 1 (ULEB128, <128 tek bayt)
+    diGovde = nullSonluMetinEkle(diGovde, kaynakDosyaAdi)  # DW_AT_name
+    diGovde = nullSonluMetinEkle(diGovde, ".")             # DW_AT_comp_dir
+    diGovde = kodEkleN(diGovde, elfTaban + basliklar, 8)   # DW_AT_low_pc
+    diGovde = kodEkleN(diGovde, kodBoy, 4)                 # DW_AT_high_pc (göreceli boyut)
+    diGovde = kodEkleN(diGovde, 0, 4)                      # DW_AT_stmt_list (.debug_line ofseti)
+    debugInfo = kodEkleN([], uzunluk(diGovde), 4)  # unit_length
+    debugInfo = baytListesiBirlestir(debugInfo, diGovde)
+
     # ---- .shstrtab: bölüm adları ----
     shstrtab = [0]
     offText = uzunluk(shstrtab)
@@ -2086,16 +2261,25 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     shstrtab = nullSonluMetinEkle(shstrtab, ".symtab")
     offStrtab = uzunluk(shstrtab)
     shstrtab = nullSonluMetinEkle(shstrtab, ".strtab")
+    offDebugAbbrev = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".debug_abbrev")
+    offDebugInfo = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".debug_info")
+    offDebugLine = uzunluk(shstrtab)
+    shstrtab = nullSonluMetinEkle(shstrtab, ".debug_line")
     offShstrtab = uzunluk(shstrtab)
     shstrtab = nullSonluMetinEkle(shstrtab, ".shstrtab")
 
     # ---- dosya-içi konumlar (PT_LOAD'dan SONRA, sırayla ekleniyor) ----
     offSymtabDosya = toplam
     offStrtabDosya = offSymtabDosya + uzunluk(symtab)
-    offShstrtabDosya = offStrtabDosya + uzunluk(strtab)
+    offDebugAbbrevDosya = offStrtabDosya + uzunluk(strtab)
+    offDebugInfoDosya = offDebugAbbrevDosya + uzunluk(debugAbbrev)
+    offDebugLineDosya = offDebugInfoDosya + uzunluk(debugInfo)
+    offShstrtabDosya = offDebugLineDosya + uzunluk(debugLine)
     offShdrDosya = offShstrtabDosya + uzunluk(shstrtab)
 
-    # ---- bölüm başlıkları (Elf64_Shdr × 5, 64 bayt/tanesi) ----
+    # ---- bölüm başlıkları (Elf64_Shdr × 8, 64 bayt/tanesi) ----
     sh = []
     i = 0
     iken i < 64
@@ -2130,6 +2314,39 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     sh = kodEkleN(sh, 0, 8)             # sh_addr
     sh = kodEkleN(sh, offStrtabDosya, 8) # sh_offset
     sh = kodEkleN(sh, uzunluk(strtab), 8) # sh_size
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 1, 8)             # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
+
+    sh = kodEkleN(sh, offDebugAbbrev, 4) # sh_name
+    sh = kodEkleN(sh, 1, 4)             # sh_type = SHT_PROGBITS
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr
+    sh = kodEkleN(sh, offDebugAbbrevDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(debugAbbrev), 8) # sh_size
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 1, 8)             # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
+
+    sh = kodEkleN(sh, offDebugInfo, 4)  # sh_name
+    sh = kodEkleN(sh, 1, 4)             # sh_type = SHT_PROGBITS
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr
+    sh = kodEkleN(sh, offDebugInfoDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(debugInfo), 8) # sh_size
+    sh = kodEkleN(sh, 0, 4)             # sh_link
+    sh = kodEkleN(sh, 0, 4)             # sh_info
+    sh = kodEkleN(sh, 1, 8)             # sh_addralign
+    sh = kodEkleN(sh, 0, 8)             # sh_entsize
+
+    sh = kodEkleN(sh, offDebugLine, 4)  # sh_name
+    sh = kodEkleN(sh, 1, 4)             # sh_type = SHT_PROGBITS
+    sh = kodEkleN(sh, 0, 8)             # sh_flags
+    sh = kodEkleN(sh, 0, 8)             # sh_addr
+    sh = kodEkleN(sh, offDebugLineDosya, 8) # sh_offset
+    sh = kodEkleN(sh, uzunluk(debugLine), 8) # sh_size
     sh = kodEkleN(sh, 0, 4)             # sh_link
     sh = kodEkleN(sh, 0, 4)             # sh_info
     sh = kodEkleN(sh, 1, 8)             # sh_addralign
@@ -2171,8 +2388,8 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     b = kodEkleN(b, 56, 2)   # e_phentsize
     b = kodEkleN(b, 1, 2)    # e_phnum
     b = kodEkleN(b, 64, 2)   # e_shentsize
-    b = kodEkleN(b, 5, 2)    # e_shnum
-    b = kodEkleN(b, 4, 2)    # e_shstrndx
+    b = kodEkleN(b, 8, 2)    # e_shnum (NULL,.text,.symtab,.strtab,.debug_abbrev,.debug_info,.debug_line,.shstrtab)
+    b = kodEkleN(b, 7, 2)    # e_shstrndx
 
     b = kodEkleN(b, 1, 4)          # p_type = PT_LOAD
     b = kodEkleN(b, 7, 4)          # p_flags = R+W+X
@@ -2186,6 +2403,9 @@ işlev elfUret(kodBaytlari, girisOfsetKodIci, etikAdlari, etikKonumlari)
     sonuc = baytListesiBirlestir(b, kodBaytlari)
     sonuc = baytListesiBirlestir(sonuc, symtab)
     sonuc = baytListesiBirlestir(sonuc, strtab)
+    sonuc = baytListesiBirlestir(sonuc, debugAbbrev)
+    sonuc = baytListesiBirlestir(sonuc, debugInfo)
+    sonuc = baytListesiBirlestir(sonuc, debugLine)
     sonuc = baytListesiBirlestir(sonuc, shstrtab)
     sonuc = baytListesiBirlestir(sonuc, sh)
     döndür sonuc
@@ -4907,7 +5127,16 @@ tokenler = tokenGenislet(tokenler, kaynakDizin, gorulenlerKutu)
 pozKutu = [0]
 adlarKutu = [[], []]
 sayacKutu = [0]
-islevTipKutu = [[], [], [], [], []]
+# K5 DWARF: satir haritasi — tampon deseni, blokDerle her deyimden once
+# buraya [etiketAdi, satirNo] ekler. AYRI 7. parametre OLARAK taşınmıyor —
+# blokDerle/deyimDerle/islevDerle ZATEN 6 parametre ile (ABI sınırında,
+# bkz. Madde 9 notu, satır ~3957) islevTipKutu'yu taşıyor; satirHaritasi
+# o kutunun 6. elemanı olarak eklendi (islevTipKutu'nun kendi genişletme
+# deseni — "yeni 7. parametre eklemek o sınırı tekrar patlatırdı" notu
+# BİREBİR doğrulandı: önce 7 parametreyle denendi, self-hosting derlenen
+# ikili SEGFAULT verdi, bu deseme geri dönülünce düzeldi).
+satirHaritasi = [tamponOlustur(), [0]]
+islevTipKutu = [[], [], [], [], [], satirHaritasi]
 z = islevDonusTipleriTara(tokenler, islevTipKutu)
 z = parametreTipleriniTara(tokenler, islevTipKutu)
 z = ulasilabilirIslevleriTara(tokenler, islevTipKutu)
@@ -4957,7 +5186,39 @@ baglaSonuc = bagla(bantTumu)
 kodBaytlari = baglaSonuc[0]
 etikAdlariSon = baglaSonuc[1]
 etikKonumlariSon = baglaSonuc[2]
-dosyaBaytlari = elfUret(kodBaytlari, 0, etikAdlariSon, etikKonumlariSon)
+
+# K5 DWARF: bagla() TÜM etiketleri (Lsatir DAHIL) tek geçişte kod-akışı
+# SIRASIYLA topladı (etikAdlariSon/etikKonumlariSon). "Lsatir" önekli
+# olanları AYNI SIRAYLA süz — bu sıra satirHaritasi ile BİREBİR aynı
+# (ikisi de blokDerle'nin tek döngüsünden, aynı sırada üretildi), bu
+# yüzden etiketBul() (O(n) doğrusal arama) ile TEKRAR TEKRAR aramaya
+# GEREK YOK — o, binlerce Lsatir etiketinde O(n²) olurdu (K5 .symtab
+# turunda AYNI tuzağa düşülmüş, baytTampon ile düzeltilmişti — burada
+# TEK GEÇİŞLİ süzme ile baştan kaçınıyoruz).
+satirOfsetleriKutu = tamponOlustur()
+satirOfsetleriNKutu = [0]
+si = 0
+esn = uzunluk(etikAdlariSon)
+iken si < esn
+    eğer onekMi(etikAdlariSon[si], "Lsatir") ise
+        z = tamponEkle(satirOfsetleriKutu, satirOfsetleriNKutu, etikKonumlariSon[si])
+    son
+    si = si + 1
+son
+satirOfsetleri = tamponSonuc(satirOfsetleriKutu, satirOfsetleriNKutu)
+satirHaritasiKayitlari = tamponSonuc(satirHaritasi[0], satirHaritasi[1])
+satirNolariKutu = tamponOlustur()
+satirNolariNKutu = [0]
+si = 0
+iken si < uzunluk(satirHaritasiKayitlari)
+    satirKaydi = satirHaritasiKayitlari[si]
+    z = tamponEkle(satirNolariKutu, satirNolariNKutu, satirKaydi[1])
+    si = si + 1
+son
+satirNolari = tamponSonuc(satirNolariKutu, satirNolariNKutu)
+
+dwarfBilgisi = [satirOfsetleri, satirNolari, girdiYolu]
+dosyaBaytlari = elfUret(kodBaytlari, 0, etikAdlariSon, etikKonumlariSon, dwarfBilgisi)
 yazBaytlar(ciktiYolu, dosyaBaytlari)
 
 yaz("TancElf: " + girdiYolu + " -> " + ciktiYolu + "  (" + metin(uzunluk(dosyaBaytlari)) + " bayt, " + metin(degiskenSayisi) + " degisken)")
