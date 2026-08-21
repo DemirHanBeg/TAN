@@ -142,7 +142,10 @@ input:focus:not(:focus-visible) {
     grid-template-columns: 1fr;
   }
   .veta-side-static {
-    display: none;
+    /* Sidebar kökü display:flex'i satır-içi style ile taşıyor (bkz.
+       Sidebar.tsx) — satır-içi stil her zaman kazanır, bu yüzden burada
+       !important şart. */
+    display: none !important;
   }
   .veta-stats {
     grid-template-columns: repeat(2, 1fr);
