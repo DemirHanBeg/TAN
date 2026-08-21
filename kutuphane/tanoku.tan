@@ -117,3 +117,29 @@ işlev girinti(n)
     son
     döndür s
 son
+
+# s'yi bir JSON string alanına gömülebilir hale kaçışlar (", \, \n, \r, \t).
+# LSP mesajlarına kaynak metin gibi ham içerik gömerken zorunlu.
+işlev jsonKac(s)
+    sonuc = ""
+    n = uzunluk(s)
+    i = 0
+    iken i < n
+        c = metinAl(s, i)
+        eğer c == "\"" ise
+            sonuc = metinBirlestir(sonuc, "\\\"")
+        değilse eğer c == "\\" ise
+            sonuc = metinBirlestir(sonuc, "\\\\")
+        değilse eğer c == "\n" ise
+            sonuc = metinBirlestir(sonuc, "\\n")
+        değilse eğer c == "\r" ise
+            sonuc = metinBirlestir(sonuc, "\\r")
+        değilse eğer c == karakter(9) ise
+            sonuc = metinBirlestir(sonuc, "\\t")
+        değilse
+            sonuc = metinBirlestir(sonuc, c)
+        son
+        i = i + 1
+    son
+    döndür sonuc
+son

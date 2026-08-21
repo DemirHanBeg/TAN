@@ -5,6 +5,7 @@
 # Builtin: girdiOkuN (n bayt), yazHam (ham stdout). Ortak: tanoku.tan.
 
 içe al "kutuphane/tanoku.tan"
+içe al "kutuphane/araclar.tan"
 
 # ---- LSP transport ----
 
@@ -219,7 +220,7 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"textDocumentSync\":1}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"textDocumentSync\":1}}}"))
     lspYaz(govde)
     döndür 0
 son
@@ -425,6 +426,30 @@ işlev lspRename(id, uri, kaynak, satirNo, kar, yeniAd)
     döndür 0
 son
 
+# ---- formatting: bicimlendirMetin'i (araclar.tan) tek TextEdit olarak döndürür ----
+işlev lspFormatting(id, kaynak)
+    # TancElf tip-izleme sınırı: kullanıcı işlevinin string dönüşünü string
+    # bağlamına al (bkz. sha256() aynı desen).
+    yeni = metinBirlestir("", bicimlendirMetin(kaynak))
+    satirlar = satiraBol(kaynak)
+    sonSatir = uzunluk(satirlar)
+    sonKar = 0
+    eğer sonSatir > 0 ise
+        sonKar = uzunluk(satirlar[sonSatir - 1])
+    son
+    eğer sonSatir > 0 ise
+        sonSatir = sonSatir - 1
+    son
+    aralik = metinBirlestir("{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":", metin(sonSatir))
+    aralik = metinBirlestir(aralik, metinBirlestir(",\"character\":", metinBirlestir(metin(sonKar), "}}")))
+    duzen = metinBirlestir("{\"range\":", aralik)
+    duzen = metinBirlestir(duzen, metinBirlestir(",\"newText\":\"", metinBirlestir(jsonKac(yeni), "\"}")))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", id)
+    govde = metinBirlestir(govde, metinBirlestir(",\"result\":[", metinBirlestir(duzen, "]}")))
+    lspYaz(govde)
+    döndür 0
+son
+
 # ---- diagnostics: kaynaktan tanı listesi [satir(0), severity, kod, mesaj] ----
 işlev lspTanilar(kaynak)
     satirlar = satiraBol(kaynak)
@@ -520,6 +545,9 @@ işlev lspCalis()
             kno = metinRakamlari(jsonHam(govde, "character"), 0)
             yeniAd = jsonMetin(govde, "newName")
             d = lspRename(id, uri, oku(uriYol(uri)), sno, kno, yeniAd)
+        değilse eğer metinEsit(yontem, "textDocument/formatting") ise
+            uri = jsonMetin(govde, "uri")
+            d = lspFormatting(id, oku(uriYol(uri)))
         değilse eğer metinEsit(yontem, "shutdown") ise
             lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":null}")))
         değilse eğer metinEsit(yontem, "exit") ise

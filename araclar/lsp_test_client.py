@@ -44,6 +44,8 @@ def main():
          "params": {"textDocument": {"uri": uri}}},
         {"jsonrpc": "2.0", "method": "textDocument/didOpen",
          "params": {"textDocument": {"uri": uri}}},
+        {"jsonrpc": "2.0", "id": 4, "method": "textDocument/formatting",
+         "params": {"textDocument": {"uri": uri}}},
         {"jsonrpc": "2.0", "id": 3, "method": "shutdown"},
         {"jsonrpc": "2.0", "method": "exit"},
     ]
@@ -65,6 +67,14 @@ def main():
             for d in diags:
                 sev = {1: "hata", 2: "uyarı", 3: "bilgi"}.get(d["severity"], "?")
                 print(f"    {d['code']} [{sev}] satır {d['range']['start']['line']}: {d['message']}")
+        elif obj.get("id") == 4:
+            edits = obj["result"]
+            if edits:
+                yeni = edits[0]["newText"]
+                print(f"[formatting] {len(edits)} TextEdit, {len(yeni.splitlines())} satır")
+                print(yeni[:200])
+            else:
+                print("[formatting] sonuç yok")
         elif obj.get("id") == 3:
             print("[shutdown] ok")
 

@@ -853,17 +853,26 @@ işlev surumAna()
 son
 
 # ---- bicimlendir: kanonik formatter ----
-işlev bicimlendirAna(yol)
-    kaynak = kaynakOku(yol)
+# kaynağı biçimlendirir, sonucu satır satır "\n" ile birleştirilmiş metin olarak
+# döndürür (yazdırmaz) — LSP formatting gibi yazıcıya değil string'e ihtiyaç
+# duyan çağıranlar için.
+işlev bicimlendirMetin(kaynak)
     satirlar = satiraBol(kaynak)
 
+    sonuc = ""
+    ilkSatirMi = doğru
     derinlik = 0
     si = 0
     iken si < uzunluk(satirlar)
         icerik = kirp(satirlar[si])
 
+        eğer ilkSatirMi == yanlış ise
+            sonuc = metinBirlestir(sonuc, "\n")
+        son
+        ilkSatirMi = yanlış
+
         eğer uzunluk(icerik) == 0 ise
-            yaz("")
+            sonuc = metinBirlestir(sonuc, "")
         değilse
             ilk = kelimeAl(icerik, 0)
 
@@ -871,21 +880,30 @@ işlev bicimlendirAna(yol)
                 eğer derinlik > 0 ise
                     derinlik = derinlik - 1
                 son
-                yaz(metinBirlestir(girinti(derinlik), icerik))
+                sonuc = metinBirlestir(sonuc, metinBirlestir(girinti(derinlik), icerik))
             değilse eğer metinEsit(ilk, "değilse") veya metinEsit(ilk, "yakala") ise
                 d2 = derinlik - 1
                 eğer d2 < 0 ise
                     d2 = 0
                 son
-                yaz(metinBirlestir(girinti(d2), icerik))
+                sonuc = metinBirlestir(sonuc, metinBirlestir(girinti(d2), icerik))
             değilse eğer blokAcici(ilk) ise
-                yaz(metinBirlestir(girinti(derinlik), icerik))
+                sonuc = metinBirlestir(sonuc, metinBirlestir(girinti(derinlik), icerik))
                 derinlik = derinlik + 1
             değilse
-                yaz(metinBirlestir(girinti(derinlik), icerik))
+                sonuc = metinBirlestir(sonuc, metinBirlestir(girinti(derinlik), icerik))
             son
         son
         si = si + 1
     son
+    döndür sonuc
+son
+
+işlev bicimlendirAna(yol)
+    kaynak = kaynakOku(yol)
+    # TancElf tip-izleme sınırı: kullanıcı işlevinin string dönüşü doğrudan
+    # yaz()'a verilirse pointer sayı sanılır — metinBirlestir ile string
+    # bağlamına al (bkz. sha256() için aynı desen, kutuphane/sha256.tan).
+    yaz(metinBirlestir("", bicimlendirMetin(kaynak)))
     döndür 0
 son
