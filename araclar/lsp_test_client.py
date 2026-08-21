@@ -35,6 +35,8 @@ def main():
         sys.exit(1)
     dosya = os.path.abspath(sys.argv[1])
     sunucu = sys.argv[2] if len(sys.argv) > 2 else "./tanlsp"
+    satir = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+    kolon = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     uri = "file://" + dosya
 
     msgs = [
@@ -46,6 +48,8 @@ def main():
          "params": {"textDocument": {"uri": uri}}},
         {"jsonrpc": "2.0", "id": 4, "method": "textDocument/formatting",
          "params": {"textDocument": {"uri": uri}}},
+        {"jsonrpc": "2.0", "id": 5, "method": "textDocument/references",
+         "params": {"textDocument": {"uri": uri}, "position": {"line": satir, "character": kolon}}},
         {"jsonrpc": "2.0", "id": 3, "method": "shutdown"},
         {"jsonrpc": "2.0", "method": "exit"},
     ]
@@ -75,6 +79,11 @@ def main():
                 print(yeni[:200])
             else:
                 print("[formatting] sonuç yok")
+        elif obj.get("id") == 5:
+            locs = obj["result"]
+            print(f"[references] {len(locs)} konum:")
+            for l in locs[:5]:
+                print(f"    satır {l['range']['start']['line']}, kolon {l['range']['start']['character']}")
         elif obj.get("id") == 3:
             print("[shutdown] ok")
 

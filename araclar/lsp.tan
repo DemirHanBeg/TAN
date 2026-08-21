@@ -220,7 +220,7 @@ son
 
 # initialize yanıtı
 işlev lspInitialize(id)
-    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"textDocumentSync\":1}}}"))
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":{\"capabilities\":{\"documentSymbolProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true,\"referencesProvider\":true,\"textDocumentSync\":1}}}"))
     lspYaz(govde)
     döndür 0
 son
@@ -369,6 +369,53 @@ işlev satirdaTumKonumlar(satir, kelime)
         son
     son
     döndür liste
+son
+
+# references yanıtı (id, uri, kaynak, satirNo, kar) — tek dosya içindeki
+# tüm whole-word geçişlerini [{uri,range}] Location listesi olarak döndürür
+işlev lspReferences(id, uri, kaynak, satirNo, kar)
+    satir0 = satirAl(kaynak, satirNo)
+    kelime = konumKelime(satir0, kar)
+    eğer uzunluk(kelime) == 0 ise
+        lspYaz(metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", metinBirlestir(id, ",\"result\":[]}")))
+        döndür 0
+    son
+    satirlar = satiraBol(kaynak)
+    konumlarMetni = ""
+    ilkMi = doğru
+    si = 0
+    iken si < uzunluk(satirlar)
+        konumlar = satirdaTumKonumlar(satirlar[si], kelime)
+        ki = 0
+        iken ki < uzunluk(konumlar)
+            kol = konumlar[ki]
+            snStr = metin(si)
+            basStr = metin(kol)
+            sonStr = metin(kol + uzunluk(kelime))
+            aralik = "{\"start\":{\"line\":"
+            aralik = metinBirlestir(aralik, snStr)
+            aralik = metinBirlestir(aralik, ",\"character\":")
+            aralik = metinBirlestir(aralik, basStr)
+            aralik = metinBirlestir(aralik, "},\"end\":{\"line\":")
+            aralik = metinBirlestir(aralik, snStr)
+            aralik = metinBirlestir(aralik, ",\"character\":")
+            aralik = metinBirlestir(aralik, sonStr)
+            aralik = metinBirlestir(aralik, "}}")
+            konum = metinBirlestir("{\"uri\":\"", uri)
+            konum = metinBirlestir(konum, metinBirlestir("\",\"range\":", metinBirlestir(aralik, "}")))
+            eğer ilkMi == yanlış ise
+                konumlarMetni = metinBirlestir(konumlarMetni, ",")
+            son
+            ilkMi = yanlış
+            konumlarMetni = metinBirlestir(konumlarMetni, konum)
+            ki = ki + 1
+        son
+        si = si + 1
+    son
+    govde = metinBirlestir("{\"jsonrpc\":\"2.0\",\"id\":", id)
+    govde = metinBirlestir(govde, metinBirlestir(",\"result\":[", metinBirlestir(konumlarMetni, "]}")))
+    lspYaz(govde)
+    döndür 0
 son
 
 # rename yanıtı (id, uri, kaynak, satirNo, kar, yeniAd) — tek dosya içindeki
@@ -545,6 +592,11 @@ işlev lspCalis()
             kno = metinRakamlari(jsonHam(govde, "character"), 0)
             yeniAd = jsonMetin(govde, "newName")
             d = lspRename(id, uri, oku(uriYol(uri)), sno, kno, yeniAd)
+        değilse eğer metinEsit(yontem, "textDocument/references") ise
+            uri = jsonMetin(govde, "uri")
+            sno = metinRakamlari(jsonHam(govde, "line"), 0)
+            kno = metinRakamlari(jsonHam(govde, "character"), 0)
+            d = lspReferences(id, uri, oku(uriYol(uri)), sno, kno)
         değilse eğer metinEsit(yontem, "textDocument/formatting") ise
             uri = jsonMetin(govde, "uri")
             d = lspFormatting(id, oku(uriYol(uri)))

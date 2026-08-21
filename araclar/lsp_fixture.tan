@@ -1,0 +1,7 @@
+işlev topla(a, b)
+    döndür a + b
+son
+
+x = topla(1, 2)
+y = topla(3, 4)
+yaz(x + y)
