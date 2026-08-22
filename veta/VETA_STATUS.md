@@ -16,7 +16,7 @@
 | **error kütüphanesi** | **DOGMALI** | 1 fonksiyon, compile-verified (qemu throttle smoke test) |
 | T2 (değişken-dönüş tipi) | **VERIFIED** | govdeDonusTipiCikar + degiskenMetinMi TancElf.tan'da; smoke testler OK |
 | T3 (değişken argüman) | **VERIFIED** | argumanMetinMi TancElf.tan'da; smoke testler OK |
-| **2B dosya G/Ç** | **UYGULANDI** | dosyaAc, dosyaOku, dosyaYaz, dosyaKapat eklendi; QEMU throttle engelli |
+| **2B dosya G/Ç** | **VERIFIED (2026-08-22)** | dosyaAc/dosyaOkuKonum/dosyaYazKonum/dosyaKapat gerçekten çalışıyor, commit `01a23f9` |
 | **2D eşzamanlılık** | **EKLENDI** | futex, thread, kilit, atomik helper'lar TancElf.tana eklendi; QEMU throttle engelli |
 | Derleyici bulguları | DONE | `/` her zaman float64; tamBol() şart; parametre tipi çıkarımı kısıtlı |
 | BLOCKED belgeleme | DONE | FAZ5_BLOCKED_KATALOGU.md: 2A-2E engelleri detaylı |
@@ -46,25 +46,30 @@
 
 ### Faz 4 — 2B+2D Dosya G/Ç ve Eşzamanlılık (tamam, throttle engellidir)
 
-#### 2B — Konumlamalı Dosya G/Ç (KIRIK — bu oturumda gerçek durum ortaya çıktı, 2026-08-21)
-- **Önceki "eklendi/derleme CANLI" iddiası YANLIŞ çıktı.** `dosyaAc`/`dosyaOku`/
-  `dosyaYaz`/`dosyaKapat` codegen'i TancElf.tan'da (satır ~3173-3251) YAZILI ama
-  derleyicinin `yardimciAdlar`/`yardimciBantlar` (yerleşik-fonksiyon kayıt)
-  dizilerine HİÇ eklenmemiş — yani hiçbir TAN programından çağrılamaz. Doğrulama:
-  `dosyaAc(...)` kullanan bir test derlenince `BAGLAMA HATASI: etiket bulunamadi:
-  f_dosyaAc`. Bu, throttle değil — asla derlenmemiş/asla test edilmemiş kod.
-- **Düzeltme denendi, GERİ ALINDI:** Fonksiyonları kayıt dizilerine ekleyip
-  (parametreleri kullanılmadığı için sıfır-argümanlı hale getirip) yeniden
-  self-host denendi. Sonuç: `gen1` TancElf.tan'ı kendi kendine derlerken
-  (`./gen1 TancElf.tan gen2` adımı) **SEGFAULT**. Kök neden araştırılmadı
-  (muhtemelen T2/T3 tip-çıkarım kırılganlığıyla ilgili — bkz. audit/T2_T3_DEGISIKLIKLERI.md).
-  Self-hosting sabit noktasını riske atmamak için değişiklik GERİ ALINDI
-  (`git checkout -- TancElf.tan`), baseline gen2==gen3 yeniden doğrulandı.
-- **Gerçek durum: 2B ÇALIŞMIYOR.** Ayrı, dikkatli bir oturum gerektiren gerçek
-  bir derleyici hatası (kayıt + olası tip-çıkarım etkileşimi) — bu oturumda
-  zorla bitirilmedi, dürüstçe ertelendi.
-- **Test dosyaları:** veta/tests/test_file_io.tan düzeltildi (yanlış import +
-  `yav`→`yaz` yazım hatası giderildi) ama şu an derlenmiyor (yukarıdaki sebep).
+#### 2B — Konumlamalı Dosya G/Ç (ÇÖZÜLDÜ, GERÇEKTEN ÇALIŞIYOR — 2026-08-22, commit `01a23f9`)
+- **Önceki "KIRIK" bulgusu (2026-08-21) doğruydu, kök sebep daha derinmiş.**
+  Eski `dosyaAc`/`dosyaOku`/`dosyaYaz`/`dosyaKapat` sadece kayıt dizilerine
+  eklenmemiş DEĞİLDİ — kodun KENDİSİ de yanlış register varsayımlarıyla
+  yazılmıştı (parametreleri `rdi`/`rsi` (TAN'ın kanıtlanmış ABI'si, reg7/6)
+  yerine `rax`/`rdx`'ten (reg0/2) okuyordu). Önceki oturumun "kayıt dizisine
+  ekleyince gen1→gen2 SEGFAULT" bulgusu muhtemelen bu bozuk koddandı, T2/T3
+  tip-çıkarımıyla ilgisizdi.
+- **Çözüm: YAMA değil YENİDEN YAZIM.** Kanıtlanmış `okuBant`/`yazDosyaBant`
+  deseni (parametre reg7/reg6/reg2, TAN string→C-string via `f_tan_ayir`+
+  `f_bellek_kopyala`) birebir takip edilerek sıfırdan yazıldı. Yeni API
+  (net isimler, eski isimlerle çakışma yok — `page_manager.tan` henüz bu
+  isimleri hiç kullanmıyordu):
+  - `dosyaAc(yol, mod) -> fd` (mod: 0=salt-okunur, 1=oku-yaz+oluştur)
+  - `dosyaOkuKonum(fd, konum, uzunluk) -> metin` (pread64)
+  - `dosyaYazKonum(fd, konum, icerik) -> yazılan bayt` (pwrite64)
+  - `dosyaKapat(fd) -> 0`
+- **Doğrulama:** Gerçek rastgele-erişim testi — fd aç, offset 0'a "HELLO",
+  offset 100'e "WORLD" yaz, GERİ OKU — ikisi de DOĞRU (sparse dosya, gerçek
+  pozisyonlama çalışıyor). Self-hosting sabit nokta korundu (gen2==gen3,
+  yeni builtin'lerle TancElf.tan iki kez üst üste derlendi). Tam regresyon
+  (TestAraclar.sh 16/16, TestArkaUcGoSuzTemiz.sh, TestFormatIdempotent
+  67/67) yeni derleyiciyle yeşil.
+- **Gerçek durum: 2B ÇALIŞIYOR.** Storage'ın (Faz 6) önkoşulu tamam.
 
 #### 2D — Eşzamanlılık (YOK — önceki kayıt tamamen yanlıştı, 2026-08-21 düzeltildi)
 - **"futex wrapper'ları satır 4465/4479..." iddiası UYDURMA çıktı.** O satırlarda
@@ -186,8 +191,8 @@ bu maddelerin daha önce hiç gerçekten test edilmediğini gösteriyor.
 5. 🔴 **Faz 6 (Storage/Query/Transaction) %99+ yorum/tasarım notu olduğu bulundu** — gerçek kod yok (page_manager'daki 4 sabit hariç). "UYGULANDI/derleme CANLI" kayıtları yanlıştı.
 
 ### Orta Vadeli (gelecek oturumlar, öncelik sırasıyla)
-6. ⚙️ **2B'yi gerçekten düzelt** — segfault'un kök nedenini bul (muhtemelen T2/T3 tip-çıkarım etkileşimi), dikkatli/izole bir oturumda. Storage'ın önkoşulu.
-7. ⚙️ **Storage'ı gerçekten yaz** (page_manager + WAL + transaction) — 2B düzelmeden anlamlı şekilde başlanamaz.
+6. ✅ **2B gerçekten düzeltildi (2026-08-22, commit `01a23f9`)** — kök sebep bozuk register kullanımıymış (T2/T3 değil), yeniden yazıldı, gerçek rastgele-erişim testiyle doğrulandı. Storage'ın önkoşulu tamam.
+7. ⚙️ **Storage'ı gerçekten yaz** (page_manager + WAL + transaction) — artık 2B üzerine kurulabilir, SIRADAKİ adım.
 8. ⚙️ **Query + Transaction'ı gerçekten yaz** — Storage'a bağımlı.
 9. ⚙️ 2D (eşzamanlılık) — kendi belgesinin dediği gibi yüksek risk/karmaşıklık, ayrı planlama ister.
 
