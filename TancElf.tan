@@ -3587,86 +3587,116 @@ işlev yazBaytlarBant()
     döndür listeBirlestir(b, retBant())
 son
 
-# 2B - Dosya G/Ç helper'ları (TancElf.tan'a eklenmesi gerekenler)
-# DOSYA AÇ: dosyaAc(yol, mod) -> fd (negatifse hata)
-işlev dosyaAc(yol, mod)
+# 2B — Konumlamalı (positional/random-access) dosya G/Ç, VETA Storage'ın
+# sayfa yöneticisi için gerekli. ÖNCEKİ dosyaAc/dosyaOku/dosyaYaz/dosyaKapat
+# (bu commit'ten önce) İKİ AYRI sorunluydu: (1) yardimciAdlar/yardimciBantlar
+# kayıt dizilerine hiç eklenmemişti (VETA_STATUS.md'de "KIRIK" olarak
+# doğrulanmıştı — BAGLAMA HATASI: etiket bulunamadi: f_dosyaAc), (2) kod
+# KENDİSİ de yanlış register varsayımlarıyla yazılmıştı (parametreleri rdi/
+# rsi=7/6 yerine rax/rdx=0/2'den okuyordu — bu ABI'de asla doğru olamazdı,
+# muhtemelen hiç gerçekten test edilmemiş/farklı bir referanstan kopyalanmış
+# kod). Düzeltme YAMA değil, YENİDEN YAZIM — kanıtlanmış okuBant/yazDosyaBant
+# deseni (parametre reg7/reg6/reg2, TAN string→C-string via f_tan_ayir+
+# f_bellek_kopyala) birebir takip edildi.
+#
+# API: dosyaAc(yol, mod) -> fd (mod: 0=salt-okunur, 1=oku-yaz+oluştur)
+#      dosyaOkuKonum(fd, konum, uzunluk) -> metin (pread64)
+#      dosyaYazKonum(fd, konum, icerik) -> yazılan bayt sayısı (pwrite64)
+#      dosyaKapat(fd) -> 0
+işlev dosyaAcBant()
     b = [bcEtiket("f_dosyaAc")]
-    b = listeBirlestir(b, pushKayit(3))
-    b = listeBirlestir(b, movKayit(3, 2))
-    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
-    b = listeBirlestir(b, movPtrOku(0, 0))
-    b = listeBirlestir(b, callBant("f_tan_ayir"))
-    b = listeBirlestir(b, movYerelYaz(0 - 16, 0))
-    b = listeBirlestir(b, movKayit(0, 0))
-    b = listeBirlestir(b, addImm32(0, 16))
-    b = listeBirlestir(b, movImm32(1, 2))
-    b = listeBirlestir(b, syscallEmit())
-    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 64))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 7))     # [-8] = yol metni
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 6))    # [-16] = mod
+    b = listeBirlestir(b, movPtrOku(0, 7))           # rax = yol uzunluğu
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))    # [-24] = yol uzunluğu
+    b = listeBirlestir(b, movKayit(7, 0))
+    b = listeBirlestir(b, addImm32(7, 16))
+    b = listeBirlestir(b, callBant("f_tan_ayir"))    # rax = C-string tamponu
+    b = listeBirlestir(b, movYerelYaz(0 - 32, 0))    # [-32] = C-string
+    b = listeBirlestir(b, movKayit(7, 0))
+    b = listeBirlestir(b, movYerelOku(6, 0 - 8))
+    b = listeBirlestir(b, leaDolayli(6, 6, 8))       # rsi = yol+8 (baytlar)
+    b = listeBirlestir(b, movYerelOku(2, 0 - 24))    # rdx = uzunluk
+    b = listeBirlestir(b, callBant("f_bellek_kopyala"))
+    # mod==0 -> O_RDONLY(0)/perm 0; mod!=0 -> O_RDWR|O_CREAT(66)/perm 0644
+    b = listeBirlestir(b, movYerelOku(0, 0 - 16))
     b = listeBirlestir(b, cmpImm32(0, 0))
-    b = listeBirlestir(b, jccBant(1, "dosyaAc_hata"))
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, jmpBant("dosyaAc_biti"))
-    b = listeBirlestir(b, [bcEtiket("dosyaAc_hata")])
-    b = listeBirlestir(b, movImm32(0, -1))
-    b = listeBirlestir(b, [bcEtiket("dosyaAc_biti")])
+    b = listeBirlestir(b, jccBant(132, "dosyaAc_okuma"))  # je
+    b = listeBirlestir(b, movImm32(6, 66))
+    b = listeBirlestir(b, movImm32(2, 420))
+    b = listeBirlestir(b, jmpBant("dosyaAc_ac"))
+    b = ekle(b, bcEtiket("dosyaAc_okuma"))
+    b = listeBirlestir(b, xorKayit(6, 6))
+    b = listeBirlestir(b, xorKayit(2, 2))
+    b = ekle(b, bcEtiket("dosyaAc_ac"))
+    b = listeBirlestir(b, movYerelOku(7, 0 - 32))    # rdi = C-string yol
+    b = listeBirlestir(b, movImm32(0, 2))            # sys_open
+    b = listeBirlestir(b, syscallEmit())
+    b = listeBirlestir(b, leaveBant())
     döndür listeBirlestir(b, retBant())
 son
 
-# 2B - DOSYA Oku
-işlev dosyaOku(dosya)
-    b = [bcEtiket("f_dosyaOku")]
-    b = listeBirlestir(b, pushKayit(3))
-    b = listeBirlestir(b, movKayit(3, 0))
-    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
-    b = listeBirlestir(b, movKayit(0, 0))
-    b = listeBirlestir(b, leaDolayli(0, 0, 16))
-    b = listeBirlestir(b, movImm32(0, 0))
+işlev dosyaOkuKonumBant()
+    b = [bcEtiket("f_dosyaOkuKonum")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 64))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 7))     # [-8] = fd
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 6))    # [-16] = konum
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 2))    # [-24] = uzunluk
+    b = listeBirlestir(b, movYerelOku(7, 0 - 24))
+    b = listeBirlestir(b, addImm32(7, 16))
+    b = listeBirlestir(b, callBant("f_tan_ayir"))    # rax = tampon (TAN string)
+    b = listeBirlestir(b, movYerelYaz(0 - 32, 0))    # [-32] = tampon
+    b = listeBirlestir(b, movYerelOku(7, 0 - 8))     # rdi = fd
+    b = listeBirlestir(b, movYerelOku(6, 0 - 32))
+    b = listeBirlestir(b, addImm32(6, 8))            # rsi = tampon+8
+    b = listeBirlestir(b, movYerelOku(2, 0 - 24))    # rdx = uzunluk
+    b = listeBirlestir(b, movYerelOku(10, 0 - 16))   # r10 = konum (offset)
+    b = listeBirlestir(b, movImm32(0, 17))           # sys_pread64
     b = listeBirlestir(b, syscallEmit())
-    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
-    b = listeBirlestir(b, movImm32(0, 16))
+    b = listeBirlestir(b, movYerelYaz(0 - 40, 0))    # [-40] = okunan bayt (rax, hatada negatif)
     b = listeBirlestir(b, cmpImm32(0, 0))
-    b = listeBirlestir(b, jccBant(1, "dosyaOku_hata"))
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, jmpBant("dosyaOku_biti"))
-    b = listeBirlestir(b, [bcEtiket("dosyaOku_hata")])
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, [bcEtiket("dosyaOku_biti")])
+    b = listeBirlestir(b, jccBant(141, "dosyaOkuKonum_pozitif"))  # jge
+    b = listeBirlestir(b, xorKayit(0, 0))
+    b = listeBirlestir(b, movYerelYaz(0 - 40, 0))
+    b = ekle(b, bcEtiket("dosyaOkuKonum_pozitif"))
+    b = listeBirlestir(b, movYerelOku(1, 0 - 32))
+    b = listeBirlestir(b, movYerelOku(0, 0 - 40))
+    b = listeBirlestir(b, movPtrYaz(1, 0))           # tampon.uzunluk = okunan bayt
+    b = listeBirlestir(b, movYerelOku(0, 0 - 32))    # rax = tampon (dönüş)
+    b = listeBirlestir(b, leaveBant())
     döndür listeBirlestir(b, retBant())
 son
 
-# 2B - DOSYA YAZ
-işlev dosyaYaz(dosya, icerik)
-    b = [bcEtiket("f_dosyaYaz")]
-    b = listeBirlestir(b, pushKayit(3))
-    b = listeBirlestir(b, movKayit(3, 1))
-    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
-    b = listeBirlestir(b, movKayit(0, 0))
-    b = listeBirlestir(b, leaDolayli(0, 0, 16))
-    b = listeBirlestir(b, movYerelYaz(0 - 16, 1))
-    b = listeBirlestir(b, movPtrOku(0, 1))
+işlev dosyaYazKonumBant()
+    b = [bcEtiket("f_dosyaYazKonum")]
+    b = listeBirlestir(b, pushKayit(5))
+    b = listeBirlestir(b, movKayit(5, 4))
+    b = listeBirlestir(b, subImm32(4, 32))
+    b = listeBirlestir(b, movYerelYaz(0 - 8, 7))     # [-8] = fd
+    b = listeBirlestir(b, movYerelYaz(0 - 16, 6))    # [-16] = konum
+    b = listeBirlestir(b, movYerelYaz(0 - 24, 2))    # [-24] = icerik
+    b = listeBirlestir(b, movYerelOku(1, 0 - 24))
+    b = listeBirlestir(b, movPtrOku(2, 1))           # rdx = icerik uzunluğu
+    b = listeBirlestir(b, movYerelOku(7, 0 - 8))     # rdi = fd
+    b = listeBirlestir(b, movYerelOku(6, 0 - 24))
+    b = listeBirlestir(b, addImm32(6, 8))            # rsi = icerik+8
+    b = listeBirlestir(b, movYerelOku(10, 0 - 16))   # r10 = konum (offset)
+    b = listeBirlestir(b, movImm32(0, 18))           # sys_pwrite64
     b = listeBirlestir(b, syscallEmit())
-    b = listeBirlestir(b, movYerelYaz(0 - 24, 0))
-    b = listeBirlestir(b, movImm32(0, 16))
-    b = listeBirlestir(b, cmpImm32(0, 0))
-    b = listeBirlestir(b, jccBant(1, "dosyaYaz_hata"))
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, jmpBant("dosyaYaz_biti"))
-    b = listeBirlestir(b, [bcEtiket("dosyaYaz_hata")])
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, [bcEtiket("dosyaYaz_biti")])
-    döndür listeBirlestir(b, retBant())
+    b = listeBirlestir(b, leaveBant())
+    döndür listeBirlestir(b, retBant())               # rax = yazılan bayt (hatada negatif)
 son
 
-# 2B - DOSYA KAPAT
-işlev dosyaKapat(dosya)
+işlev dosyaKapatBant()
     b = [bcEtiket("f_dosyaKapat")]
-    b = listeBirlestir(b, pushKayit(1))
-    b = listeBirlestir(b, movKayit(1, 3))
-    b = listeBirlestir(b, movYerelYaz(0 - 8, 0))
-    b = listeBirlestir(b, movKayit(0, 0))
+    b = listeBirlestir(b, movImm32(0, 3))            # sys_close (rdi=fd zaten yerinde)
     b = listeBirlestir(b, syscallEmit())
-    b = listeBirlestir(b, movImm32(0, 0))
-    b = listeBirlestir(b, retBant())
+    döndür listeBirlestir(b, retBant())
 son
 
 # ---------------- PROGRAM ARGÜMANLARI (libc yok, ham yığın) ----------------
@@ -5058,6 +5088,10 @@ işlev yardimciBagimliliklari(ad)
         döndür ["f_tan_ayir", "f_bellek_kopyala"]
     değilse eğer metinEsit(ad, "f_yazDosyaCalistirilabilir") ise
         döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_dosyaAc") ise
+        döndür ["f_tan_ayir", "f_bellek_kopyala"]
+    değilse eğer metinEsit(ad, "f_dosyaOkuKonum") ise
+        döndür ["f_tan_ayir"]
     değilse eğer metinEsit(ad, "f_calistir") ise
         döndür ["f_tan_ayir", "f_bellek_kopyala"]
     değilse eğer metinEsit(ad, "f_izleRegs") ise
@@ -5147,8 +5181,8 @@ degiskenSayisi = uzunluk(adlarKutu[0])
 cerceveBoy = 8 * degiskenSayisi + 16
 
 # --- Faz 5 (B): kullanılan yardımcı kümesini govde bandından çıkar ---
-yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_soketDinle", "f_soketKabul", "f_catal", "f_izle", "f_calistir", "f_bekle", "f_izleRegs", "f_oku", "f_yazDosya", "f_yazDosyaCalistirilabilir", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
-yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), soketDinleBant(), soketKabulBant(), catalBant(), izleBant(), calistirBant(), bekleBant(), izleRegsBant(), okuBant(), yazDosyaBant(), yazDosyaCalistirilabilirBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
+yardimciAdlar = ["yaz_sayi", "f_tan_ayir", "f_bellek_kopyala", "f_liste_ekle", "f_liste_yap", "f_sayi_metne", "f_metin_birlestir", "f_metin_esit", "f_metin_indeks", "f_kod", "f_karakter", "f_yaz_metin", "f_yazHam", "f_zaman", "f_soketAc", "f_soketBagla", "f_soketYaz", "f_soketOku", "f_soketKapat", "f_soketDinle", "f_soketKabul", "f_catal", "f_izle", "f_calistir", "f_bekle", "f_izleRegs", "f_oku", "f_yazDosya", "f_yazDosyaCalistirilabilir", "f_dosyaAc", "f_dosyaOkuKonum", "f_dosyaYazKonum", "f_dosyaKapat", "f_girdiOku", "f_girdiOkuN", "f_dosyaVarMi", "f_yazBaytlar", "f_argsay", "f_arg", "f_kesir_metne", "f_yaz_kesir", "f_hata_sifira_bolme"]
+yardimciBantlar = [yazSayiBant(), tanAyirBant(), bellekKopyalaBant(), listeEkleBant(), listeYapBant(), sayiMetneBant(), metinBirlestirBant(), metinEsitBant(), metinIndeksBant(), kodBant(), karakterBant(), yazMetinBant(), yazHamBant(), zamanBant(), soketAcBant(), soketBaglaBant(), soketYazBant(), soketOkuBant(), soketKapatBant(), soketDinleBant(), soketKabulBant(), catalBant(), izleBant(), calistirBant(), bekleBant(), izleRegsBant(), okuBant(), yazDosyaBant(), yazDosyaCalistirilabilirBant(), dosyaAcBant(), dosyaOkuKonumBant(), dosyaYazKonumBant(), dosyaKapatBant(), girdiOkuBant(), girdiOkuNBant(), dosyaVarMiBant(), yazBaytlarBant(), argsayBant(), argBant(), kesirMetneBant(), yazKesirBant(), hataSifiraBolmeBant()]
 kullanilanYardimcilar = yardimciKullanimiTara(govde, yardimciAdlar)
 gomulcekYardimcilar = yardimciKapanisi(kullanilanYardimcilar)
 
