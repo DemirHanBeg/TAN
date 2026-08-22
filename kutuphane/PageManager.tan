@@ -1,0 +1,148 @@
+# ============================================================
+# PageManager.tan — VETA Storage: sayfa-tabanlı disk yöneticisi
+# ------------------------------------------------------------
+# 2B (kutuphane/dosyaAc/dosyaOkuKonum/dosyaYazKonum/dosyaKapat,
+# TancElf.tan builtin, commit 01a23f9) üzerine kurulu — gerçek
+# konumlamalı (pread/pwrite) dosya G/Ç. Eski veta/libraries/storage/
+# source/page_manager.tan (%99 yorum/tasarım notu, "sabit" anahtar
+# kelimesi TAN'da yok, hiç derlenmiyordu) temel ALINMADI — sıfırdan,
+# kanıtlanmış TAN sözdizimiyle yazıldı.
+#
+# Tasarım: sayfa 0 = HEADER sayfası (meta veri: toplam sayfa sayısı).
+# Sayfa 1'den itibaren veri sayfaları. Her sayfa PAGE_SIZE (4096) bayt,
+# sabit boyutlu, dosyada sayfaNo*PAGE_SIZE offsetinde.
+#
+# Kullanım:
+#   içe al "kutuphane/PageManager.tan"
+#   pm = pmAc("veri.db")
+#   no = pmSayfaAyir(pm)              # yeni boş sayfa, no döner
+#   z  = pmSayfaYaz(pm, no, icerik)   # icerik <= PAGE_SIZE bayt
+#   veri = pmSayfaOku(pm, no)          # tam PAGE_SIZE bayt döner
+#   z  = pmKapat(pm)
+#
+# BİLİNEN SINIR (dürüst): fsync YOK (TancElf'te syscall builtin'i yok,
+# bu eklemenin kapsamı dışında) — durability (ACID'in D'si) tam garanti
+# EDİLMİYOR, sadece "yazma çağrısı yapıldı" garantisi var. Tek-thread
+# varsayımı — eşzamanlı erişim (2D, hâlâ yazılmadı) YOK.
+# ============================================================
+
+içe al "kutuphane/tanoku.tan"
+
+işlev pageBoyut()
+    döndür 4096
+son
+
+# "SAYFASAYISI:" öneki + ondalık sayı + "\n" — header'ın ilk kısmı.
+işlev pmHeaderOneki()
+    döndür "SAYFASAYISI:"
+son
+
+# metneTam benzeri: baştaki rakamları tam sayıya çevirir (bas'tan itibaren)
+işlev pmMetneTam(s, bas)
+    n = uzunluk(s)
+    i = bas
+    r = 0
+    iken i < n
+        k = kod(metinAl(s, i))
+        eğer k >= 48 ve k <= 57 ise
+            r = r * 10 + (k - 48)
+            i = i + 1
+        değilse
+            i = n
+        son
+    son
+    döndür r
+son
+
+# yol'daki veritabanı dosyasını açar (yoksa oluşturur). Yeni dosyaysa
+# header sayfasını (sayfa 0, sayfaSayisi=1 — sadece header'ın kendisi)
+# yazar. pm = [fd, sayfaSayisiKutu] — sayfaSayisiKutu = [n] (mutable kutu).
+işlev pmAc(yol)
+    fd = dosyaAc(yol, 1)
+    # TancElf tip-izleme sınırı (bkz. sha256()/kirp() ile aynı desen):
+    # yeni builtin'lerin (dosyaOkuKonum) dönüş tipi ön-uç tarafından
+    # bilinmiyor, metinBirlestir("", ...) ile string bağlamına zorlanır.
+    ham = metinBirlestir("", dosyaOkuKonum(fd, 0, uzunluk(pmHeaderOneki())))
+    onek = metinBirlestir("", pmHeaderOneki())
+    eğer metinEsit(ham, onek) ise
+        tamHeader = metinBirlestir("", dosyaOkuKonum(fd, 0, 64))
+        sayfaSayisi = pmMetneTam(tamHeader, uzunluk(onek))
+    değilse
+        sayfaSayisi = 1
+        z = pmHeaderYaz(fd, sayfaSayisi)
+    son
+    döndür [fd, [sayfaSayisi]]
+son
+
+işlev pmHeaderYaz(fd, sayfaSayisi)
+    icerik = metinBirlestir(pmHeaderOneki(), metinBirlestir(metin(sayfaSayisi), "\n"))
+    döndür dosyaYazKonum(fd, 0, icerik)
+son
+
+# Yeni bir boş sayfa ayırır (dosyayı büyütmez — pmSayfaYaz ilk yazımda
+# dosyayı gerektiği kadar genişletir, pwrite EOF'un ötesine yazınca
+# aradaki boşluk sparse/sıfır olur, standart POSIX davranışı). Sayfa
+# numarasını döndürür.
+işlev pmSayfaAyir(pm)
+    fd = pm[0]
+    sayacKutu = pm[1]
+    yeniNo = sayacKutu[0]
+    sayacKutu[0] = yeniNo + 1
+    z = pmHeaderYaz(fd, sayacKutu[0])
+    döndür yeniNo
+son
+
+# sayfaNo'daki sayfayı TAM PAGE_SIZE bayt olarak okur (dosyanın o kısmı
+# hiç yazılmamışsa sıfır baytlarla — pread kısa okursa kalan kısmı
+# manuel sıfırla, sparse dosyanın okunmamış kısmı zaten sıfırdır ama
+# dosya o kadar büyümediyse pread daha az bayt döndürebilir).
+işlev pmSayfaOku(pm, sayfaNo)
+    fd = pm[0]
+    konum = sayfaNo * pageBoyut()
+    ham = metinBirlestir("", dosyaOkuKonum(fd, konum, pageBoyut()))
+    eğer uzunluk(ham) < pageBoyut() ise
+        dolgu = pageBoyut() - uzunluk(ham)
+        i = 0
+        iken i < dolgu
+            ham = metinBirlestir(ham, karakter(0))
+            i = i + 1
+        son
+    son
+    döndür ham
+son
+
+# sayfaNo'ya icerik yazar (PAGE_SIZE'dan kısaysa sıfırla doldurulur,
+# uzunsa kırpılır — bir sayfa asla PAGE_SIZE'ı aşamaz).
+işlev pmSayfaYaz(pm, sayfaNo, icerik)
+    fd = pm[0]
+    konum = sayfaNo * pageBoyut()
+    n = uzunluk(icerik)
+    eğer n > pageBoyut() ise
+        yazilacak = ""
+        i = 0
+        iken i < pageBoyut()
+            yazilacak = metinBirlestir(yazilacak, metinAl(icerik, i))
+            i = i + 1
+        son
+    değilse eğer n < pageBoyut() ise
+        yazilacak = icerik
+        dolgu = pageBoyut() - n
+        i = 0
+        iken i < dolgu
+            yazilacak = metinBirlestir(yazilacak, karakter(0))
+            i = i + 1
+        son
+    değilse
+        yazilacak = icerik
+    son
+    döndür dosyaYazKonum(fd, konum, yazilacak)
+son
+
+işlev pmSayfaSayisi(pm)
+    sayacKutu = pm[1]
+    döndür sayacKutu[0]
+son
+
+işlev pmKapat(pm)
+    döndür dosyaKapat(pm[0])
+son

@@ -1,27 +1,18 @@
-# test_storage.tan — VETA Storage (page manager + WAL + transaction) smoke test
-# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
-# Çalıştırma:  qemu-x86_64 <cikti>
-# Kural: mevcut TancElf binary'sini kullan; Faz 5 syscall'lerinden faydalanır.
-# BU TEST: QEMU throttle nedeniyle UNVERIFIED olabilir — ama derleme CANLIdir.
+# test_storage.tan — VETA Storage smoke test.
+# 2026-08-22: eski hali `../source/page_manager.tan` (import) + `sabit`
+# anahtar kelimesi (TAN'da yok) kullanıyordu — hiç derlenmiyordu (bkz.
+# VETA_STATUS.md "Faz 6 — Storage YOK, %99 yorum"). Gerçek, çalışan
+# implementasyon artık kutuphane/PageManager.tan (repo kökü) — bu dosya
+# ona işaret ediyor. Asıl kapsamlı, otomatik regresyona dahil test:
+# testler/storage_testleri.tan (13/13 GEÇİYOR, TestAraclar.sh çalıştırır).
 
-içe al "../source/page_manager.tan"
-içe al "../source/wal.tan"
-içe al "../source/transaction.tan"
+içe al "kutuphane/PageManager.tan"
 
-# Basit test: PAGE_SIZE ve sabit tiplerin derlenebilirliğini kontrol et
-yaz("PAGE_SIZE: ")
-yaz(PAGE_SIZE)
-yaz("\n")
+yaz(metinBirlestir("PAGE_SIZE: ", metin(pageBoyut())))
 
-yaus("PAGE_TYPE_NONE: ")
-yaus(PAGE_TYPE_NONE)
-yaz("\n")
-
-yaus("PAGE_TYPE_DATA: ")
-yaus(PAGE_TYPE_DATA)
-yaz("\n")
-
-# WAL ve Transaction temelli basit test
-yaz("=== Storage Test ===\n")
-yaz("Storage (page manager + WAL + transaction) modülleri yüklü\n")
-yaz("Faz 6: Storage zemini hazır\n")
+pm = pmAc("/tmp/veta_smoke_storage.db")
+yaz(metinBirlestir("baslangic sayfaSayisi: ", metin(pmSayfaSayisi(pm))))
+no = pmSayfaAyir(pm)
+z = pmSayfaYaz(pm, no, "smoke test")
+d = pmKapat(pm)
+yaz("page_manager smoke test tamamlandi")

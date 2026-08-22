@@ -1,0 +1,102 @@
+# storage_testleri.tan — PageManager + Wal + Islem (VETA Storage) testleri.
+# Gerçek dosya G/Ç kullanır (2B, dosyaAc/dosyaOkuKonum/dosyaYazKonum/dosyaKapat).
+
+içe al "kutuphane/test.tan"
+içe al "kutuphane/Islem.tan"
+
+işlev ilkN(s, n)
+    r = ""
+    i = 0
+    iken i < n
+        r = metinBirlestir(r, metinAl(s, i))
+        i = i + 1
+    son
+    döndür r
+son
+
+gecti = 0
+toplam = 0
+
+# ---- PageManager: temel ayır/yaz/oku ----
+# unlink syscall'i yok (2B'nin kapsami disinda) - onceki calistirmadan
+# kalan dosya varsa header'ini bozup "yeni dosya" gibi algilanmasini
+# sagliyoruz (pmAc/walAc, magic onek eslesmezse sifirdan baslatiyor).
+fdTemiz1 = dosyaAc("/tmp/tan_test_storage.db", 1)
+z = dosyaYazKonum(fdTemiz1, 0, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+z = dosyaKapat(fdTemiz1)
+fdTemiz2 = dosyaAc("/tmp/tan_test_storage.wal", 1)
+z = dosyaYazKonum(fdTemiz2, 0, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+z = dosyaKapat(fdTemiz2)
+
+pm = pmAc("/tmp/tan_test_storage.db")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(1, pmSayfaSayisi(pm), "pmAc: yeni dosyada sayfaSayisi=1 (header)")
+
+no1 = pmSayfaAyir(pm)
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(1, no1, "pmSayfaAyir: ilk sayfa no=1")
+
+no2 = pmSayfaAyir(pm)
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(2, no2, "pmSayfaAyir: ikinci sayfa no=2")
+
+z = pmSayfaYaz(pm, no1, "MERHABA")
+okunan = pmSayfaOku(pm, no1)
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(4096, uzunluk(okunan), "pmSayfaOku: tam PAGE_SIZE doner")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("MERHABA", ilkN(okunan, 7), "pmSayfaOku: yazilan icerik dogru okunuyor")
+
+z = pmKapat(pm)
+
+# ---- PageManager: kalicilik (kapat + tekrar ac) ----
+pm2 = pmAc("/tmp/tan_test_storage.db")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(3, pmSayfaSayisi(pm2), "pmAc: tekrar acinca sayfaSayisi korunmus (header'dan okundu)")
+okunan2 = pmSayfaOku(pm2, no1)
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("MERHABA", ilkN(okunan2, 7), "pmSayfaOku: kalicilik - dosya kapatilip acilinca icerik korunmus")
+
+# ---- Islem (transaction): commit ----
+wal = walAc("/tmp/tan_test_storage.wal")
+txSayac = [1]
+
+tx1 = islemBaslat(pm2, wal, txSayac[0])
+txSayac[0] = txSayac[0] + 1
+z = islemSayfaYaz(tx1, no1, "COMMITLENDI")
+z = islemCommit(tx1)
+sonuc1 = pmSayfaOku(pm2, no1)
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("COMMITLENDI", ilkN(sonuc1, 11), "islemCommit: degisiklik kalici")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(1, islemDurum(tx1), "islemDurum: commit sonrasi durum=1")
+
+# ---- Islem (transaction): rollback tek sayfa ----
+tx2 = islemBaslat(pm2, wal, txSayac[0])
+txSayac[0] = txSayac[0] + 1
+z = islemSayfaYaz(tx2, no1, "GORULMEMELI")
+z = islemRollback(tx2)
+sonuc2 = pmSayfaOku(pm2, no1)
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("COMMITLENDI", ilkN(sonuc2, 11), "islemRollback: degisiklik geri alindi, onceki commit korunmus")
+toplam = toplam + 1
+gecti = gecti + iddiaSayi(2, islemDurum(tx2), "islemDurum: rollback sonrasi durum=2")
+
+# ---- Islem (transaction): rollback coklu sayfa ----
+z = pmSayfaYaz(pm2, no2, "SAYFA2-ORIJINAL")
+tx3 = islemBaslat(pm2, wal, txSayac[0])
+txSayac[0] = txSayac[0] + 1
+z = islemSayfaYaz(tx3, no1, "TX3-S1")
+z = islemSayfaYaz(tx3, no2, "TX3-S2")
+z = islemRollback(tx3)
+s1 = pmSayfaOku(pm2, no1)
+s2 = pmSayfaOku(pm2, no2)
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("COMMITLENDI", ilkN(s1, 11), "islemRollback (coklu sayfa): sayfa1 geri alindi")
+toplam = toplam + 1
+gecti = gecti + iddiaMetin("SAYFA2-ORIJINAL", ilkN(s2, 15), "islemRollback (coklu sayfa): sayfa2 geri alindi")
+
+z = walKapat(wal)
+z = pmKapat(pm2)
+
+d = testSonuc(gecti, toplam)

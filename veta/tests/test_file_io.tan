@@ -1,34 +1,28 @@
-# test_file_io.tan — VETA file I/O (2B) smoke test
-# Kompilasyon: ./TancElf veta/tests/test_file_io.tan <cikti> (repo kökünden)
-# Çalıştırma:  <cikti>
-# 2026-08-21: GERÇEKTEN ÇALIŞTIRILDI (native WSL2, throttle yok). Önceki halinde
-# yanlış import ("../source/math/source/mat.tan" — hiç var olmadı) ve "yav("
-# yazım hatası vardı (yaz() olmalıydı) — bu dosya derlenmemiş bir taslaktı,
-# düzeltildi.
+# test_file_io.tan — VETA file I/O (2B) smoke test.
+# 2026-08-22: API TAMAMEN YENİDEN YAZILDI. Eski dosyaAc/dosyaYaz(fd,icerik)/
+# dosyaOku(fd) API'si hiç kayıtlı değildi (BAGLAMA HATASI veriyordu) VE kodun
+# kendisi de yanlış register varsayımlarıyla yazılmıştı — bkz. VETA_STATUS.md
+# "2B — ÇÖZÜLDÜ" ve TancElf.tan commit 01a23f9. Yeni API konumlamalı
+# (pread/pwrite): dosyaAc(yol,mod)/dosyaOkuKonum(fd,konum,uzunluk)/
+# dosyaYazKonum(fd,konum,icerik)/dosyaKapat(fd). Asıl kapsamlı, otomatik
+# regresyona dahil test: testler/storage_testleri.tan (repo kökünden,
+# TestAraclar.sh tarafından çalıştırılır, 13/13 GEÇİYOR). Bu dosya sadece
+# builtin'lerin ham/manuel bir smoke test'i olarak kalıyor.
 
-yaz("=== File I/O Test ===\n")
+yaz("=== File I/O Test (konumlamali API) ===")
 
 fd = dosyaAc("/tmp/veta_test_output.txt", 1)
-yaz("dosyaAc sonucu (fd): ")
-yaz(fd)
-yaz("\n")
+yaz(metinBirlestir("dosyaAc fd: ", metin(fd)))
 
-sonuc = dosyaYaz(fd, "merhaba veta\n")
-yaz("dosyaYaz sonucu: ")
-yaz(sonuc)
-yaz("\n")
+yazilan = dosyaYazKonum(fd, 0, "merhaba veta")
+yaz(metinBirlestir("dosyaYazKonum yazilan bayt: ", metin(yazilan)))
 
-dosyaKapat(fd)
-yaz("dosyaKapat: OK\n")
+d = dosyaKapat(fd)
+yaz("dosyaKapat: OK")
 
 fd2 = dosyaAc("/tmp/veta_test_output.txt", 0)
-yaz("yeniden-ac (okuma) fd: ")
-yaz(fd2)
-yaz("\n")
+icerik = metinBirlestir("", dosyaOkuKonum(fd2, 0, 12))
+yaz(metinBirlestir("dosyaOkuKonum icerik: ", icerik))
 
-icerik = dosyaOku(fd2)
-yaz("okunan icerik: ")
-yaz(icerik)
-
-dosyaKapat(fd2)
-yaz("test: dosyaAc/Yaz/Kapat/Oku dongusu tamamlandi\n")
+d = dosyaKapat(fd2)
+yaz("test: dosyaAc/YazKonum/Kapat/OkuKonum dongusu tamamlandi")

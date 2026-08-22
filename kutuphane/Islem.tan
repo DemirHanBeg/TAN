@@ -1,0 +1,79 @@
+# ============================================================
+# Islem.tan — VETA Transaction (İşlem) katmanı: PageManager + Wal koordinasyonu
+# ------------------------------------------------------------
+# Eski veta/libraries/storage/source/transaction.tan (tasarım notu,
+# sıfır kod) yerine sıfırdan yazıldı. ACID durumu (dürüst):
+#   Atomicity: EVET — commit öncesi rollback tüm değişiklikleri geri alır.
+#   Consistency: uygulamanın sorumluluğu (bu katman garanti etmez).
+#   Isolation: YOK — tek-thread varsayımı (2D eşzamanlılık ayrı, yazılmadı).
+#   Durability: KISMİ — fsync yok (2B'nin sınırı), crash-recovery yok.
+#
+# Kullanım:
+#   içe al "kutuphane/Islem.tan"
+#   pm  = pmAc("veri.db")
+#   wal = walAc("veri.wal")
+#   tx  = islemBaslat(pm, wal, 1)
+#   z   = islemSayfaYaz(tx, no, "yeni icerik")
+#   z   = islemCommit(tx)      # ya da islemRollback(tx)
+# ============================================================
+
+içe al "kutuphane/Wal.tan"
+
+# NOT: txId üretimi kasıtlı olarak bu modülün DIŞINDA — TAN fonksiyonları
+# top-level (global) değişkenlere güvenilir erişemiyor (bilinen kapsam
+# sınırı, "Yorumlayıcı Kapsam Bug'ı" ile aynı aile: fonksiyon İÇİNDEN
+# dosya-seviyesi bir değişkene erişmek tanımsız/segfault riski taşıyor —
+# doğrulandı: modül-seviyesi "sonrakiTxIdKutu = [1]" + onu okuyan bir
+# fonksiyon SEGFAULT verdi). Çağıran kendi sayacını (bir "kutu", örn
+# `txSayac = [1]`) tutup `islemBaslat`'a besler.
+
+# tx = [pm, wal, txId, durumKutu, baslangicLsn]
+# durum: 0=AKTIF, 1=KOMIT, 2=ROLLBACK
+işlev islemBaslat(pm, wal, txId)
+    döndür [pm, wal, txId, [0], walSonLsn(wal)]
+son
+
+işlev islemDurum(tx)
+    durumKutu = tx[3]
+    döndür durumKutu[0]
+son
+
+# sayfaNo'ya yeniIcerik yazar. write-ahead: önce WAL'a eski+yeni içerik
+# kaydedilir, SONRA gerçek sayfa güncellenir.
+işlev islemSayfaYaz(tx, sayfaNo, yeniIcerik)
+    pm = tx[0]
+    wal = tx[1]
+    txId = tx[2]
+    eskiIcerik = pmSayfaOku(pm, sayfaNo)
+    lsn = walEkle(wal, txId, sayfaNo, eskiIcerik, yeniIcerik)
+    z = pmSayfaYaz(pm, sayfaNo, yeniIcerik)
+    döndür lsn
+son
+
+# değişiklikleri kalıcı kabul eder (durum=KOMIT). Sayfalar zaten
+# islemSayfaYaz sırasında yazılmıştı — commit sadece durumu işaretler
+# (WAL'a redo-sonrası temizlik/crash-recovery bu eklemenin kapsamı dışında).
+işlev islemCommit(tx)
+    durumKutu = tx[3]
+    durumKutu[0] = 1
+    döndür 0
+son
+
+# bu transaction'ın WAL'a yazdığı TÜM değişiklikleri (baslangicLsn'den
+# şu ana kadar) GERİYE doğru tarayıp eskiIcerik'i sayfaya geri yazar.
+işlev islemRollback(tx)
+    pm = tx[0]
+    wal = tx[1]
+    durumKutu = tx[3]
+    baslangicLsn = tx[4]
+    lsn = walSonLsn(wal) - 1
+    iken lsn >= baslangicLsn
+        kayit = walKayitOku(wal, lsn)
+        sayfaNo = kayit[0]
+        eskiIcerik = kayit[1]
+        z = pmSayfaYaz(pm, sayfaNo, eskiIcerik)
+        lsn = lsn - 1
+    son
+    durumKutu[0] = 2
+    döndür 0
+son

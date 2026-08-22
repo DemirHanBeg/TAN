@@ -1,0 +1,140 @@
+# ============================================================
+# Wal.tan — VETA Write-Ahead Log: undo-log tabanlı transaction desteği
+# ------------------------------------------------------------
+# PageManager.tan üzerine kurulu. Tasarım (eski veta/libraries/storage/
+# source/wal.tan'daki tasarım notlarından, sıfırdan kanıtlanmış TAN
+# sözdizimiyle yazıldı — o dosya %100 yorum satırıydı, gerçek kod yoktu):
+#
+# Her WAL kaydı SABİT BOYUTLU (walKayitBoyutu() bayt): txId+sayfaNo
+# başlık (walBasligBoyut() bayt, metin) + eskiIcerik (PAGE_SIZE) +
+# yeniIcerik (PAGE_SIZE). Sabit boyut şart — sayfa içeriği rastgele bayt
+# (newline dahil) taşıyabilir, satır-tabanlı format bunu bozar.
+#
+# Protokol: write-ahead — walEkle() ÖNCE çağrılır (eski+yeni içerik
+# WAL'a yazılır), SONRA gerçek sayfa güncellenir (bkz. Islem.tan
+# islemSayfaYaz). Rollback: transaction'ın WAL lsn aralığını GERİYE
+# doğru tarar, eskiIcerik'i sayfaya geri yazar (undo log).
+#
+# BİLİNEN SINIR (dürüst): fsync YOK — WAL'ın kendisi de gerçek sayfa
+# kadar "durable" (2B'nin sınırı). Crash-recovery (WAL'dan REDO) bu
+# eklemenin kapsamı DIŞINDA — sadece çalışan process içinde rollback
+# destekleniyor (Atomicity: evet: WAL öncesi geri alınabilir; Isolation:
+# YOK, tek-thread varsayımı; Durability: KISMİ, fsync yok).
+# ============================================================
+
+içe al "kutuphane/tanoku.tan"
+içe al "kutuphane/PageManager.tan"
+
+işlev walBasligBoyut()
+    döndür 64
+son
+
+işlev walKayitBoyutu()
+    döndür walBasligBoyut() + pageBoyut() * 2
+son
+
+# n uzunluğa sağdan boşlukla doldurur (sabit-genişlik alan kodlama)
+işlev walSabitGenislik(s, n)
+    r = s
+    iken uzunluk(r) < n
+        r = metinBirlestir(r, " ")
+    son
+    döndür r
+son
+
+# icerik'i tam PAGE_SIZE'a normalize eder (kısaysa sıfır doldurur, uzunsa kırpar)
+işlev walIcerikNormalize(icerik)
+    n = uzunluk(icerik)
+    b = pageBoyut()
+    eğer n > b ise
+        r = ""
+        i = 0
+        iken i < b
+            r = metinBirlestir(r, metinAl(icerik, i))
+            i = i + 1
+        son
+        döndür r
+    değilse eğer n < b ise
+        r = icerik
+        dolgu = b - n
+        i = 0
+        iken i < dolgu
+            r = metinBirlestir(r, karakter(0))
+            i = i + 1
+        son
+        döndür r
+    son
+    döndür icerik
+son
+
+# metin'in [bas, bas+n) aralığını döndürür
+işlev walAltMetin(s, bas, n)
+    r = ""
+    i = bas
+    son2 = bas + n
+    iken i < son2
+        r = metinBirlestir(r, metinAl(s, i))
+        i = i + 1
+    son
+    döndür r
+son
+
+# wal dosyasını açar (yoksa oluşturur). wal = [fd, sayacKutu]
+işlev walAc(yol)
+    fd = dosyaAc(yol, 1)
+    onek = metinBirlestir("", "WALSAYAC:")
+    ham = metinBirlestir("", dosyaOkuKonum(fd, 0, uzunluk(onek)))
+    eğer metinEsit(ham, onek) ise
+        tamHeader = metinBirlestir("", dosyaOkuKonum(fd, 0, walBasligBoyut()))
+        sayac = pmMetneTam(tamHeader, uzunluk(onek))
+    değilse
+        sayac = 0
+        z = walSayacYaz(fd, 0)
+    son
+    döndür [fd, [sayac]]
+son
+
+işlev walSayacYaz(fd, sayac)
+    icerik = metinBirlestir("WALSAYAC:", metinBirlestir(metin(sayac), "\n"))
+    döndür dosyaYazKonum(fd, 0, icerik)
+son
+
+işlev walSonLsn(wal)
+    sayacKutu = wal[1]
+    döndür sayacKutu[0]
+son
+
+# Yeni bir WAL kaydı ekler (write-ahead — gerçek sayfa değişmeden ÖNCE
+# çağrılmalı). Kaydın lsn'ini (log sequence number) döndürür.
+işlev walEkle(wal, txId, sayfaNo, eskiIcerik, yeniIcerik)
+    fd = wal[0]
+    sayacKutu = wal[1]
+    lsn = sayacKutu[0]
+    konum = walBasligBoyut() + lsn * walKayitBoyutu()
+    baslikHam = metinBirlestir("W:", metinBirlestir(metin(txId), metinBirlestir(":", metin(sayfaNo))))
+    baslik = walSabitGenislik(baslikHam, walBasligBoyut())
+    kayit = metinBirlestir(baslik, metinBirlestir(walIcerikNormalize(eskiIcerik), walIcerikNormalize(yeniIcerik)))
+    z = dosyaYazKonum(fd, konum, kayit)
+    sayacKutu[0] = lsn + 1
+    z = walSayacYaz(fd, sayacKutu[0])
+    döndür lsn
+son
+
+# lsn numaralı kaydı okur: [sayfaNo, eskiIcerik, yeniIcerik] döndürür
+işlev walKayitOku(wal, lsn)
+    fd = wal[0]
+    konum = walBasligBoyut() + lsn * walKayitBoyutu()
+    kayit = metinBirlestir("", dosyaOkuKonum(fd, konum, walKayitBoyutu()))
+    baslik = kirp(walAltMetin(kayit, 0, walBasligBoyut()))
+    # baslik = "W:<txId>:<sayfaNo>" — son ":" sonrası sayfaNo
+    sonIki = karakterBul(baslik, ":", karakterBul(baslik, ":", 0) + 1)
+    sayfaNoMetin = walAltMetin(baslik, sonIki + 1, uzunluk(baslik) - sonIki - 1)
+    sayfaNo = pmMetneTam(sayfaNoMetin, 0)
+    eskiIcerik = walAltMetin(kayit, walBasligBoyut(), pageBoyut())
+    yeniIcerik = walAltMetin(kayit, walBasligBoyut() + pageBoyut(), pageBoyut())
+    döndür [sayfaNo, eskiIcerik, yeniIcerik]
+son
+
+işlev walKapat(wal)
+    döndür dosyaKapat(wal[0])
+son

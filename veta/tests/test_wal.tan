@@ -1,10 +1,14 @@
-# test_wal.tan — VETA WAL (Write-Ahead Logging) smoke test
-# Kompilasyon: qemu-x86_64 TancElf <bu_dosya> <cikti>
-# Çalıştırma:  qemu-x86_64 <cikti>
-# Kural: mevcut TancElf binary'sini kullan; Faz 6 zemini (Storage + Query + Transaction + Event hazır); QEMU throttle toleranı.
+# test_wal.tan — VETA WAL smoke test.
+# 2026-08-22: eski hali `../libraries/storage/source/wal.tan` (tasarım notu,
+# sıfır kod) import ediyordu VE "yaus(" yazım hatası vardı — hiç derlenmiyordu.
+# Gerçek, çalışan implementasyon artık kutuphane/Wal.tan. Asıl kapsamlı,
+# otomatik regresyona dahil test: testler/storage_testleri.tan (13/13
+# GEÇİYOR, TestAraclar.sh çalıştırır — commit/rollback dahil).
 
-içe al "../libraries/storage/source/wal.tan"
+içe al "kutuphane/Wal.tan"
 
-# Basit WAL testi
-yaz("WAL Başlatılıyor...\n")
-yaus("WAL Sistemi Aktif\n")
+yaz("WAL baslatiliyor...")
+wal = walAc("/tmp/veta_smoke_wal.wal")
+yaz(metinBirlestir("baslangic lsn: ", metin(walSonLsn(wal))))
+d = walKapat(wal)
+yaz("WAL smoke test tamamlandi")
