@@ -127,43 +127,60 @@
 
 ### Kural: Zemin matrisi (2B+2D) hazır olmadan FAZ 6 BaşLATILMAZ.
 
-#### Storage (Depolama) — YOK (önceki "UYGULANDI" iddiası YANLIŞ, 2026-08-21 düzeltildi)
-- **Gerçek bulgu:** `libraries/storage/source/page_manager.tan` **%99 yorum satırı**
-  — gerçek kod sadece 4 `sabit` (PAGE_SIZE/PAGE_TYPE_*) tanımı, `page_tur`
-  fonksiyonu bile YORUM SATIRI OLARAK yazılmış (`# işlem page_tur(tur)` ...),
-  hiç aktif değil. `wal.tan`, `transaction.tan`, `transaction_detail.tan` ise
-  **SIFIR gerçek kod** — `grep -c '^işlev\|^sabit'` üçü için de 0 verdi, tamamı
-  tasarım notu/yorum (WALBasla/WALEkle/WALCommit/WALRollback gibi "fonksiyonlar"
-  sadece ne yapması GEREKTİĞİNİ anlatan yorum satırları, hiçbiri `işlev` olarak
-  yazılmamış). Derleme "başarılı" oluyordu çünkü derlenecek neredeyse hiçbir şey
-  yoktu (221 bayt, 0 değişken çıktı — boş program gibi).
-- **Gerçek durum: Storage/WAL/Transaction (page_manager hariç) YOK, sadece
-  tasarım dokümanı.** page_manager.tan'da sabitler gerçek ve derleniyor, geri
-  kalanı henüz yazılmadı.
-- **Bu oturumda YAZILMADI (kapsam dışı bırakıldı, dürüst):** Gerçek bir sayfa
-  yöneticisi + WAL + transaction motoru, 2B (dosya G/Ç) üzerine kurulmalı ama
-  2B şu an KIRIK (yukarı bakın) — bu yüzden Storage'ı gerçek anlamda yazmak
-  önce 2B'nin düzeltilmesini gerektiriyor. Ayrı, büyük, dikkatli bir oturum.
+#### Storage (Depolama) — GERÇEK, ÇALIŞIYOR (2026-08-22, commit `f2919f2`)
+- **Eski `libraries/storage/source/*` (page_manager/wal/transaction/
+  transaction_detail) TEMEL ALINMADI** — %99 yorum/tasarım notuydu, `sabit`
+  anahtar kelimesi TAN'da hiç yok, hiç derlenmiyordu (bu durum tespiti hâlâ
+  doğru, aşağıdaki yeni implementasyon SIFIRDAN yazıldı).
+- **`kutuphane/PageManager.tan` — gerçek sayfa yöneticisi.** Sayfa 0 =
+  HEADER (meta veri, toplam sayfa sayısı). `pmAc/pmSayfaAyir/pmSayfaOku/
+  pmSayfaYaz/pmSayfaSayisi/pmKapat`. 2B'nin (`dosyaAc`/`dosyaOkuKonum`/
+  `dosyaYazKonum`/`dosyaKapat`, commit `01a23f9`) üzerine kurulu.
+  Doğrulandı: yaz+oku+**kapat-tekrar-aç kalıcılığı** (gerçek disk testi).
+- **`kutuphane/Wal.tan` — undo-log tabanlı WAL.** Sabit-boyutlu kayıtlar
+  (satır-tabanlı format KULLANILMADI — sayfa içeriği rastgele bayt/newline
+  taşıyabilir). `walAc/walEkle/walKayitOku/walSonLsn/walKapat`.
+- **`kutuphane/Islem.tan` — transaction katmanı.** `islemBaslat/
+  islemSayfaYaz` (write-ahead: önce WAL, sonra gerçek sayfa)/`islemCommit/
+  islemRollback` (kendi WAL lsn aralığını geriye tarayıp undo yapar).
+- **BULUNAN BUG (yeni):** TAN fonksiyonları top-level (dosya-seviyesi)
+  global değişkene GÜVENİLİR ERİŞEMİYOR — modül-seviyesi bir sayaç +
+  onu okuyan yardımcı fonksiyon SEGFAULT verdi. Düzeltme: global state
+  kaldırıldı, çağıran kendi sayacını (bir "kutu") parametre olarak besliyor.
+- **ACID durumu (dürüst):** Atomicity EVET (rollback doğrulandı — tek
+  sayfa VE çok-sayfalı senaryo), Consistency uygulama sorumluluğu,
+  **Isolation YOK** (tek-thread varsayımı, 2D hâlâ yazılmadı),
+  **Durability KISMİ** (fsync yok — 2B'nin sınırı; crash-recovery/REDO bu
+  eklemenin kapsamı DIŞINDA, sadece çalışan process içi rollback var).
+- **Doğrulama:** `testler/storage_testleri.tan` — 13/13 GEÇTİ (temel
+  ayır/yaz/oku, kalıcılık, commit, rollback tek-sayfa, rollback çok-sayfa),
+  `TestAraclar.sh`'ye otomatik dahil (kalıcı regresyon), iki kez üst üste
+  çalıştırılıp idempotent olduğu doğrulandı. `veta/tests/test_file_io.tan`/
+  `test_storage.tan`/`test_wal.tan`/`test_transaction.tan` (önceden hiç
+  derlenmeyen sahte testlerdi) yeni API ile çalışır hale getirildi.
+  TancElf.tan bu turda DEĞİŞMEDİ (saf kütüphane kodu) — self-hosting
+  riski yok, ama yine de tam regresyon (TestArkaUcGoSuzTemiz.sh,
+  TestFormatIdempotent) yeşil doğrulandı.
 
-#### Query (Sorgu) — YOK
-- `libraries/query/source/query.tan`: **SIFIR gerçek kod** (`grep -c` = 0),
-  tamamı yorum/tasarım notu. Storage'a bağımlı olduğu için zaten başlayamazdı.
-- **Gerçek durum:** Tasarım var, implementasyon yok. Ertelendi.
+#### Query (Sorgu) — YOK (Storage'ın üzerine kurulacak, henüz başlanmadı)
+- `libraries/query/source/query.tan`: **SIFIR gerçek kod**, tamamı yorum/
+  tasarım notu. Storage artık HAZIR (yukarı bakın) — Query artık
+  gerçekten başlanabilir, ama bu oturumda YAZILMADI.
+- **Gerçek durum:** Tasarım var, implementasyon yok. Sıradaki adım.
 
-#### Transaction (İşlem) — YOK
-- `transaction.tan` + `transaction_detail.tan`: **SIFIR gerçek kod** (`grep -c`
-  = 0 ikisi için de), tamamı yorum/tasarım notu.
-- **Gerçek durum:** Tasarım var, implementasyon yok. Storage'a bağımlı,
-  ertelendi.
+#### Transaction (İşlem) — Storage seviyesinde ÇÖZÜLDÜ (`kutuphane/Islem.tan`)
+- Eski `transaction.tan`/`transaction_detail.tan` (tasarım notu, sıfır kod)
+  hâlâ boş, ama gerçek transaction mantığı artık `kutuphane/Islem.tan`'da
+  var ve çalışıyor (yukarı bakın — Storage bölümü). Query katmanının
+  KENDİ transaction ihtiyaçları (çok-tablolu/karmaşık sorgu işlemleri)
+  ayrıca ele alınabilir ama temel commit/rollback hazır.
 
-**Genel not (2026-08-21):** Bu 3 alt-sistemin önceki "UYGULANDI/derleme
-CANLI" kayıtları önceki bir oturumun (muhtemelen throttle nedeniyle asla
-gerçekten kod okumadan/çalıştırmadan yazılmış) hatalı iyimser değerlendirmesiydi.
-Gerçek durum: Faz 6 tasarım aşamasında, kod yazımı HENÜZ BAŞLAMADI (page_manager
-sabitleri hariç). Bu, Demir'in "sonraki VETA adımı: PostgreSQL-seviyesi veritabanı
-programından daha ileri" hedefinin ÖNÜNDE, önce buraya (gerçek Storage/WAL/
-Query/Transaction motoru) ulaşmak gerekiyor — bkz. bu dosyanın sonundaki
-"Sonraki Adımlar" notu.
+**Genel not (2026-08-22 güncelleme):** 2026-08-21'deki "Faz 6 tasarım
+aşamasında, kod yazımı HENÜZ BAŞLAMADI" tespiti bu oturumda KAPANDI —
+Storage artık gerçek, test edilmiş, kalıcı bir motor. Demir'in "VETA'yı
+PostgreSQL-seviyesi programdan ileri taşıma" hedefinin önündeki asıl
+engel (Storage yokluğu) kalktı. Sıradaki adım Query (SIFIR kod, henüz
+başlanmadı) + Isolation/2D (tek-thread sınırı hâlâ geçerli).
 
 ## Faz 7 — VETA Core Detaylı Uygulama (devam ediyor)
 
