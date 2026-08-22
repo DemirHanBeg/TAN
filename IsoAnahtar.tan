@@ -1,8 +1,0 @@
-işlev tst()
-    anahtarlar = ["yaz", "eğer", "ise", "değilse", "iken", "işlev", "döndür", "son", "her", "içinde", "dur", "devam", "içe", "al", "doğru", "yanlış", "yok", "ve", "veya", "değil", "köprü", "dene", "yakala"]
-    döndür uzunluk(anahtarlar)
-son
-
-yaz(9999999)
-yaz(tst())
-yaz(9999998)

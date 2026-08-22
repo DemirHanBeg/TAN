@@ -45,3 +45,8 @@ tanlsp
 /tan
 tandbg
 registrys
+gen1_*
+gen2_*
+gen3_*
+*_test_bin
+*.copy_test
